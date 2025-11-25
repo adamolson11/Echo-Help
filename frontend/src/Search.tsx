@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 type TicketResult = {
   id: string | number;
@@ -77,6 +77,9 @@ export default function Search() {
   const [priorityFilter, setPriorityFilter] = useState<
     "all" | "low" | "medium" | "high" | "critical"
   >("all");
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const filteredResults = results.filter((ticket) => {
     const status = String(ticket.status ?? "").toLowerCase();
@@ -105,6 +108,79 @@ export default function Search() {
 
     return true;
   });
+
+  // Keep activeIndex in bounds when filteredResults change
+  useEffect(() => {
+    if (!filteredResults.length) {
+      setActiveIndex(null);
+      return;
+    }
+    if (activeIndex === null || activeIndex >= filteredResults.length) {
+      setActiveIndex(0);
+    }
+  }, [filteredResults, activeIndex]);
+
+  // Global keyboard navigation
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Ctrl+K / Cmd+K -> focus search input
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      // Ignore arrow/enter/esc when typing in an input/textarea/select
+      const target = e.target as HTMLElement | null;
+      const tagName = target?.tagName.toLowerCase();
+      if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+        return;
+      }
+
+      if (!filteredResults.length) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((prev) => {
+          if (prev === null) return 0;
+          return prev + 1 >= filteredResults.length ? filteredResults.length - 1 : prev + 1;
+        });
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((prev) => {
+          if (prev === null) return filteredResults.length - 1;
+          return prev - 1 < 0 ? 0 : prev - 1;
+        });
+        return;
+      }
+
+      if (e.key === "Enter") {
+        if (activeIndex !== null && filteredResults[activeIndex]) {
+          e.preventDefault();
+          setSelectedTicket(filteredResults[activeIndex]);
+        }
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (selectedTicket) {
+          e.preventDefault();
+          setSelectedTicket(null);
+          return;
+        }
+        if (activeIndex !== null) {
+          e.preventDefault();
+          setActiveIndex(null);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [filteredResults, activeIndex, selectedTicket]);
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -173,6 +249,7 @@ export default function Search() {
           }}
         >
           <input
+            ref={searchInputRef}
             type="text"
             className="flex-1 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="Search tickets..."
@@ -290,30 +367,41 @@ export default function Search() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredResults.map((ticket) => (
-                      <tr
-                        key={ticket.id}
-                        className="border-t border-slate-800 hover:bg-slate-800/80 cursor-pointer"
-                        onClick={() => setSelectedTicket(ticket)}
-                      >
-                        <td className="px-4 py-2 font-mono text-xs text-slate-400">
-                          {ticket.id}
-                        </td>
-                        <td className="px-4 py-2">
-                          {highlightQuery(
-                            String(ticket.title ?? ticket.summary ?? ""),
-                            query
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <StatusPill status={ticket.status} />
-                        </td>
-                        <td className="px-4 py-2">{ticket.priority ?? "-"}</td>
-                        <td className="px-4 py-2 text-xs text-slate-400">
-                          {ticket.created_at ? formatDate(ticket.created_at) : "-"}
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredResults.map((ticket, index) => {
+                      const isActive = index === activeIndex;
+                      return (
+                        <tr
+                          key={ticket.id}
+                          className={
+                            "border-t border-slate-800 cursor-pointer " +
+                            (isActive
+                              ? "bg-slate-800/90 ring-1 ring-indigo-500"
+                              : "hover:bg-slate-800/80")
+                          }
+                          onClick={() => {
+                            setSelectedTicket(ticket);
+                            setActiveIndex(index);
+                          }}
+                        >
+                          <td className="px-4 py-2 font-mono text-xs text-slate-400">
+                            {ticket.id}
+                          </td>
+                          <td className="px-4 py-2">
+                            {highlightQuery(
+                              String(ticket.title ?? ticket.summary ?? ""),
+                              query
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            <StatusPill status={ticket.status} />
+                          </td>
+                          <td className="px-4 py-2">{ticket.priority ?? "-"}</td>
+                          <td className="px-4 py-2 text-xs text-slate-400">
+                            {ticket.created_at ? formatDate(ticket.created_at) : "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
