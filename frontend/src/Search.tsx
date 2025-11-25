@@ -1,36 +1,123 @@
 import React, { useState } from "react";
 
-interface Ticket {
-  id: number;
-  external_key: string;
-  source: string;
-  project_key: string;
-  summary: string;
-  description: string;
-  status: string;
-  priority?: string | null;
-  created_at: string;
-  updated_at: string;
-  resolved_at?: string | null;
-}
+type TicketResult = {
+  id: string | number;
+  title?: string;
+  summary?: string;
+  status?: string;
+  priority?: string;
+  created_at?: string;
+  updated_at?: string;
+  description?: string;
+  resolution?: string;
+  [key: string]: unknown;
+};
 
 const API_URL = "/api/search";
 
+function formatDate(value?: string) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString();
+}
+
+function escapeRegExp(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightQuery(text: string, query: string) {
+  const q = query.trim();
+  if (!q) return text;
+
+  const regex = new RegExp(`(${escapeRegExp(q)})`, "ig");
+  const parts = text.split(regex);
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <span key={i} className="bg-yellow-300/30 text-yellow-100">
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+function StatusPill({ status }: { status?: string }) {
+  if (!status) return <span className="text-slate-400">-</span>;
+  const normalized = status.toLowerCase();
+  let classes =
+    "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border";
+
+  if (normalized.includes("open")) {
+    classes += " bg-red-500/10 text-red-200 border-red-500/60";
+  } else if (normalized.includes("closed") || normalized.includes("resolved")) {
+    classes += " bg-emerald-500/10 text-emerald-200 border-emerald-500/60";
+  } else {
+    classes += " bg-slate-500/10 text-slate-200 border-slate-500/60";
+  }
+
+  return <span className={classes}>{status}</span>;
+}
+
 export default function Search() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Ticket[]>([]);
+  const [results, setResults] = useState<TicketResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<TicketResult | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed" | "other">(
+    "all"
+  );
+  const [priorityFilter, setPriorityFilter] = useState<
+    "all" | "low" | "medium" | "high" | "critical"
+  >("all");
+
+  const filteredResults = results.filter((ticket) => {
+    const status = String(ticket.status ?? "").toLowerCase();
+    const priority = String(ticket.priority ?? "").toLowerCase();
+
+    // Status filter
+    if (statusFilter === "open" && !status.includes("open")) return false;
+    if (
+      statusFilter === "closed" &&
+      !(status.includes("closed") || status.includes("resolved"))
+    )
+      return false;
+    if (
+      statusFilter === "other" &&
+      (status.includes("open") ||
+        status.includes("closed") ||
+        status.includes("resolved"))
+    )
+      return false;
+
+    // Priority filter
+    if (priorityFilter === "low" && !priority.includes("low")) return false;
+    if (priorityFilter === "medium" && !priority.includes("medium")) return false;
+    if (priorityFilter === "high" && !priority.includes("high")) return false;
+    if (priorityFilter === "critical" && !priority.includes("critical")) return false;
+
+    return true;
+  });
 
   const handleSearch = async () => {
+    if (!query.trim()) return;
+
     setLoading(true);
     setError(null);
-    console.log("[Search] Starting fetch for:", query);
+    setSelectedTicket(null);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();
-      console.log("[Search] Fetch aborted due to timeout");
-    }, 10000); // 10s timeout
+    }, 10000);
+
     try {
       const res = await fetch(API_URL, {
         method: "POST",
@@ -38,60 +125,289 @@ export default function Search() {
         body: JSON.stringify({ q: query }),
         signal: controller.signal,
       });
+
       clearTimeout(timeout);
-      console.log("[Search] Response status:", res.status);
+
       if (res.status === 422) {
         setError("Invalid search request (422). Please try again.");
         setResults([]);
         return;
       }
-      if (!res.ok) throw new Error(`Error: ${res.status}`);
+
+      if (!res.ok) {
+        throw new Error(`Error: ${res.status}`);
+      }
+
       const data = await res.json();
-      console.log("[Search] Data received:", data);
-      setResults(data);
+      setResults(Array.isArray(data) ? data : []);
     } catch (err: any) {
       clearTimeout(timeout);
-      if (err.name === 'AbortError') {
+      if (err?.name === "AbortError") {
         setError("Search timed out. Please try again.");
       } else {
-        setError(err.message || "Unknown error");
+        setError(err?.message || "Unknown error");
       }
       setResults([]);
-      console.error("[Search] Error:", err);
     } finally {
       setLoading(false);
-      console.log("[Search] Loading set to false");
     }
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: "2rem auto", padding: 24 }}>
-      <h2>Ticket Search</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Type a keyword..."
-          style={{ flex: 1, padding: 8 }}
-        />
-        <button onClick={handleSearch} disabled={loading || !query.trim()}>
-          {loading ? "Searching..." : "Search"}
-        </button>
-      </div>
-      {error && <div style={{ color: "red" }}>{error}</div>}
-      <ul style={{ listStyle: "none", padding: 0 }}>
-        {results.map(ticket => (
-          <li key={ticket.id} style={{ border: "1px solid #ccc", borderRadius: 6, margin: "12px 0", padding: 12 }}>
-            <strong>{ticket.summary}</strong> <span style={{ color: "#888" }}>({ticket.status})</span>
-            <div style={{ fontSize: 13, color: "#555" }}>{ticket.description}</div>
-            <div style={{ fontSize: 12, color: "#999" }}>
-              <span>Key: {ticket.external_key}</span> | <span>Project: {ticket.project_key}</span> | <span>Priority: {ticket.priority || "-"}</span>
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-slate-100">
+      <div className="w-full max-w-5xl mx-4 bg-slate-800/80 border border-slate-700 rounded-xl p-6 shadow-lg">
+        <h2 className="text-xl font-semibold mb-1">Ticket Search</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          Search across tickets by keyword. Try:{" "}
+          <span className="font-mono">password reset</span>,{" "}
+          <span className="font-mono">vpn</span>,{" "}
+          <span className="font-mono">onboarding</span>.
+        </p>
+
+        {/* Search bar */}
+        <form
+          className="flex gap-2 mb-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSearch();
+          }}
+        >
+          <input
+            type="text"
+            className="flex-1 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Search tickets..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            disabled={loading}
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading || !query.trim()}
+          >
+            {loading ? "Searching…" : "Search"}
+          </button>
+        </form>
+
+        {/* Error banner */}
+        {error && (
+          <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <span className="mt-0.5 text-lg leading-none">!</span>
+            <div className="flex-1">
+              <div className="font-semibold">Search error</div>
+              <div>{error}</div>
             </div>
-          </li>
-        ))}
-      </ul>
-      {results.length === 0 && !loading && !error && <div>No results.</div>}
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="ml-2 text-xs font-medium underline underline-offset-2"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Filters + summary */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2 text-xs text-slate-300">
+          <div className="flex flex-wrap gap-2">
+            <label className="inline-flex items-center gap-1">
+              <span className="text-slate-400">Status</span>
+              <select
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(e.target.value as "all" | "open" | "closed" | "other")
+                }
+              >
+                <option value="all">All</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed / Resolved</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label className="inline-flex items-center gap-1">
+              <span className="text-slate-400">Priority</span>
+              <select
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={priorityFilter}
+                onChange={(e) =>
+                  setPriorityFilter(
+                    e.target.value as "all" | "low" | "medium" | "high" | "critical"
+                  )
+                }
+              >
+                <option value="all">All</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="text-slate-400">
+            {results.length === 0 ? (
+              <span>No tickets loaded yet</span>
+            ) : filteredResults.length === 0 ? (
+              <span>No tickets match current filters</span>
+            ) : (
+              <span>
+                Showing{" "}
+                <span className="font-semibold text-slate-100">
+                  {filteredResults.length}
+                </span>{" "}
+                of{" "}
+                <span className="font-semibold text-slate-100">
+                  {results.length}
+                </span>{" "}
+                tickets
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Results + inspector layout */}
+        <div className="mt-2 grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)] gap-3 items-start">
+          {/* Results table */}
+          <div className="bg-slate-900/60 border border-slate-700 rounded-lg">
+            {results.length === 0 && !loading && !error && (
+              <div className="px-4 py-6 text-sm text-slate-400 text-center">
+                No tickets yet. Try a different keyword or broaden your search.
+              </div>
+            )}
+
+            {filteredResults.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-900/80 text-slate-300">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium">ID</th>
+                      <th className="text-left px-4 py-2 font-medium">Title</th>
+                      <th className="text-left px-4 py-2 font-medium">Status</th>
+                      <th className="text-left px-4 py-2 font-medium">Priority</th>
+                      <th className="text-left px-4 py-2 font-medium">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredResults.map((ticket) => (
+                      <tr
+                        key={ticket.id}
+                        className="border-t border-slate-800 hover:bg-slate-800/80 cursor-pointer"
+                        onClick={() => setSelectedTicket(ticket)}
+                      >
+                        <td className="px-4 py-2 font-mono text-xs text-slate-400">
+                          {ticket.id}
+                        </td>
+                        <td className="px-4 py-2">
+                          {highlightQuery(
+                            String(ticket.title ?? ticket.summary ?? ""),
+                            query
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          <StatusPill status={ticket.status} />
+                        </td>
+                        <td className="px-4 py-2">{ticket.priority ?? "-"}</td>
+                        <td className="px-4 py-2 text-xs text-slate-400">
+                          {ticket.created_at ? formatDate(ticket.created_at) : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {results.length > 0 &&
+              filteredResults.length === 0 &&
+              !loading &&
+              !error && (
+                <div className="px-4 py-6 text-sm text-slate-400 text-center">
+                  No tickets match the current filters.
+                </div>
+              )}
+          </div>
+
+          {/* Inspector panel */}
+          <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/80 min-h-[160px]">
+            {selectedTicket ? (
+              <>
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">
+                      Ticket ID:{" "}
+                      <span className="font-mono">{selectedTicket.id}</span>
+                    </div>
+                    <h3 className="text-lg font-semibold">
+                      {selectedTicket.title ?? selectedTicket.summary}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs text-slate-400 hover:text-slate-200"
+                    onClick={() => setSelectedTicket(null)}
+                  >
+                    Close ✕
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-3 mb-3 text-xs text-slate-300">
+                  <StatusPill status={selectedTicket.status} />
+                  {selectedTicket.priority && (
+                    <span className="px-2 py-0.5 rounded-full border border-slate-600">
+                      Priority: {selectedTicket.priority}
+                    </span>
+                  )}
+                  {selectedTicket.created_at && (
+                    <span>Created: {formatDate(selectedTicket.created_at)}</span>
+                  )}
+                  {selectedTicket.updated_at && (
+                    <span>Updated: {formatDate(selectedTicket.updated_at)}</span>
+                  )}
+                </div>
+
+                {selectedTicket.summary && (
+                  <p className="text-sm text-slate-200 mb-2">
+                    {selectedTicket.summary}
+                  </p>
+                )}
+
+                {selectedTicket.description && (
+                  <div className="mt-2">
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                      Description
+                    </div>
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap">
+                      {selectedTicket.description}
+                    </p>
+                  </div>
+                )}
+
+                {selectedTicket.resolution && (
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold text-emerald-300 uppercase tracking-wide mb-1">
+                      Resolution
+                    </div>
+                    <p className="text-sm text-slate-100 whitespace-pre-wrap">
+                      {selectedTicket.resolution}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-sm text-slate-400">
+                <div className="mb-1 font-semibold text-slate-200">
+                  No ticket selected
+                </div>
+                <div className="text-center">
+                  Choose a ticket from the table to view its full details here.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
