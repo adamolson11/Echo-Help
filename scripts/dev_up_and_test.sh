@@ -26,6 +26,21 @@ if ! curl -sf http://localhost:8000/api/health >/dev/null; then
   exit 1
 fi
 
+
+# Seed demo tickets
+echo "[INFO] Seeding demo tickets..."
+curl -sf -X POST http://localhost:8000/api/tickets/seed-demo || true
+
+# Backfill embeddings
+echo "[INFO] Backfilling ticket embeddings..."
+python3 -m scripts.backfill_embeddings
+
+# Test /api/intake
+INT_RESPONSE=$(curl -s -X POST http://localhost:8000/api/intake \
+  -H "Content-Type: application/json" \
+  -d '{"text":"user cannot login"}')
+echo "$INT_RESPONSE" | grep "suggested_tickets" >/dev/null
+
 # Run tests
 ./scripts/dev_test.sh
 TEST_EXIT=$?

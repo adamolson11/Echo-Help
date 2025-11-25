@@ -14,7 +14,7 @@ interface Ticket {
   resolved_at?: string | null;
 }
 
-const API_URL = "http://localhost:8000/api/search";
+const API_URL = "/api/search";
 
 export default function Search() {
   const [query, setQuery] = useState("");
@@ -25,18 +25,42 @@ export default function Search() {
   const handleSearch = async () => {
     setLoading(true);
     setError(null);
+    console.log("[Search] Starting fetch for:", query);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+      console.log("[Search] Fetch aborted due to timeout");
+    }, 10000); // 10s timeout
     try {
-      const res = await fetch(`${API_URL}?q=${encodeURIComponent(query)}`, {
+      const res = await fetch(API_URL, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: query }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
+      console.log("[Search] Response status:", res.status);
+      if (res.status === 422) {
+        setError("Invalid search request (422). Please try again.");
+        setResults([]);
+        return;
+      }
       if (!res.ok) throw new Error(`Error: ${res.status}`);
       const data = await res.json();
+      console.log("[Search] Data received:", data);
       setResults(data);
     } catch (err: any) {
-      setError(err.message || "Unknown error");
+      clearTimeout(timeout);
+      if (err.name === 'AbortError') {
+        setError("Search timed out. Please try again.");
+      } else {
+        setError(err.message || "Unknown error");
+      }
       setResults([]);
+      console.error("[Search] Error:", err);
     } finally {
       setLoading(false);
+      console.log("[Search] Loading set to false");
     }
   };
 

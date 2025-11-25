@@ -25,9 +25,3 @@ class Subcategory(SQLModel, table=True):
     category_id: int = Field(foreign_key="category.id")
     name: str
 
-class TicketFeedback(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    ticket_id: int = Field(foreign_key="ticket.id")
-    query_text: str
-    rating: int  # 1–5 scale for “did this help?”
-    created_at: datetime

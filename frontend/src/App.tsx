@@ -2,9 +2,12 @@ import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
+import Intake from "./Intake";
+import Search from "./Search";
 
 function App() {
   const [count, setCount] = useState(0)
+  const [tab, setTab] = useState<'search' | 'intake'>('search');
 
   return (
     <>
@@ -28,6 +31,11 @@ function App() {
       <p className="read-the-docs">
         Click on the Vite and React logos to learn more
       </p>
+      <div style={{ margin: '1rem 0' }}>
+        <button onClick={() => setTab('search')}>Search</button>
+        <button onClick={() => setTab('intake')}>Intake</button>
+      </div>
+      {tab === 'intake' ? <Intake /> : <Search />}
     </>
   )
 }

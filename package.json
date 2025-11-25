@@ -1,0 +1,10 @@
+{
+  "name": "echo-help-root",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n BACKEND,FRONTEND -c magenta,cyan \"uvicorn backend.app.main:app --reload --port 8000\" \"npm run dev --prefix frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

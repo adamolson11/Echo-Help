@@ -1,5 +1,6 @@
-from .ticket import Ticket, Category, Subcategory, TicketFeedback
+from .ticket import Ticket, Category, Subcategory
 from .embedding import Embedding
+from .ticket_feedback import TicketFeedback
 
 __all__ = [
 	"Ticket",
