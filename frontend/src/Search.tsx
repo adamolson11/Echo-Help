@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+
+import React, { useState, useEffect, useRef } from "react";
+import { getApiBase } from "./apiConfig";
 
 type TicketResult = {
   id: string | number;
@@ -13,7 +15,8 @@ type TicketResult = {
   [key: string]: unknown;
 };
 
-const API_URL = "/api/search";
+const API_BASE = getApiBase();
+const API_URL = `${API_BASE}/api/search`;
 
 function formatDate(value?: string) {
   if (!value) return "";
@@ -67,6 +70,7 @@ function StatusPill({ status }: { status?: string }) {
 
 export default function Search() {
   const [query, setQuery] = useState("");
+  console.log("SEARCH API_BASE =", API_BASE);
   const [results, setResults] = useState<TicketResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

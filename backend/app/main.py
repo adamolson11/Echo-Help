@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db import init_db
 from .api import health, tickets, search, intake, feedback
 from .api.routes import ticket_feedback
+from .api.routes import insights
 
 def create_app():
     app = FastAPI(title="EchoHelp API", version="0.1.0")
@@ -26,6 +27,7 @@ def create_app():
 
 
     app.include_router(ticket_feedback.router)
+    app.include_router(insights.router)
     return app
 
 app = create_app()
