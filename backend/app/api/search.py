@@ -1,22 +1,19 @@
-from typing import List
-
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+# ruff: noqa: B008
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlmodel import Session, select, or_
+from sqlmodel import Session, select
+
 from ..db import get_session
-from ..models import Ticket, Embedding
-import json
-from ..services.embeddings import embed_text, cosine_similarity, MODEL_NAME
+from ..models import Ticket
 
 router = APIRouter(tags=["search"])
+
 
 class SearchRequest(BaseModel):
     q: str
 
 
-@router.post("/search", response_model=List[Ticket])
+@router.post("/search", response_model=list[Ticket])
 def search(
     body: SearchRequest,
     session: Session = Depends(get_session),
@@ -30,7 +27,8 @@ def search(
 
     # No query? Just show some recent tickets.
     if not q:
-        stmt = select(Ticket).order_by(Ticket.id.desc()).limit(20)
+        stmt = select(Ticket).order_by(Ticket.id.desc())  # type: ignore[reportUnknownMemberType]
+        stmt = stmt.limit(20)
         return session.exec(stmt).all()
 
     pattern = f"%{q}%"
@@ -38,11 +36,11 @@ def search(
     stmt = (
         select(Ticket)
         .where(
-            Ticket.summary.ilike(pattern)
-            | Ticket.description.ilike(pattern)
-            | Ticket.external_key.ilike(pattern)
+            Ticket.summary.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
+            | Ticket.description.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
+            | Ticket.external_key.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
         )
-        .order_by(Ticket.id.desc())
+        .order_by(Ticket.id.desc())  # type: ignore[reportUnknownMemberType]
         .limit(20)
     )
 

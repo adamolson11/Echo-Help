@@ -1,24 +1,25 @@
+# ruff: noqa: E501,B008
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
-from datetime import datetime
 
 from ..db import get_session
 from ..models import Ticket
 
 router = APIRouter(tags=["tickets"])
 
+
 @router.get("/tickets")
 def list_tickets(session: Session = Depends(get_session)):
     statement = select(Ticket)
     return session.exec(statement).all()
 
+
 @router.post("/tickets/seed-demo")
 def seed_demo(session: Session = Depends(get_session)):
     if session.exec(select(Ticket)).all():
         return {"message": "Tickets already exist"}
-
-
 
     now = datetime.utcnow()
     demo = [

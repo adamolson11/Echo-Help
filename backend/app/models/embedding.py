@@ -1,9 +1,10 @@
 from datetime import datetime
-from typing import Optional
-from sqlmodel import SQLModel, Field
+
+from sqlmodel import Field, SQLModel
+
 
 class Embedding(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     object_type: str  # "ticket", "document", "concept"
     object_id: int
     model_name: str

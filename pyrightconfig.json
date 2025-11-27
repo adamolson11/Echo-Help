@@ -1,0 +1,13 @@
+{
+  "include": ["backend"],
+  "exclude": ["tests", "scripts"],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "pythonVersion": "3.10",
+  "executionEnvironments": [
+    {
+      "root": "backend"
+    }
+  ]
+}

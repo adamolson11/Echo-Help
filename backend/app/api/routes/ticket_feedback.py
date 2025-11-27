@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException
+# ruff: noqa: B008
+from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from ...db import get_session
@@ -27,12 +26,13 @@ def create_ticket_feedback(
     session.add(feedback)
     session.commit()
     session.refresh(feedback)
-    return feedback
+    # Convert ORM -> read schema so the response_type matches exactly.
+    return TicketFeedbackRead.model_validate(feedback)
 
 
-@router.get("/", response_model=List[TicketFeedbackRead])
+@router.get("/", response_model=list[TicketFeedbackRead])
 def list_ticket_feedback(
-    ticket_id: Optional[int] = None,
+    ticket_id: int | None = None,
     session: Session = Depends(get_session),
 ) -> list[TicketFeedbackRead]:
     query = select(TicketFeedback)
@@ -40,4 +40,5 @@ def list_ticket_feedback(
         query = query.where(TicketFeedback.ticket_id == ticket_id)
 
     results = session.exec(query).all()
-    return results
+    # Return a list of read models (convert ORM objects to read schema)
+    return [TicketFeedbackRead.model_validate(r) for r in results]

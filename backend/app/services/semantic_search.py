@@ -1,11 +1,14 @@
-from typing import List, Tuple
-from sqlmodel import Session, select
 import json
 
-from ..models import Ticket, Embedding
-from .embeddings import embed_text, cosine_similarity, MODEL_NAME
+from sqlmodel import Session, select
 
-def semantic_search_tickets(session: Session, query: str, limit: int = 20) -> List[Tuple[float, Ticket]]:
+from ..models import Embedding, Ticket
+from .embeddings import MODEL_NAME, cosine_similarity, embed_text
+
+
+def semantic_search_tickets(
+    session: Session, query: str, limit: int = 20
+) -> list[tuple[float, Ticket]]:
     q = (query or "").strip()
     if not q:
         return []
@@ -32,12 +35,11 @@ def semantic_search_tickets(session: Session, query: str, limit: int = 20) -> Li
     top = scored[:limit]
     top_ids = [tid for _, tid in top]
 
-    tickets = session.exec(
-        select(Ticket).where(Ticket.id.in_(top_ids))
-    ).all()
+    # SQLModel/SQLAlchemy expression `.in_` isn't fully visible to the type
+    # checker here; narrow-ignore the attribute-access/argument typing.
+    tickets = session.exec(select(Ticket).where(Ticket.id.in_(top_ids)))  # type: ignore[reportUnknownMemberType]
+    tickets = tickets.all()
     tmap = {t.id: t for t in tickets}
 
-    ordered = [
-        (score, tmap[tid]) for score, tid in top if tid in tmap
-    ]
+    ordered = [(score, tmap[tid]) for score, tid in top if tid in tmap]
     return ordered

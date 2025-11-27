@@ -3,3 +3,8 @@ sentence-transformers==2.2.2
 transformers==4.38.2
 huggingface_hub==0.24.6
 tokenizers==0.15.2
+
+ruff
+pyright
+pytest
+pre-commit

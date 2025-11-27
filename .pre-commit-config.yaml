@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-pyright
+    rev: v1.1.385
+    hooks:
+      - id: pyright
+
+  - repo: https://github.com/pre-commit/mirrors-pytest
+    rev: v0.2.0
+    hooks:
+      - id: pytest
+        args: ["-q"]

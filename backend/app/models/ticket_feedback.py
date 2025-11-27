@@ -1,20 +1,19 @@
-
 from datetime import datetime
-from typing import Optional
 
-from sqlmodel import SQLModel, Field
+from sqlmodel import Field, SQLModel
 
 
 class TicketFeedbackBase(SQLModel):
     ticket_id: int
-    helped: Optional[bool] = None
-    resolution_notes: Optional[str] = None
+    helped: bool | None = None
+    resolution_notes: str | None = None
     # AI stubs for future use
-    ai_cluster_id: Optional[str] = None
-    ai_summary: Optional[str] = None
+    ai_cluster_id: str | None = None
+    ai_summary: str | None = None
 
 
 class TicketFeedback(TicketFeedbackBase, table=True):
-    __tablename__ = "ticketfeedback"
-    id: Optional[int] = Field(default=None, primary_key=True)
+    # SQLModel/SQLAlchemy uses `__tablename__` declared at runtime; narrow-ignore
+    __tablename__ = "ticketfeedback"  # type: ignore[reportAssignmentType]
+    id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)

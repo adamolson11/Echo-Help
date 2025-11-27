@@ -1,2 +1,2 @@
-from .intake import IntakeRequest, IntakeSuggestedTicket, IntakeResponse
+from .intake import IntakeRequest, IntakeResponse, IntakeSuggestedTicket  # noqa: F401
 # ...existing exports...

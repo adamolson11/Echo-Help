@@ -1,5 +1,7 @@
-from . import health
-from . import tickets
-from . import search
-from . import intake  # noqa: F401
-from . import feedback  # noqa: F401
+from . import (
+    feedback,  # noqa: F401
+    health,  # noqa: F401
+    intake,  # noqa: F401
+    search,  # noqa: F401
+    tickets,  # noqa: F401
+)

@@ -1,4 +1,8 @@
 import numpy as np
+from typing import Sequence, Union
+
+from sentence_transformers import SentenceTransformer
+
 
 def cosine_similarity(a, b):
     """
@@ -6,19 +10,19 @@ def cosine_similarity(a, b):
     """
     va = np.array(a)
     vb = np.array(b)
-    denom = (np.linalg.norm(va) * np.linalg.norm(vb))
+    denom = np.linalg.norm(va) * np.linalg.norm(vb)
     if denom == 0:
         return 0.0
     return float(np.dot(va, vb) / denom)
 
-from sentence_transformers import SentenceTransformer
 
 # Name of the embedding model we use everywhere
 MODEL_NAME = "all-MiniLM-L6-v2"
 
 _model = SentenceTransformer(MODEL_NAME)
 
-def embed_text(text: str):
+
+def embed_text(text: Union[str, Sequence[str]]):
     """
     Return embeddings as Python lists.
     If a single string is passed, return a single vector.
@@ -31,5 +35,11 @@ def embed_text(text: str):
         texts = text
         single = False
 
-    embeddings = _model.encode(texts, convert_to_numpy=True).tolist()
-    return embeddings[0] if single else embeddings
+    # The SentenceTransformer encode API may return numpy arrays or tensors
+    # depending on environment; coerce to numpy array and then tolist for a
+    # predictable Python list return type. Narrow-ignore where external stubs
+    # are incomplete.
+    embeddings_np = _model.encode(texts, convert_to_numpy=True)  # type: ignore[reportUnknownMemberType]
+    arr = np.asarray(embeddings_np)
+    lists = arr.tolist()
+    return lists[0] if single else lists

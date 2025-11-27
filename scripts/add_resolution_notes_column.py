@@ -5,6 +5,7 @@ if it does not already exist. Run from repo root:
 
     python3 scripts/add_resolution_notes_column.py
 """
+
 import sqlite3
 from pathlib import Path
 

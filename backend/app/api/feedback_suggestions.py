@@ -1,10 +1,10 @@
-from typing import List
-
+# ruff: noqa: B008
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlmodel import Session, select
 from sqlalchemy import func, text
+from sqlmodel import Session, select
 
+from ..ai.normalize import normalize_phrase
 from ..db import get_session
 from ..models.ticket_feedback import TicketFeedback
 
@@ -18,7 +18,7 @@ class FeedbackSuggestion(BaseModel):
 
 @router.get(
     "/feedback-suggestions",
-    response_model=List[FeedbackSuggestion],
+    response_model=list[FeedbackSuggestion],
     summary="Most common actual fix phrases from ticket feedback",
 )
 def get_feedback_suggestions(
@@ -32,12 +32,14 @@ def get_feedback_suggestions(
     stmt = (
         select(
             TicketFeedback.resolution_notes,
-            func.count(TicketFeedback.id).label("count"),
+            func.count(TicketFeedback.id).label("count"),  # type: ignore[reportArgumentType]
         )
-        .where(TicketFeedback.resolution_notes.isnot(None))
-        .where(func.length(func.trim(TicketFeedback.resolution_notes)) > 0)
+        # SQLAlchemy expression APIs aren't fully visible to the type checker;
+        # ignore the attribute-access diagnostics on these expressions.
+        .where(TicketFeedback.resolution_notes.isnot(None))  # type: ignore[reportAttributeAccessIssue]
+        .where(func.length(func.trim(TicketFeedback.resolution_notes)) > 0)  # type: ignore[reportUnknownMemberType]
         .group_by(TicketFeedback.resolution_notes)
-        .order_by(func.count(TicketFeedback.id).desc())
+        .order_by(func.count(TicketFeedback.id).desc())  # type: ignore[reportAttributeAccessIssue]
         .limit(limit)
     )
 
@@ -45,7 +47,9 @@ def get_feedback_suggestions(
     # `resolution_notes` column in the `ticketfeedback` table yet. Querying
     # that non-existent column results in an OperationalError on SQLite.
     try:
-        cols = session.exec(text("PRAGMA table_info('ticketfeedback')")).all()
+        # session.exec typing doesn't accept TextClause in stubs; narrow-ignore here.
+        cols = session.exec(text("PRAGMA table_info('ticketfeedback')"))  # type: ignore[reportArgumentType]
+        cols = cols.all()
     except Exception:
         # If this fails for any reason, don't crash the endpoint.
         return []
@@ -61,6 +65,16 @@ def get_feedback_suggestions(
         print("feedback-suggestions query error:", exc)
         return []
 
-    return [
-        FeedbackSuggestion(phrase=row[0], count=row[1]) for row in rows
-    ]
+    # Normalize phrases and aggregate counts for identical normalized phrases
+    agg: dict[str, int] = {}
+    for raw_phrase, cnt in rows:
+        norm = normalize_phrase(raw_phrase or "")
+        if not norm:
+            continue
+        agg[norm] = agg.get(norm, 0) + (cnt or 0)
+
+    # Convert to sorted list of FeedbackSuggestion
+    suggestions = [FeedbackSuggestion(phrase=ph, count=ct) for ph, ct in agg.items()]
+    suggestions.sort(key=lambda s: s.count, reverse=True)
+    # Respect the requested limit
+    return suggestions[:limit]

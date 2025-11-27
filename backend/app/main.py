@@ -1,19 +1,11 @@
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-from starlette.requests import Request
-from typing import List
-from fastapi import Body
-from .api.search import SearchRequest
-from .models.ticket import Ticket
+
+from .api import feedback, feedback_suggestions, health, intake, search, tickets
+from .api.routes import insights, ticket_feedback
+
 # ...existing imports...
 from .db import init_db
-from .api import health, tickets, search, intake, feedback, feedback_suggestions
-from .api.routes import ticket_feedback
-from .api.routes import insights
-
 
 app = FastAPI()
 
@@ -41,10 +33,10 @@ app = FastAPI()
 # ✅ DEV CORS: allow everything
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # allow any origin
-    allow_credentials=False,     # MUST be False when allow_origins=["*"]
-    allow_methods=["*"],        # allow all HTTP verbs
-    allow_headers=["*"],        # allow all headers
+    allow_origins=["*"],  # allow any origin
+    allow_credentials=False,  # MUST be False when allow_origins=["*"]
+    allow_methods=["*"],  # allow all HTTP verbs
+    allow_headers=["*"],  # allow all headers
 )
 
 init_db()
@@ -60,6 +52,7 @@ app.include_router(ticket_feedback.router)
 app.include_router(insights.router, prefix="/api")
 app.include_router(feedback_suggestions.router, prefix="/api")
 
+
 @app.get("/")
 async def root():
     return {
@@ -68,6 +61,7 @@ async def root():
         "message": "Backend running. See /docs for API docs.",
     }
 
+
 @app.get("/health")
-async def health():
+async def health_check():
     return {"status": "ok"}

@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-from typing import List
-
+# ruff: noqa: B008
 from fastapi import APIRouter, Depends
+from sklearn.cluster import KMeans
 from sqlmodel import Session, select
 
-from backend.app.db import get_session
-from backend.app.models.ticket_feedback import TicketFeedback
-from backend.app.schemas.insights import (
+from ...db import get_session
+from ...models.ticket_feedback import TicketFeedback
+from ...schemas.insights import (
+    FeedbackCluster,
     TicketFeedbackInsights,
     UnhelpfulExample,
-    FeedbackCluster,
 )
-
-from sklearn.cluster import KMeans
-from backend.app.services.embeddings import embed_text
+from ...services.embeddings import embed_text
 
 router = APIRouter(
     prefix="/insights",
@@ -28,7 +26,7 @@ def get_ticket_feedback_insights(
     session: Session = Depends(get_session),
 ) -> TicketFeedbackInsights:
     query = select(TicketFeedback)
-    feedback_items: List[TicketFeedback] = session.exec(query).all()
+    feedback_items: list[TicketFeedback] = list(session.exec(query).all())
 
     total = len(feedback_items)
     helped_true = sum(1 for f in feedback_items if f.helped is True)
@@ -59,20 +57,26 @@ def get_ticket_feedback_insights(
 
 
 # --- Feedback Clustering Endpoint ---
-@router.get("/feedback/clusters", response_model=List[FeedbackCluster])
+@router.get("/feedback/clusters", response_model=list[FeedbackCluster])
 def get_ticket_feedback_clusters(
     n_clusters: int = 5,
     max_examples_per_cluster: int = 3,
     session: Session = Depends(get_session),
-) -> List[FeedbackCluster]:
+) -> list[FeedbackCluster]:
     # 1. Load feedback with non-empty resolution_notes
-    query = select(TicketFeedback).where(TicketFeedback.resolution_notes.is_not(None))
-    feedback_items: List[TicketFeedback] = session.exec(query).all()
+    query = select(TicketFeedback).where(
+        TicketFeedback.resolution_notes.is_not(None)  # type: ignore[reportAttributeAccessIssue]
+    )
+    feedback_items: list[TicketFeedback] = list(session.exec(query).all())
 
     if not feedback_items:
         return []
 
-    texts = [f.resolution_notes.strip() for f in feedback_items if f.resolution_notes and f.resolution_notes.strip()]
+    texts = [
+        f.resolution_notes.strip()
+        for f in feedback_items
+        if f.resolution_notes and f.resolution_notes.strip()
+    ]
     items = [f for f in feedback_items if f.resolution_notes and f.resolution_notes.strip()]
 
     if not items:
@@ -92,7 +96,7 @@ def get_ticket_feedback_clusters(
     for idx, label in enumerate(labels):
         clusters.setdefault(int(label), []).append(idx)
 
-    results: List[FeedbackCluster] = []
+    results: list[FeedbackCluster] = []
 
     for cluster_idx, indices in clusters.items():
         # sort by recency (most recent first)

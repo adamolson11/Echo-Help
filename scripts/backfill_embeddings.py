@@ -1,17 +1,20 @@
 import json
-from typing import List
+
 from sqlmodel import Session, select
+
 from backend.app.db import engine
-from backend.app.models import Ticket, Embedding
-from backend.app.services.embeddings import embed_text, MODEL_NAME
+from backend.app.models import Embedding, Ticket
+from backend.app.services.embeddings import MODEL_NAME, embed_text
+
 
 def get_ticket_embedding_text(ticket: Ticket) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     if ticket.summary:
         parts.append(ticket.summary)
     if ticket.description:
         parts.append(ticket.description)
     return "\n\n".join(parts)
+
 
 def backfill_ticket_embeddings():
     with Session(engine) as session:
@@ -40,6 +43,7 @@ def backfill_ticket_embeddings():
             session.add(emb)
         session.commit()
         print("Backfill complete.")
+
 
 if __name__ == "__main__":
     backfill_ticket_embeddings()
