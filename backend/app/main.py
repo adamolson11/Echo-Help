@@ -1,45 +1,72 @@
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+from starlette.requests import Request
+from typing import List
+from fastapi import Body
+from .api.search import SearchRequest
+from .models.ticket import Ticket
+# ...existing imports...
 from .db import init_db
 from .api import health, tickets, search, intake, feedback
 from .api.routes import ticket_feedback
 from .api.routes import insights
 
-def create_app():
-    app = FastAPI(title="EchoHelp API", version="0.1.0")
 
-    # Allow CORS for local frontend dev (adjust origins as needed)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # For dev only; restrict in prod
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    init_db()
-
-    app.include_router(health.router, prefix="/api")
-    app.include_router(tickets.router, prefix="/api")
-    app.include_router(search.router, prefix="/api")
-    app.include_router(intake.router, prefix="/api")
-    app.include_router(feedback.router, prefix="/api")
+app = FastAPI()
 
 
-    app.include_router(ticket_feedback.router)
-    app.include_router(insights.router)
-    return app
+## DEV: Previously had an Eat401Middleware here that intercepted 401s
+## and converted them to 200 for /api/search. Commenting it out for
+## the simpler dev flow requested (no auth middleware interference).
+# class Eat401Middleware(BaseHTTPMiddleware):
+#     async def dispatch(self, request: Request, call_next):
+#         response = await call_next(request)
+#         # Debug print so we can see what's going on
+#         if response.status_code == 401:
+#             print("EAT401 MIDDLEWARE: intercepted 401 for path:", request.url.path)
+#         # For /api/search, turn any 401 into a 200 with empty ticket list
+#         if response.status_code == 401 and request.url.path.startswith("/api/search"):
+#             return Response(
+#                 content="[]",
+#                 media_type="application/json",
+#                 status_code=200,
+#             )
+#         return response
 
-app = create_app()
+# app.add_middleware(Eat401Middleware)
+
+# ✅ DEV CORS: allow everything
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],        # allow any origin
+    allow_credentials=False,     # MUST be False when allow_origins=["*"]
+    allow_methods=["*"],        # allow all HTTP verbs
+    allow_headers=["*"],        # allow all headers
+)
+
+init_db()
+
+# ⬅️ include your routers AFTER the middleware is added
+app.include_router(health.router, prefix="/api")
+app.include_router(tickets.router, prefix="/api")
+# Restore real search router
+app.include_router(search.router, prefix="/api")
+app.include_router(intake.router, prefix="/api")
+app.include_router(feedback.router, prefix="/api")
+app.include_router(ticket_feedback.router)
+app.include_router(insights.router, prefix="/api")
+
 @app.get("/")
 async def root():
     return {
         "status": "ok",
         "service": "EchoHelp backend",
-        "message": "Backend running. See /docs for API docs."
+        "message": "Backend running. See /docs for API docs.",
     }
 
-
 @app.get("/health")
-async def health_check():
+async def health():
     return {"status": "ok"}
