@@ -10,7 +10,7 @@ from .api.search import SearchRequest
 from .models.ticket import Ticket
 # ...existing imports...
 from .db import init_db
-from .api import health, tickets, search, intake, feedback
+from .api import health, tickets, search, intake, feedback, feedback_suggestions
 from .api.routes import ticket_feedback
 from .api.routes import insights
 
@@ -58,6 +58,7 @@ app.include_router(intake.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
 app.include_router(ticket_feedback.router)
 app.include_router(insights.router, prefix="/api")
+app.include_router(feedback_suggestions.router, prefix="/api")
 
 @app.get("/")
 async def root():

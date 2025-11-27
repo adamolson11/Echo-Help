@@ -284,3 +284,28 @@ Video walkthrough will be added once core features are functional and integrated
 
 Internal project for experimental and professional development.
 Not yet affiliated with any employer or organization.
+
+### GET `/api/feedback-suggestions`
+
+Returns the most common "actual fix" phrases from ticket feedback. This is
+intended to power future insights features (e.g. surfacing missing knowledge
+base articles based on what actually solved tickets in the field).
+
+**Query parameters**
+
+- `limit` (int, optional, default `50`): maximum number of phrases to return.
+
+**Response**
+
+```json
+[
+  {
+    "phrase": "reset user password",
+    "count": 14
+  },
+  {
+    "phrase": "rebooted modem",
+    "count": 8
+  }
+]
+```
