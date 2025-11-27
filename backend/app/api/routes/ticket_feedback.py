@@ -5,9 +5,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from backend.app.db import get_session
-from backend.app.models.ticket_feedback import TicketFeedback
-from backend.app.schemas.ticket_feedback import (
+from ...db import get_session
+from ...models.ticket_feedback import TicketFeedback
+from ...schemas.ticket_feedback import (
     TicketFeedbackCreate,
     TicketFeedbackRead,
 )

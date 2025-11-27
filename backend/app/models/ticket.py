@@ -12,8 +12,8 @@ class Ticket(SQLModel, table=True):
     description: str
     status: str
     priority: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
     resolved_at: Optional[datetime] = None
 
 class Category(SQLModel, table=True):
