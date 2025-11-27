@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from "react";
-import { getApiBase } from "./apiConfig";
 
 type UnhelpfulExample = {
   ticket_id: number;
@@ -31,42 +30,41 @@ export default function InsightsPanel() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const API_BASE = getApiBase();
-    console.log("INSIGHTS API_BASE =", API_BASE);
+    if (!import.meta.env.DEV) {
+      const fetchInsights = async () => {
+        setLoading(true);
+        setError(null);
 
-    const fetchInsights = async () => {
-      setLoading(true);
-      setError(null);
+        try {
+          const [insightsRes, clustersRes] = await Promise.all([
+            fetch(`/api/insights/feedback`),
+            fetch(`/api/insights/feedback/clusters?n_clusters=5&max_examples_per_cluster=3`),
+          ]);
 
-      try {
-        const [insightsRes, clustersRes] = await Promise.all([
-          fetch(`${API_BASE}/insights/feedback`),
-          fetch(
-            `${API_BASE}/insights/feedback/clusters?n_clusters=5&max_examples_per_cluster=3`
-          ),
-        ]);
+          if (!insightsRes.ok) {
+            throw new Error(`Insights error: ${insightsRes.status}`);
+          }
+          if (!clustersRes.ok) {
+            throw new Error(`Clusters error: ${clustersRes.status}`);
+          }
 
-        if (!insightsRes.ok) {
-          throw new Error(`Insights error: ${insightsRes.status}`);
+          const insightsJson: FeedbackInsights = await insightsRes.json();
+          const clustersJson: FeedbackCluster[] = await clustersRes.json();
+
+          setInsights(insightsJson);
+          setClusters(clustersJson);
+        } catch (err: any) {
+          console.error("Error loading insights:", err);
+          setError(err?.message ?? "Failed to load insights");
+        } finally {
+          setLoading(false);
         }
-        if (!clustersRes.ok) {
-          throw new Error(`Clusters error: ${clustersRes.status}`);
-        }
-
-        const insightsJson: FeedbackInsights = await insightsRes.json();
-        const clustersJson: FeedbackCluster[] = await clustersRes.json();
-
-        setInsights(insightsJson);
-        setClusters(clustersJson);
-      } catch (err: any) {
-        console.error("Error loading insights:", err);
-        setError(err?.message ?? "Failed to load insights");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInsights();
+      };
+      fetchInsights();
+    } else {
+      console.log("Insights disabled in dev mode.");
+      setError("Insights disabled in dev mode");
+    }
   }, []);
 
   if (loading && !insights && clusters.length === 0) {

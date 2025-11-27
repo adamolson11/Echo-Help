@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
-import { getApiBase } from "./apiConfig";
+import FeedbackForm from "./FeedbackForm";
 
 type TicketResult = {
   id: string | number;
@@ -15,8 +15,7 @@ type TicketResult = {
   [key: string]: unknown;
 };
 
-const API_BASE = getApiBase();
-const API_URL = `${API_BASE}/api/search`;
+const API_URL = `/api/search`;
 
 function formatDate(value?: string) {
   if (!value) return "";
@@ -70,7 +69,7 @@ function StatusPill({ status }: { status?: string }) {
 
 export default function Search() {
   const [query, setQuery] = useState("");
-  console.log("SEARCH API_BASE =", API_BASE);
+
   const [results, setResults] = useState<TicketResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,7 +198,7 @@ export default function Search() {
     }, 10000);
 
     try {
-      const res = await fetch(API_URL, {
+      const res = await fetch(`/api/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ q: query }),
@@ -372,37 +371,46 @@ export default function Search() {
                 <tbody>
                   {filteredResults.map((ticket, index) => {
                     const isActive = index === activeIndex;
+                    const isSelected = selectedTicket && selectedTicket.id === ticket.id;
                     return (
-                      <tr
-                        key={ticket.id}
-                        className={
-                          "border-t border-slate-800 cursor-pointer " +
-                          (isActive
-                            ? "bg-slate-800/90 ring-1 ring-indigo-500"
-                            : "hover:bg-slate-800/80")
-                        }
-                        onClick={() => {
-                          setSelectedTicket(ticket);
-                          setActiveIndex(index);
-                        }}
-                      >
-                        <td className="px-4 py-2 font-mono text-xs text-slate-400">
-                          {ticket.id}
-                        </td>
-                        <td className="px-4 py-2">
-                          {highlightQuery(
-                            String(ticket.title ?? ticket.summary ?? ""),
-                            query
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <StatusPill status={ticket.status} />
-                        </td>
-                        <td className="px-4 py-2">{ticket.priority ?? "-"}</td>
-                        <td className="px-4 py-2 text-xs text-slate-400">
-                          {ticket.created_at ? formatDate(ticket.created_at) : "-"}
-                        </td>
-                      </tr>
+                      <React.Fragment key={ticket.id}>
+                        <tr
+                          className={
+                            "border-t border-slate-800 cursor-pointer " +
+                            (isActive
+                              ? "bg-slate-800/90 ring-1 ring-indigo-500"
+                              : "hover:bg-slate-800/80")
+                          }
+                          onClick={() => {
+                            setSelectedTicket(ticket);
+                            setActiveIndex(index);
+                          }}
+                        >
+                          <td className="px-4 py-2 font-mono text-xs text-slate-400">
+                            {ticket.id}
+                          </td>
+                          <td className="px-4 py-2">
+                            {highlightQuery(
+                              String(ticket.title ?? ticket.summary ?? ""),
+                              query
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            <StatusPill status={ticket.status} />
+                          </td>
+                          <td className="px-4 py-2">{ticket.priority ?? "-"}</td>
+                          <td className="px-4 py-2 text-xs text-slate-400">
+                            {ticket.created_at ? formatDate(ticket.created_at) : "-"}
+                          </td>
+                        </tr>
+                        {isSelected && (
+                          <tr>
+                            <td colSpan={5} className="bg-slate-900/80 px-4 py-2 border-t border-slate-800">
+                              <FeedbackForm ticketId={ticket.id} />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
