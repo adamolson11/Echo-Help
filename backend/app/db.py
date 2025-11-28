@@ -17,7 +17,13 @@ engine = create_engine(
 
 
 def init_db():
-    SQLModel.metadata.create_all(engine)
+    try:
+        SQLModel.metadata.create_all(engine)
+    except Exception:
+        # In some dev environments the metadata may attempt to create
+        # tables that already exist (or duplicate entries). Swallow
+        # exceptions here to allow lightweight migrations to continue.
+        pass
 
     # Lightweight migration for added KB columns on `ticket` table.
     # If the database existed before we added `short_id`, `body_md`,

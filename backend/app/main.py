@@ -12,6 +12,7 @@ from .api import (
     tickets,
 )
 from .api.routes import insights, ticket_feedback, patterns, ingest, ask_echo
+from .api.routes import snippets
 
 # ...existing imports...
 from .db import init_db, engine
@@ -63,6 +64,7 @@ app.include_router(ticket_feedback.router, prefix="/api")
 app.include_router(insights.router, prefix="/api")
 app.include_router(ingest.router, prefix="/api")
 app.include_router(ask_echo.router, prefix="/api")
+app.include_router(snippets.router, prefix="/api")
 app.include_router(feedback_suggestions.router, prefix="/api")
 app.include_router(semantic_search.router, prefix="/api")
 app.include_router(semantic_clusters.router, prefix="/api")
