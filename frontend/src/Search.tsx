@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useRef } from "react";
-import FeedbackForm from "./FeedbackForm";
 
 type TicketResult = {
   id: string | number;
@@ -74,6 +73,12 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<TicketResult | null>(null);
+  // Feedback UI state
+  const [feedbackRating, setFeedbackRating] = useState<number>(5);
+  const [feedbackNotes, setFeedbackNotes] = useState<string>("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed" | "other">(
     "all"
   );
@@ -247,6 +252,60 @@ export default function Search() {
       setLoading(false);
     }
   };
+
+  // Reset feedback state when selected ticket changes
+  useEffect(() => {
+    setFeedbackError(null);
+    setFeedbackSuccess(null);
+    setFeedbackNotes("");
+    setFeedbackRating(5);
+    setFeedbackSubmitting(false);
+  }, [selectedTicket]);
+
+  async function handleSubmitFeedback() {
+    if (!selectedTicket) return;
+
+    setFeedbackError(null);
+    setFeedbackSuccess(null);
+
+    // Require notes for low ratings
+    if (feedbackRating <= 3 && !feedbackNotes.trim()) {
+      setFeedbackError("Please describe what actually fixed it for low ratings.");
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    try {
+      const payload = {
+        ticket_id: selectedTicket.id,
+        rating: feedbackRating,
+        resolution_notes: feedbackNotes.trim(),
+        query_text: query || null,
+        helped: feedbackRating >= 4 ? true : false,
+      } as any;
+
+      const resp = await fetch("/api/ticket-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        setFeedbackError(`Failed to save feedback (status ${resp.status}).`);
+        return;
+      }
+
+      setFeedbackSuccess("Feedback saved — thanks!");
+      setFeedbackNotes("");
+      setFeedbackRating(5);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Error submitting feedback", err);
+      setFeedbackError("Network error while saving feedback.");
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }
 
     return (
       <div className="mx-auto max-w-3xl bg-slate-800/80 border border-slate-700 rounded-xl p-6 md:p-8 shadow-lg text-slate-100">
@@ -432,13 +491,7 @@ export default function Search() {
                             {ticket.created_at ? formatDate(ticket.created_at) : "-"}
                           </td>
                         </tr>
-                        {isSelected && (
-                          <tr>
-                            <td colSpan={5} className="bg-slate-900/80 px-4 py-2 border-t border-slate-800">
-                              <FeedbackForm ticketId={ticket.id} />
-                            </td>
-                          </tr>
-                        )}
+                        
                       </React.Fragment>
                     );
                   })}
@@ -525,6 +578,46 @@ export default function Search() {
                   </p>
                 </div>
               )}
+
+              {/* Feedback form */}
+              <div className="mt-6 border border-slate-700 rounded-lg p-4 bg-slate-900/60">
+                <h3 className="text-sm font-semibold mb-3">Feedback</h3>
+
+                <label className="block text-xs font-medium mb-1">How helpful was this ticket?</label>
+                <select
+                  className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm mb-3"
+                  value={feedbackRating}
+                  onChange={(e) => setFeedbackRating(Number(e.target.value))}
+                  disabled={feedbackSubmitting}
+                >
+                  <option value={5}>5 – Very helpful</option>
+                  <option value={4}>4</option>
+                  <option value={3}>3 – Neutral</option>
+                  <option value={2}>2</option>
+                  <option value={1}>1 – Not helpful</option>
+                </select>
+
+                <label className="block text-xs font-medium mb-1">What actually fixed it? (steps, missing info, or notes)</label>
+                <textarea
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm mb-3 resize-y min-h-[80px]"
+                  value={feedbackNotes}
+                  onChange={(e) => setFeedbackNotes(e.target.value)}
+                  disabled={feedbackSubmitting}
+                  placeholder="Example: Had to clear cached credentials and re-sync MFA before reset worked..."
+                />
+
+                {feedbackError && <p className="text-xs text-red-400 mb-2">{feedbackError}</p>}
+                {feedbackSuccess && <p className="text-xs text-emerald-400 mb-2">{feedbackSuccess}</p>}
+
+                <button
+                  type="button"
+                  onClick={handleSubmitFeedback}
+                  disabled={feedbackSubmitting || !selectedTicket}
+                  className="inline-flex items-center rounded bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed px-3 py-1.5 text-xs font-medium"
+                >
+                  {feedbackSubmitting ? "Submitting..." : "Submit feedback"}
+                </button>
+              </div>
             </>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-sm text-slate-400">
