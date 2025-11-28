@@ -126,6 +126,7 @@ export default function Search() {
   const [patternsError, setPatternsError] = useState<string | null>(null);
   const [ticketFeedbackHistory, setTicketFeedbackHistory] = useState<any[]>([]);
   const [ticketFeedbackLoading, setTicketFeedbackLoading] = useState(false);
+  const [isPendingInsightsSelection, setIsPendingInsightsSelection] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -247,7 +248,7 @@ export default function Search() {
     try {
         const endpoint = useSemantic ? "/api/semantic-search" : "/api/search";
         const bodyPayload: any = { q: localQuery, status: statusFilter, priority: priorityFilter };
-        if (useSemantic) bodyPayload.limit = 10;
+        if (useSemantic) bodyPayload.limit = 5;
 
         const res = await fetch(endpoint, {
           method: "POST",
@@ -301,6 +302,8 @@ export default function Search() {
           }, 50);
         }
         setPendingInsightsTicketId(null);
+        // clear pending hint when we've attempted selection
+        setIsPendingInsightsSelection(false);
       }
     } catch (err: any) {
       clearTimeout(timeout);
@@ -311,6 +314,8 @@ export default function Search() {
       }
       setResults([]);
     } finally {
+      // ensure pending hint is cleared if an error/timeout occurred
+      setIsPendingInsightsSelection(false);
       setLoading(false);
     }
   };
@@ -443,6 +448,7 @@ export default function Search() {
 
     // If not found, remember we want this ticket and trigger a broad search
     setPendingInsightsTicketId(ticketId);
+    setIsPendingInsightsSelection(true);
     // run a broad search (empty query) to load recent tickets
     runSearch("");
   };
@@ -708,6 +714,9 @@ export default function Search() {
 
               {loading && (
                 <div className="text-xs text-slate-400">{useSemantic ? "Running AI search…" : "Searching…"}</div>
+              )}
+              {isPendingInsightsSelection && (
+                <div className="text-xs text-slate-400">Loading and focusing ticket selected from Insights…</div>
               )}
             </div>
           </div>
