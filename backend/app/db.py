@@ -19,6 +19,35 @@ engine = create_engine(
 def init_db():
     SQLModel.metadata.create_all(engine)
 
+    # Lightweight migration for added KB columns on `ticket` table.
+    # If the database existed before we added `short_id`, `body_md`,
+    # `root_cause`, `environment`, or `tags`, create those columns.
+    try:
+        import sqlite3
+
+        # Only apply for SQLite file DBs
+        if DATABASE_URL.startswith("sqlite"):
+            db_path = DB_PATH
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute("PRAGMA table_info(ticket)")
+            cols = [r[1] for r in cur.fetchall()]
+
+            def add_col(col_def: str, col_name: str):
+                if col_name not in cols:
+                    cur.execute(f"ALTER TABLE ticket ADD COLUMN {col_def}")
+
+            add_col("short_id TEXT", "short_id")
+            add_col("body_md TEXT", "body_md")
+            add_col("root_cause TEXT", "root_cause")
+            add_col("environment TEXT", "environment")
+            add_col("tags TEXT", "tags")
+            conn.commit()
+            conn.close()
+    except Exception:
+        # Non-fatal migration helper — if it fails, existing schema will be used.
+        pass
+
 
 def get_session():
     with Session(engine) as session:

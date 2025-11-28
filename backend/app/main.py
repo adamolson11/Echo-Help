@@ -11,10 +11,12 @@ from .api import (
     semantic_search,
     tickets,
 )
-from .api.routes import insights, ticket_feedback, patterns
+from .api.routes import insights, ticket_feedback, patterns, ingest, ask_echo
 
 # ...existing imports...
-from .db import init_db
+from .db import init_db, engine
+from sqlalchemy import text
+import os
 
 app = FastAPI()
 
@@ -59,6 +61,8 @@ app.include_router(intake.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
 app.include_router(ticket_feedback.router, prefix="/api")
 app.include_router(insights.router, prefix="/api")
+app.include_router(ingest.router, prefix="/api")
+app.include_router(ask_echo.router, prefix="/api")
 app.include_router(feedback_suggestions.router, prefix="/api")
 app.include_router(semantic_search.router, prefix="/api")
 app.include_router(semantic_clusters.router, prefix="/api")
@@ -76,7 +80,21 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    # Basic DB connectivity check
+    db_ok = False
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+            db_ok = True
+    except Exception:
+        db_ok = False
+
+    return {
+        "status": "ok",
+        "service": "echohelp-backend",
+        "version": os.getenv("ECHOHELP_VERSION", "0.1.0"),
+        "db_ok": db_ok,
+    }
 
 
 @app.get("/healthz")

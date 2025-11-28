@@ -1,4 +1,5 @@
 from sqlmodel import Session, select
+import logging
 
 from ..models import Embedding, Ticket
 from .embeddings import MODEL_NAME, cosine_similarity, embed_text
@@ -26,9 +27,24 @@ def semantic_search_tickets(
         return []
 
     scored = []
+    logger = logging.getLogger(__name__)
+
     for emb in embeddings:
         # emb.vector is stored as JSON-backed list[float]
         vec = emb.vector
+        # Skip invalid vectors (non-list) and dimensionality mismatches.
+        if not isinstance(vec, (list, tuple)):
+            logger.warning("Skipping embedding id=%s: vector is not a list/tuple", getattr(emb, 'id', 'unknown'))
+            continue
+        if len(vec) != len(query_vec):
+            # skip vectors that don't align with the query embedding dim
+            logger.warning(
+                "Skipping embedding id=%s: dim mismatch %s vs %s",
+                getattr(emb, 'id', 'unknown'),
+                len(vec),
+                len(query_vec),
+            )
+            continue
         score = cosine_similarity(query_vec, vec)
         if emb.ticket_id is None:
             continue

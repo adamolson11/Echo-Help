@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy application
 COPY backend /app/backend
-COPY backend/requirements.txt /app/backend/requirements.txt
 
 ENV PYTHONPATH=/app
 

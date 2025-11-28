@@ -5,6 +5,7 @@ type TicketResult = {
   id: string | number;
   title?: string;
   summary?: string;
+  source?: string;
   status?: string;
   priority?: string;
   created_at?: string;
@@ -765,10 +766,19 @@ export default function Search() {
                           </td>
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-3">
-                              <div className="flex-1">
-                                {highlightQuery(
-                                  String(ticket.title ?? ticket.summary ?? ""),
-                                  query
+                              <div className="flex-1 flex items-center gap-2">
+                                <div className="flex-1">
+                                  {highlightQuery(
+                                    String(ticket.title ?? ticket.summary ?? ""),
+                                    query
+                                  )}
+                                </div>
+                                {ticket.source && (
+                                  <div className="flex-shrink-0">
+                                    <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
+                                      {String(ticket.source).toUpperCase()}
+                                    </span>
+                                  </div>
                                 )}
                               </div>
                               {useSemantic && (ticket as any).ai_score !== undefined && (

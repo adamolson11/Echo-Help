@@ -142,6 +142,58 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 
 The API root will be at: `http://127.0.0.1:8000`.
 
+### 🚀 Quick Demo (Search)
+
+A tiny CLI demo script is included to exercise the real HTTP API and print friendly results.
+
+1. Start the backend (from the repo root):
+
+```bash
+# Example: start the FastAPI dev server
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+2. Run the demo script (defaults to `http://localhost:8000`):
+
+```bash
+PYTHONPATH=. python -m scripts.demo_echohelp
+```
+
+If your backend is running on a different host/port, set `ECHOHELP_API_BASE`:
+
+```bash
+export ECHOHELP_API_BASE="http://127.0.0.1:8000"
+PYTHONPATH=. python -m scripts.demo_echohelp
+```
+
+The script issues a few example queries and prints a compact list of matching tickets (id, title, snippet, source).
+
+### 🔄 Ingest → Search Demo (End-to-End)
+
+This demo mode ingests a synthetic conversation thread and then searches for it to show the full
+pipeline: ingest -> embedding -> search.
+
+1. Start the backend (from the repo root):
+
+```bash
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+2. Run the ingest→search demo:
+
+```bash
+PYTHONPATH=. python -m scripts.demo_echohelp --mode ingest-search
+```
+
+This will POST a small synthetic thread to `/api/ingest/thread`, wait briefly for embedding,
+and then call `/api/search` to look up the ingested content. The script prints the ingest
+response followed by the search results.
+
+If you see zero results, check that the backend you're running is the same one used by the demo
+script (use `ECHOHELP_API_BASE` to point to another host/port).
+
+
+
 ### 4. Install frontend dependencies and run dev server
 
 ```bash

@@ -1,0 +1,12 @@
+{
+  "source": "slack",
+  "external_id": "C12345:1710000000.0001",
+  "title": "VPN drops every 20 minutes",
+  "resolved": true,
+  "resolution_notes": "Upgraded VPN client and restarted tunnel service.",
+  "messages": [
+    { "author": "user", "text": "VPN keeps disconnecting after 20 minutes." },
+    { "author": "agent", "text": "Check your client version and upgrade to 2.3.1." },
+    { "author": "user", "text": "Updated it and now it’s stable, thanks!" }
+  ]
+}
