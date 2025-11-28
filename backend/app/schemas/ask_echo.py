@@ -14,3 +14,6 @@ class AskEchoResponse(BaseModel):
     answer: str
     results: List[Any]
     snippets: List[SnippetSearchResult] = []
+    kb_backed: bool = False
+    kb_confidence: float = 0.0
+    mode: None | str = None

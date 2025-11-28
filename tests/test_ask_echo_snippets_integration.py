@@ -38,6 +38,11 @@ def test_ask_echo_returns_snippets_field_and_ordering():
         scores = [s.get("echo_score", 0) for s in snippets]
         assert scores == sorted(scores, reverse=True)
 
+    # verify answer metadata
+    assert data.get("kb_backed") is True
+    assert data.get("kb_confidence", 0.0) >= 0.0
+    assert data.get("mode") in ("KB_ONLY", "KB_AND_TICKETS")
+
 
 def test_ask_echo_handles_no_snippets_and_no_tickets():
     init_db()
@@ -47,3 +52,7 @@ def test_ask_echo_handles_no_snippets_and_no_tickets():
     assert data.get("query") == "no-such-query"
     assert "snippets" in data
     assert data["snippets"] == []
+    # verify metadata for no-kb case (may still surface tickets)
+    assert data.get("kb_backed") is False
+    assert data.get("kb_confidence") == 0.0
+    assert data.get("mode") in ("NO_KB", "TICKETS_ONLY")
