@@ -1,5 +1,3 @@
-import json
-
 from sqlmodel import Session, select
 
 from ..models import Embedding, Ticket
@@ -15,21 +13,26 @@ def semantic_search_tickets(
 
     query_vec = embed_text(q)
 
+    # Select embeddings that are associated with tickets and match the model
     embeddings = session.exec(
         select(Embedding).where(
-            Embedding.object_type == "ticket",
             Embedding.model_name == MODEL_NAME,
+            Embedding.ticket_id.is_not(None),  # type: ignore[reportAttributeAccessIssue]
         )
-    ).all()
+    )
+    embeddings = list(embeddings.all())
 
     if not embeddings:
         return []
 
     scored = []
     for emb in embeddings:
-        vec = json.loads(emb.vector_json)
+        # emb.vector is stored as JSON-backed list[float]
+        vec = emb.vector
         score = cosine_similarity(query_vec, vec)
-        scored.append((score, emb.object_id))
+        if emb.ticket_id is None:
+            continue
+        scored.append((score, emb.ticket_id))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[:limit]

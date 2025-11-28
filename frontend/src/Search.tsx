@@ -69,7 +69,7 @@ function StatusPill({ status }: { status?: string }) {
 
 export default function Search() {
   const [query, setQuery] = useState("");
-
+  const [useSemantic, setUseSemantic] = useState(false);
   const [results, setResults] = useState<TicketResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -198,10 +198,11 @@ export default function Search() {
     }, 10000);
 
     try {
-      const res = await fetch(`/api/search`, {
+      const endpoint = useSemantic ? "/api/semantic-search" : "/api/search";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: query }),
+        body: JSON.stringify({ q: query, limit: 50 }),
         signal: controller.signal,
       });
 
@@ -218,7 +219,22 @@ export default function Search() {
       }
 
       const data = await res.json();
-      setResults(Array.isArray(data) ? data : []);
+
+      // Normalize semantic-search results into the shape the UI expects.
+      if (useSemantic && Array.isArray(data)) {
+        const normalized = data.map((item: any) => ({
+          id: item.ticket_id ?? item.id ?? String(item.ticket_id),
+          summary: item.summary,
+          description: item.description,
+          // keep the ai score for optional UI display
+          ai_score: typeof item.score === "number" ? item.score : undefined,
+          // spread other fields in case backends provide them
+          ...item,
+        }));
+        setResults(normalized);
+      } else {
+        setResults(Array.isArray(data) ? data : []);
+      }
     } catch (err: any) {
       clearTimeout(timeout);
       if (err?.name === "AbortError") {
@@ -303,6 +319,16 @@ export default function Search() {
               <option value="closed">Closed / Resolved</option>
               <option value="other">Other</option>
             </select>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={useSemantic}
+              onChange={(e) => setUseSemantic(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span>Use AI semantic search</span>
           </label>
 
           <label className="inline-flex items-center gap-1">
@@ -394,6 +420,9 @@ export default function Search() {
                               String(ticket.title ?? ticket.summary ?? ""),
                               query
                             )}
+                            {useSemantic && (ticket as any).ai_score !== undefined && (
+                              <span className="ml-2 text-xs text-emerald-300">AI {((ticket as any).ai_score as number).toFixed(2)}</span>
+                            )}
                           </td>
                           <td className="px-4 py-2">
                             <StatusPill status={ticket.status} />
@@ -441,6 +470,9 @@ export default function Search() {
                   <h3 className="text-lg font-semibold">
                     {selectedTicket.title ?? selectedTicket.summary}
                   </h3>
+                  {selectedTicket && (selectedTicket as any).ai_score !== undefined && (
+                    <div className="text-xs text-emerald-300">AI score: {((selectedTicket as any).ai_score as number).toFixed(2)}</div>
+                  )}
                 </div>
                 <button
                   type="button"

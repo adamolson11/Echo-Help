@@ -1,6 +1,6 @@
-import numpy as np
-from typing import Sequence, Union
+from collections.abc import Sequence
 
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
 
@@ -22,7 +22,7 @@ MODEL_NAME = "all-MiniLM-L6-v2"
 _model = SentenceTransformer(MODEL_NAME)
 
 
-def embed_text(text: Union[str, Sequence[str]]):
+def embed_text(text: str | Sequence[str]):
     """
     Return embeddings as Python lists.
     If a single string is passed, return a single vector.
