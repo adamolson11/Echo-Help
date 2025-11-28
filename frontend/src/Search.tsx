@@ -321,6 +321,56 @@ export default function Search() {
     }
   };
 
+  // Send snippet feedback to backend using ticket_id so snippets can be
+  // auto-created/updated via ensure_snippet_for_feedback.
+  async function handleSnippetFeedback(ticketId: string | number, helped: boolean, notes?: string) {
+    setFeedbackError(null);
+    setFeedbackSuccess(null);
+    setFeedbackSubmitting(true);
+    try {
+      const payload: any = { ticket_id: ticketId, helped };
+      if (notes && notes.trim().length) payload.notes = notes.trim();
+
+      const res = await fetch(`/api/snippets/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const detail = body?.detail ?? `status ${res.status}`;
+        throw new Error(detail);
+      }
+
+      setFeedbackSuccess("Thank you — feedback submitted.");
+
+      // If the ticket we just fed back on isn't selected, select it so user
+      // can see the updated KB state in the inspector.
+      if (!selectedTicket || String(selectedTicket.id) !== String(ticketId)) {
+        const found = results.find((t) => String(t.id) === String(ticketId));
+        if (found) setSelectedTicket(found as TicketResult);
+      }
+
+      // Refresh ticket feedback history for the selected ticket
+      try {
+        const res2 = await fetch(`/api/ticket-feedback/?ticket_id=${ticketId}`);
+        if (res2.ok) {
+          const data = await res2.json();
+          setTicketFeedbackHistory(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        // ignore history refresh errors
+      }
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("Snippet feedback error", err);
+      setFeedbackError(err?.message || "Failed to submit feedback");
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }
+
   const handleSearch = async () => runSearch();
 
   // Reset feedback state when selected ticket changes
@@ -789,6 +839,32 @@ export default function Search() {
                                   </span>
                                 </div>
                               )}
+                              {/* Feedback buttons (quick). Stop propagation so clicking doesn't open the inspector accidentally. */}
+                              <div className="flex-shrink-0 ml-2 flex items-center gap-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedTicket(ticket);
+                                    handleSnippetFeedback(ticket.id, true);
+                                  }}
+                                  title="This helped"
+                                  className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs"
+                                >
+                                  👍
+                                </button>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    setSelectedTicket(ticket);
+                                    const note = window.prompt("What actually fixed it or why this didn't help? (optional)");
+                                    await handleSnippetFeedback(ticket.id, false, note ?? "");
+                                  }}
+                                  title="Didn't help"
+                                  className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-xs"
+                                >
+                                  👎
+                                </button>
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-2">
