@@ -6,6 +6,7 @@ from backend.app.schemas.ask_echo import AskEchoRequest, AskEchoResponse
 from backend.app.services.semantic_search import semantic_search_tickets
 from backend.app.db import get_session
 from backend.app.models.ticket import Ticket
+from backend.app.services.snippet_repository import search_snippets as repo_search_snippets
 import logging
 
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
@@ -42,4 +43,25 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
     # Safety note for experimental AI output
     answer = answer + "\n\nNote: This is experimental AI output — verify details before applying fixes." 
 
-    return AskEchoResponse(query=req.q, answer=answer, results=[r.model_dump() for r in tickets])
+    # Find matching snippets in the KB and sort by echo_score desc
+    try:
+        snippets = repo_search_snippets(session, req.q, limit=req.limit)
+        snippets = sorted(snippets, key=lambda s: (s.echo_score or 0.0), reverse=True)
+    except Exception:
+        logging.exception("snippet search failed")
+        snippets = []
+
+    # Map snippets to lightweight summaries
+    snippet_summaries = [
+        {
+            "id": s.id,
+            "title": s.title,
+            "summary": s.summary,
+            "echo_score": s.echo_score,
+            "success_count": s.success_count,
+            "ticket_id": s.ticket_id,
+        }
+        for s in snippets
+    ]
+
+    return AskEchoResponse(query=req.q, answer=answer, results=[r.model_dump() for r in tickets], snippets=snippet_summaries)
