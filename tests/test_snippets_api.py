@@ -78,3 +78,39 @@ def test_snippet_search_empty_query_returns_empty():
     assert resp.status_code == 200
     results = resp.json()
     assert results == []
+
+
+def test_feedback_unknown_snippet_returns_404():
+    init_db()
+    resp = client.post("/api/snippets/feedback", json={"snippet_id": 999999, "helped": True})
+    assert resp.status_code == 404
+    data = resp.json()
+    assert data.get("detail") == "Snippet not found"
+
+
+def test_feedback_requires_snippet_or_ticket():
+    init_db()
+    # missing both snippet_id and ticket_id should return 400
+    resp = client.post("/api/snippets/feedback", json={"helped": True})
+    assert resp.status_code == 400
+    assert resp.json().get("detail") == "snippet_id or ticket_id required"
+
+
+def test_feedback_accepts_optional_resolution_notes():
+    init_db()
+    # create snippet
+    s = client.post("/api/snippets/create", json={"title": "Note test", "content_md": "do this", "source": "test"}).json()
+    sid = s["id"]
+    note = "This resolved the issue by restarting the agent"
+    resp = client.post("/api/snippets/feedback", json={"snippet_id": sid, "helped": True, "notes": note})
+    assert resp.status_code == 200
+
+    # verify a feedback row persists with notes
+    from sqlmodel import Session, select
+    from backend.app.db import engine
+    from backend.app.models.snippets import SnippetFeedback
+
+    with Session(engine) as session:
+        rows = session.exec(select(SnippetFeedback).where(SnippetFeedback.snippet_id == sid)).all()
+        assert len(rows) >= 1
+        assert any(r.notes and note in r.notes for r in rows)

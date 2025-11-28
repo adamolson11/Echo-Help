@@ -20,7 +20,7 @@ def search_snippets(session: Session, query: str, limit: int = 10, offset: int =
 def increment_feedback_and_recalculate_score(session: Session, snippet_id: int, helped: bool, notes: str | None = None) -> SolutionSnippet:
     snippet = session.get(SolutionSnippet, snippet_id)
     if not snippet:
-        raise ValueError("snippet not found")
+        raise ValueError("Snippet not found")
 
     # persist feedback
     fb = SnippetFeedback(snippet_id=snippet_id, helped=helped, notes=notes)

@@ -19,7 +19,11 @@ class CreateSnippetResponse(BaseModel):
 
 
 class SnippetFeedbackRequest(BaseModel):
-    snippet_id: int
+    # Accept either a `snippet_id` (preferred) or a `ticket_id` to allow
+    # creating/reusing a snippet based on the ticket context. At least one
+    # of these should be provided; router will validate presence.
+    snippet_id: Optional[int] = None
+    ticket_id: Optional[int] = None
     helped: bool
     notes: Optional[str] = None
 

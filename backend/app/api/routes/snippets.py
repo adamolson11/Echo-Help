@@ -47,13 +47,30 @@ def create_snippet(payload: CreateSnippetRequest, session: Session = Depends(get
 
 @router.post("/snippets/feedback")
 def submit_snippet_feedback(payload: SnippetFeedbackRequest, session: Session = Depends(get_session)):
-    # Validate snippet exists
-    snippet = get_snippet_by_id(session, payload.snippet_id)
-    if not snippet:
-        raise HTTPException(status_code=404, detail="snippet not found")
+    # Validate presence of an identifier
+    if not payload.snippet_id and not payload.ticket_id:
+        raise HTTPException(status_code=400, detail="snippet_id or ticket_id required")
+
+    # If snippet_id provided, use it. Otherwise try to find or create a snippet for ticket_id
+    snippet_id = payload.snippet_id
+    if not snippet_id and payload.ticket_id:
+        # try to ensure a snippet exists for that ticket
+        try:
+            from backend.app.services.snippet_processor import ensure_snippet_for_feedback
+
+            snippet = ensure_snippet_for_feedback(session=session, ticket_id=payload.ticket_id, feedback_notes=payload.notes or "")
+            snippet_id = snippet.id
+        except Exception:
+            raise HTTPException(status_code=500, detail="failed to ensure snippet for ticket")
 
     # Increment counters and recalc atomically
-    updated = increment_feedback_and_recalculate_score(session, payload.snippet_id, payload.helped, payload.notes)
+    try:
+        updated = increment_feedback_and_recalculate_score(session, snippet_id, payload.helped, payload.notes)
+    except ValueError as e:
+        # bubble up not found as 404
+        if str(e).lower().startswith("snippet not found"):
+            raise HTTPException(status_code=404, detail="Snippet not found")
+        raise HTTPException(status_code=500, detail="feedback update failed")
 
     return {"snippet_id": updated.id, "echo_score": updated.echo_score}
 

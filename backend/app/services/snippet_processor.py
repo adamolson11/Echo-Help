@@ -87,3 +87,32 @@ def summarize_resolution_with_ai(query: str, notes: str) -> str:
     if len(excerpt) > 800:
         excerpt = excerpt[:800] + "..."
     return f"**Summary for**: {query}\n\n{excerpt}\n"
+
+
+def ensure_snippet_for_feedback(session: Session, ticket_id: int, feedback_notes: str) -> SolutionSnippet:
+    """Find or create a snippet associated with `ticket_id`.
+
+    If a snippet already exists for the ticket, return it. Otherwise create
+    a minimal snippet using the ticket summary and feedback notes.
+    """
+    if not ticket_id:
+        raise ValueError("ticket_id required")
+
+    # Try to find existing snippet for ticket
+    existing = session.exec(select(SolutionSnippet).where(SolutionSnippet.ticket_id == ticket_id)).first()
+    if existing:
+        return existing
+
+    # Build a snippet from ticket and notes
+    t = session.exec(select(Ticket).where(Ticket.id == ticket_id)).one_or_none()
+    title = None
+    if t:
+        title = f"Solution for {t.summary or t.title or ('ticket-'+str(ticket_id))}"
+
+    if not title:
+        title = f"Snippet from feedback for ticket {ticket_id}"
+
+    content_md = f"### Auto-generated snippet from feedback\n\n{feedback_notes or ''}\n"
+
+    snippet = generate_snippet_from_feedback(title=title, content_md=content_md, session=session, ticket_id=ticket_id)
+    return snippet
