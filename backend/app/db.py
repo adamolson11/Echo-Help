@@ -1,6 +1,11 @@
+from pathlib import Path
+
 from sqlmodel import Session, SQLModel, create_engine
 
-DATABASE_URL = "sqlite:///./echohelp.db"
+# Use a repo-root absolute path so the same database file is used
+# regardless of the current working directory when starting the server.
+BASE_DIR = Path(__file__).resolve().parents[2]
+DATABASE_URL = f"sqlite:///{BASE_DIR / 'echohelp.db'}"
 
 engine = create_engine(
     DATABASE_URL,

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 
 type TicketResult = {
   id: string | number;
@@ -14,8 +14,7 @@ type TicketResult = {
   [key: string]: unknown;
 };
 
-const API_URL = `/api/search`;
-
+ 
 function formatDate(value?: string) {
   if (!value) return "";
   const d = new Date(value);
@@ -69,6 +68,22 @@ function StatusPill({ status }: { status?: string }) {
 export default function Search() {
   const [query, setQuery] = useState("");
   const [useSemantic, setUseSemantic] = useState(false);
+  
+  // Persist AI toggle to localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("useAiSearch");
+    if (saved !== null) {
+      setUseSemantic(saved === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("useAiSearch", String(useSemantic));
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [useSemantic]);
   const [results, setResults] = useState<TicketResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +94,7 @@ export default function Search() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
+  const [feedbackHelped, setFeedbackHelped] = useState<boolean | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed" | "other">(
     "all"
   );
@@ -86,6 +102,30 @@ export default function Search() {
     "all" | "low" | "medium" | "high" | "critical"
   >("all");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  // Tabs: search | insights
+  const [activeTab, setActiveTab] = useState<"search" | "insights">("search");
+  // When an Insights item requests a ticket that isn't loaded yet,
+  // store its id here so we can auto-select it after a broad search.
+  const [pendingInsightsTicketId, setPendingInsightsTicketId] = useState<number | null>(null);
+
+  interface TicketPattern {
+    ticket_id: number;
+    summary?: string;
+    total_feedback: number;
+    unresolved: number;
+  }
+
+  interface PatternsSummary {
+    total_feedback: number;
+    by_ticket: TicketPattern[];
+    top_unresolved: TicketPattern[];
+  }
+
+  const [patterns, setPatterns] = useState<PatternsSummary | null>(null);
+  const [patternsLoading, setPatternsLoading] = useState(false);
+  const [patternsError, setPatternsError] = useState<string | null>(null);
+  const [ticketFeedbackHistory, setTicketFeedbackHistory] = useState<any[]>([]);
+  const [ticketFeedbackLoading, setTicketFeedbackLoading] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -190,8 +230,10 @@ export default function Search() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [filteredResults, activeIndex, selectedTicket]);
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  // Central search runner used by the UI. Accept an optional `qArg` to
+  // perform a broad search (e.g., empty string) when triggered from Insights.
+  const runSearch = async (qArg?: string) => {
+    const localQuery = qArg !== undefined ? qArg : query;
 
     setLoading(true);
     setError(null);
@@ -203,13 +245,16 @@ export default function Search() {
     }, 10000);
 
     try {
-      const endpoint = useSemantic ? "/api/semantic-search" : "/api/search";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: query, limit: 50 }),
-        signal: controller.signal,
-      });
+        const endpoint = useSemantic ? "/api/semantic-search" : "/api/search";
+        const bodyPayload: any = { q: localQuery, status: statusFilter, priority: priorityFilter };
+        if (useSemantic) bodyPayload.limit = 10;
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyPayload),
+          signal: controller.signal,
+        });
 
       clearTimeout(timeout);
 
@@ -226,19 +271,36 @@ export default function Search() {
       const data = await res.json();
 
       // Normalize semantic-search results into the shape the UI expects.
+      let normalized: TicketResult[] = [];
       if (useSemantic && Array.isArray(data)) {
-        const normalized = data.map((item: any) => ({
+        normalized = data.map((item: any) => ({
           id: item.ticket_id ?? item.id ?? String(item.ticket_id),
           summary: item.summary,
           description: item.description,
-          // keep the ai score for optional UI display
           ai_score: typeof item.score === "number" ? item.score : undefined,
-          // spread other fields in case backends provide them
           ...item,
         }));
-        setResults(normalized);
       } else {
-        setResults(Array.isArray(data) ? data : []);
+        normalized = Array.isArray(data) ? data : [];
+      }
+
+      setResults(normalized);
+
+      // If Insights requested a specific ticket, try to select it now.
+      if (pendingInsightsTicketId !== null) {
+        const pid = pendingInsightsTicketId;
+        const idx = normalized.findIndex((t) => String(t.id) === String(pid));
+        if (idx !== -1) {
+          const ticket = normalized[idx];
+          setSelectedTicket(ticket);
+          setActiveIndex(idx);
+          // scroll into view
+          setTimeout(() => {
+            const el = document.getElementById(`ticket-row-${ticket.id}`);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 50);
+        }
+        setPendingInsightsTicketId(null);
       }
     } catch (err: any) {
       clearTimeout(timeout);
@@ -253,6 +315,8 @@ export default function Search() {
     }
   };
 
+  const handleSearch = async () => runSearch();
+
   // Reset feedback state when selected ticket changes
   useEffect(() => {
     setFeedbackError(null);
@@ -260,7 +324,55 @@ export default function Search() {
     setFeedbackNotes("");
     setFeedbackRating(5);
     setFeedbackSubmitting(false);
+    setFeedbackHelped(null);
+    // Load ticket feedback history for inspector
+    if (selectedTicket && selectedTicket.id) {
+      const loadHistory = async () => {
+        try {
+          setTicketFeedbackLoading(true);
+          const res = await fetch(`/api/ticket-feedback/?ticket_id=${selectedTicket.id}`);
+          if (!res.ok) throw new Error(`failed to fetch feedback: ${res.status}`);
+          const data = await res.json();
+          setTicketFeedbackHistory(Array.isArray(data) ? data : []);
+        } catch (err) {
+          setTicketFeedbackHistory([]);
+        } finally {
+          setTicketFeedbackLoading(false);
+        }
+      };
+
+      loadHistory();
+    } else {
+      setTicketFeedbackHistory([]);
+    }
   }, [selectedTicket]);
+
+  // Fetch patterns summary when Insights tab is activated
+  useEffect(() => {
+    if (activeTab !== "insights") return;
+    if (patterns || patternsLoading) return;
+
+    const fetchPatterns = async () => {
+      try {
+        setPatternsLoading(true);
+        setPatternsError(null);
+
+        const res = await fetch("/api/patterns/summary");
+        if (!res.ok) throw new Error(`Patterns request failed: ${res.status}`);
+
+        const data = await res.json();
+        setPatterns(data as PatternsSummary);
+      } catch (err: any) {
+        // eslint-disable-next-line no-console
+        console.error("Patterns fetch error:", err);
+        setPatternsError(err?.message ?? "Failed to load patterns.");
+      } finally {
+        setPatternsLoading(false);
+      }
+    };
+
+    fetchPatterns();
+  }, [activeTab, patterns, patternsLoading]);
 
   async function handleSubmitFeedback() {
     if (!selectedTicket) return;
@@ -268,9 +380,9 @@ export default function Search() {
     setFeedbackError(null);
     setFeedbackSuccess(null);
 
-    // Require notes for low ratings
-    if (feedbackRating <= 3 && !feedbackNotes.trim()) {
-      setFeedbackError("Please describe what actually fixed it for low ratings.");
+    // Require notes for low ratings or when user says it did NOT help
+    if ((feedbackRating <= 3 || feedbackHelped === false) && !feedbackNotes.trim()) {
+      setFeedbackError("Please describe what actually fixed it for low ratings or why this did not help.");
       return;
     }
 
@@ -280,11 +392,13 @@ export default function Search() {
         ticket_id: selectedTicket.id,
         rating: feedbackRating,
         resolution_notes: feedbackNotes.trim(),
-        query_text: query || null,
-        helped: feedbackRating >= 4 ? true : false,
+        // ensure non-null value for query_text to match backend NOT NULL constraint
+        query_text: query || "",
+        // prefer explicit helped flag if user set it; otherwise infer from rating
+        helped: feedbackHelped !== null ? feedbackHelped : feedbackRating >= 4,
       } as any;
 
-      const resp = await fetch("/api/ticket-feedback", {
+      const resp = await fetch("/api/ticket-feedback/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -307,6 +421,32 @@ export default function Search() {
     }
   }
 
+  // When an Insights list item is clicked, switch to Search and try to select that ticket.
+  const handleInsightsTicketClick = (ticketId: number) => {
+    // Switch to the search tab
+    setActiveTab("search");
+    // Try to find the ticket in the currently loaded results (best-effort)
+    const foundIdx = results.findIndex((t: any) => String(t.id) === String(ticketId));
+    if (foundIdx !== -1) {
+      const ticket = results[foundIdx];
+      setSelectedTicket(ticket);
+      // Also try to set the active index so the row is highlighted if visible
+      const idx = filteredResults.findIndex((t) => String(t.id) === String(ticketId));
+      if (idx >= 0) setActiveIndex(idx);
+      // Scroll into view
+      setTimeout(() => {
+        const el = document.getElementById(`ticket-row-${ticketId}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+      return;
+    }
+
+    // If not found, remember we want this ticket and trigger a broad search
+    setPendingInsightsTicketId(ticketId);
+    // run a broad search (empty query) to load recent tickets
+    runSearch("");
+  };
+
     return (
       <div className="mx-auto max-w-3xl bg-slate-800/80 border border-slate-700 rounded-xl p-6 md:p-8 shadow-lg text-slate-100">
       <h2 className="text-xl font-semibold mb-1">Ticket Search</h2>
@@ -317,6 +457,36 @@ export default function Search() {
         <span className="font-mono">onboarding</span>.
       </p>
 
+      {/* Tab header */}
+      <div className="mb-4 border-b border-slate-700 flex items-center justify-between">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("search")}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+              activeTab === "search"
+                ? "border-indigo-500 text-indigo-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Search
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("insights")}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+              activeTab === "insights"
+                ? "border-indigo-500 text-indigo-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Insights
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "search" && (
+        <>
       {/* Search bar */}
       <form
         className="flex gap-2 mb-4"
@@ -329,7 +499,7 @@ export default function Search() {
           ref={searchInputRef}
           type="text"
           className="flex-1 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          placeholder="Search tickets..."
+          placeholder="Describe the issue or paste an error message…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           disabled={loading}
@@ -337,11 +507,15 @@ export default function Search() {
         <button
           type="submit"
           className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={loading || !query.trim()}
+          disabled={loading}
         >
           {loading ? "Searching…" : "Search"}
         </button>
       </form>
+
+      <div className="mb-4">
+        <div className="text-xs text-slate-400">Try asking a question or describing what happened — e.g. "I can't log in after password reset".</div>
+      </div>
 
       {/* Error banner */}
       {error && (
@@ -415,29 +589,135 @@ export default function Search() {
             <span>No tickets loaded yet</span>
           ) : filteredResults.length === 0 ? (
             <span>No tickets match current filters</span>
+          ) : useSemantic ? (
+            <span>
+              Showing top <span className="font-semibold text-slate-100">{filteredResults.length}</span> AI-ranked tickets
+            </span>
           ) : (
             <span>
-              Showing{" "}
-              <span className="font-semibold text-slate-100">
-                {filteredResults.length}
-              </span>{" "}
-              of{" "}
-              <span className="font-semibold text-slate-100">
-                {results.length}
-              </span>{" "}
-              tickets
+              Showing <span className="font-semibold text-slate-100">{filteredResults.length}</span> of <span className="font-semibold text-slate-100">{results.length}</span> tickets
             </span>
           )}
         </div>
       </div>
 
+      {/* End Search tab */}
+        </>
+      )}
+
+      {activeTab === "insights" && (
+        <div className="space-y-4">
+          {/* Friendly empty state when there is no feedback at all */}
+          {patterns && patterns.total_feedback === 0 && !patternsLoading && (
+            <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/70 p-4 text-xs text-slate-300">
+              <p className="font-medium text-slate-100 mb-1">No feedback yet</p>
+              <p>As agents start submitting “Did this resolve your issue?” feedback, EchoHelp will surface unresolved patterns and high-friction tickets here.</p>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+              <div className="text-xs text-slate-400">Total Feedback</div>
+              <div className="mt-1 text-2xl font-semibold">
+                {patterns ? patterns.total_feedback : patternsLoading ? "…" : "0"}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+              <div className="text-xs text-slate-400">Tickets with Unresolved Feedback</div>
+              <div className="mt-1 text-2xl font-semibold">
+                {patterns
+                  ? patterns.by_ticket.filter((t) => t.unresolved > 0).length
+                  : patternsLoading
+                  ? "…"
+                  : "0"}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+              <div className="text-xs text-slate-400">Most Unresolved Ticket</div>
+              <div className="mt-1 text-sm font-semibold line-clamp-2">
+                {patterns && patterns.top_unresolved.length > 0
+                  ? patterns.top_unresolved[0].summary || `Ticket #${patterns.top_unresolved[0].ticket_id}`
+                  : patternsLoading
+                  ? "Loading…"
+                  : "No data"}
+              </div>
+            </div>
+          </div>
+
+          {patternsError && (
+            <div className="rounded-md border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
+              {patternsError}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-slate-100">Top Unresolved Tickets</h2>
+              {patternsLoading && <span className="text-xs text-slate-400">Loading…</span>}
+            </div>
+
+            {patterns && patterns.top_unresolved.length === 0 && !patternsLoading && (
+              <p className="text-xs text-slate-400">No unresolved feedback yet. Once users start saying “No, this didn’t help”, they will show up here.</p>
+            )}
+
+            {patterns && patterns.top_unresolved.length > 0 && (
+              <ul className="divide-y divide-slate-800">
+                {patterns.top_unresolved.map((item) => (
+                  <li
+                    key={item.ticket_id}
+                    onClick={() => handleInsightsTicketClick(item.ticket_id)}
+                    className="py-2 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 rounded-md px-2 transition"
+                  >
+                    <div className="mr-2">
+                      <div className="text-xs font-medium text-slate-100">{item.summary || `Ticket #${item.ticket_id}`}</div>
+                      <div className="text-[11px] text-slate-400">Ticket #{item.ticket_id}</div>
+                    </div>
+                    <div className="flex gap-3 text-[11px]">
+                      <span className="px-2 py-1 rounded-full bg-slate-800 text-slate-200">{item.total_feedback} feedback</span>
+                      <span className="px-2 py-1 rounded-full bg-rose-900/70 text-rose-100">{item.unresolved} unresolved</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Results + inspector layout */}
       <div className="mt-2 grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)] gap-3 items-start">
         {/* Results table */}
         <div className="bg-slate-900/60 border border-slate-700 rounded-lg">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <h2 className="text-sm font-semibold text-slate-100">Results</h2>
+            <div className="flex items-center gap-3">
+              {useSemantic ? (
+                <div className="text-xs text-emerald-200">
+                  {query ? (
+                    <span>
+                      AI semantic search – top <span className="font-semibold">{filteredResults.length}</span> matches for “{query}”
+                    </span>
+                  ) : (
+                    <span>AI semantic search – top <span className="font-semibold">{filteredResults.length}</span> matches for recent issues</span>
+                  )}
+                </div>
+              ) : (
+                <span className="inline-flex items-center rounded-full border border-slate-600 bg-slate-900/30 px-2 py-1 text-[11px] font-medium text-slate-200">Keyword search</span>
+              )}
+
+              {loading && (
+                <div className="text-xs text-slate-400">{useSemantic ? "Running AI search…" : "Searching…"}</div>
+              )}
+            </div>
+          </div>
           {results.length === 0 && !loading && !error && (
             <div className="px-4 py-6 text-sm text-slate-400 text-center">
-              No tickets yet. Try a different keyword or broaden your search.
+              {useSemantic ? (
+                <span>No strong AI matches yet. Try a different query or switch to keyword search.</span>
+              ) : (
+                <span>No tickets yet. Try a different keyword or broaden your search.</span>
+              )}
             </div>
           )}
 
@@ -456,10 +736,10 @@ export default function Search() {
                 <tbody>
                   {filteredResults.map((ticket, index) => {
                     const isActive = index === activeIndex;
-                    const isSelected = selectedTicket && selectedTicket.id === ticket.id;
                     return (
-                      <React.Fragment key={ticket.id}>
+                      <Fragment key={ticket.id}>
                         <tr
+                          id={`ticket-row-${ticket.id}`}
                           className={
                             "border-t border-slate-800 cursor-pointer " +
                             (isActive
@@ -475,13 +755,22 @@ export default function Search() {
                             {ticket.id}
                           </td>
                           <td className="px-4 py-2">
-                            {highlightQuery(
-                              String(ticket.title ?? ticket.summary ?? ""),
-                              query
-                            )}
-                            {useSemantic && (ticket as any).ai_score !== undefined && (
-                              <span className="ml-2 text-xs text-emerald-300">AI {((ticket as any).ai_score as number).toFixed(2)}</span>
-                            )}
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1">
+                                {highlightQuery(
+                                  String(ticket.title ?? ticket.summary ?? ""),
+                                  query
+                                )}
+                              </div>
+                              {useSemantic && (ticket as any).ai_score !== undefined && (
+                                <div className="flex-shrink-0">
+                                  <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-200 text-xs font-medium">
+                                    <span className="font-mono text-[11px]">AI</span>
+                                    <span>{((ticket as any).ai_score as number).toFixed(2)}</span>
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-2">
                             <StatusPill status={ticket.status} />
@@ -492,7 +781,7 @@ export default function Search() {
                           </td>
                         </tr>
                         
-                      </React.Fragment>
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -505,7 +794,11 @@ export default function Search() {
             !loading &&
             !error && (
               <div className="px-4 py-6 text-sm text-slate-400 text-center">
-                No tickets match the current filters.
+                {useSemantic ? (
+                  <span>No strong AI matches for “{query || 'your query'}”. Try different wording or switch to keyword search.</span>
+                ) : (
+                  <span>No tickets found for “{query}”. Try a broader search or switch to AI semantic search.</span>
+                )}
               </div>
             )}
         </div>
@@ -579,9 +872,46 @@ export default function Search() {
                 </div>
               )}
 
+              {/* Previous feedback history (if any) */}
+              {ticketFeedbackLoading ? (
+                <div className="mb-3 text-xs text-slate-400">Loading previous feedback…</div>
+              ) : ticketFeedbackHistory && ticketFeedbackHistory.length > 0 ? (
+                <div className="mb-3 border border-slate-800 rounded-md bg-slate-900/70 p-2 max-h-40 overflow-y-auto">
+                  <div className="text-[11px] font-semibold text-slate-200 mb-1">Previous feedback</div>
+                  <ul className="space-y-1">
+                    {ticketFeedbackHistory.map((fb) => (
+                      <li key={fb.id} className="text-[11px] text-slate-300">
+                        <span className="font-medium">{fb.helped ? "✅ Helped" : "⚠️ Not resolved"}</span>{" "}
+                        · rating {fb.rating} · <span className="text-slate-400">{fb.resolution_notes ? (fb.resolution_notes.length > 120 ? fb.resolution_notes.slice(0, 120) + "…" : fb.resolution_notes) : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               {/* Feedback form */}
               <div className="mt-6 border border-slate-700 rounded-lg p-4 bg-slate-900/60">
                 <h3 className="text-sm font-semibold mb-3">Feedback</h3>
+
+                <label className="block text-xs font-medium mb-1">Did this resolve your issue?</label>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackHelped(true)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium border ${feedbackHelped === true ? 'bg-emerald-600/80 border-emerald-400' : 'bg-slate-900 border-slate-700'}`}
+                    disabled={feedbackSubmitting}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackHelped(false)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium border ${feedbackHelped === false ? 'bg-rose-600/80 border-rose-400' : 'bg-slate-900 border-slate-700'}`}
+                    disabled={feedbackSubmitting}
+                  >
+                    No
+                  </button>
+                </div>
 
                 <label className="block text-xs font-medium mb-1">How helpful was this ticket?</label>
                 <select

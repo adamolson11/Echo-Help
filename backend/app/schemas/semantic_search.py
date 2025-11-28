@@ -6,6 +6,8 @@ from pydantic import BaseModel
 class SemanticSearchRequest(BaseModel):
     q: str
     limit: int = 10
+    status: str | None = None
+    priority: str | None = None
 
 
 class SemanticSearchResult(BaseModel):

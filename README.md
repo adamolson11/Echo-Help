@@ -12,300 +12,315 @@ It transforms how support teams search, categorize, resolve, and continually imp
 
 At its core, EchoHelp turns a single natural-language problem description into:
 
-Predicted ticket fields (category, subcategory, tags)
+# EchoHelp
+
+EchoHelp is a small SaaS-style tool for IT support teams.  
+It lets agents search historical tickets, record what actually fixed each issue, and surface unresolved problem patterns over time — with optional **AI semantic search** powered by embeddings.
+
+---
+
+## ✨ Features
+
+- **Ticket search console**
+  - Keyword-based search (`/api/search`) across ticket summaries and descriptions.
+  - Optional **AI semantic search** (`/api/semantic-search`) using vector embeddings.
+  - “Use AI semantic search” toggle with a visible badge and per-result AI score.
+
+- **Ticket inspector & feedback loop**
+  - Click a ticket to open a detailed inspector panel.
+  - Capture structured resolution feedback:
+    - Did this resolve your issue? (**Yes/No**)
+    - What did you do to resolve it? (free-text notes)
+    - Rating (1–5)
+    - Original query text
+  - Feedback is persisted to a `ticketfeedback` table via `/api/ticket-feedback/`.
 
-Relevant historical tickets and docs (semantic ranking)
+- **Insights (patterns) view**
+  - `/api/patterns/summary` aggregates all feedback:
+    - Total feedback count
+    - Tickets with unresolved feedback
+    - Top unresolved tickets with counts
+  - **Insights tab** in the UI shows:
+    - A small metrics row (total feedback, unresolved tickets, most unresolved ticket)
+    - A “Top Unresolved Tickets” list
+  - Clicking a ticket in Insights jumps back to the Search tab and (when possible) highlights that ticket in the results.
 
-Suggested standardized phrasing (canonical terms)
+- **Developer experience**
+  - Canonical SQLite DB in the repo root (`echohelp.db`) with helper scripts:
+    - `db_init.sh` – create tables and seed demo tickets
+    - `db_reset.sh` – drop & recreate DB + seed data + backfill embeddings
+  - Semantic embeddings backfill script: `scripts/backfill_ticket_embeddings.py`.
+  - GitHub Actions CI pipeline running `ruff`, `pyright`, and `pytest`.
+  - Production build via Vite (`npm run build` in `frontend/`).
 
-A feedback-driven improvement loop for solution accuracy
+---
 
-A living, self-auditing knowledge base enriched by real agent input
+## 🧱 Architecture
 
-The system evolves with every interaction, slowly building a semantic understanding of an organization’s support landscape.
+**Backend**
 
-🎯 MVP Goals
+- **Framework:** FastAPI
+- **ORM:** SQLModel
+- **Database:** SQLite (`echohelp.db` in repo root)
+- **Key modules:**
+  - `backend/app/api/search.py` – keyword ticket search (`/api/search`)
+  - `backend/app/api/semantic_search.py` – embedding-based semantic search (`/api/semantic-search`)
+  - `backend/app/api/routes/ticket_feedback.py` – feedback endpoint (`/api/ticket-feedback/`)
+  - `backend/app/api/routes/patterns.py` – feedback patterns summary (`/api/patterns/summary`)
+  - `backend/app/services/embeddings.py` – embedding helper + model loading
+  - `backend/app/models/ticket.py` – ticket model
+  - `backend/app/models/ticket_feedback.py` – feedback model
+  - `backend/app/models/embedding.py` – ticket embedding model
+  - `backend/app/db_init.py` – DB init + seeding
 
-The initial MVP focuses on a tightly scoped, high-impact vertical slice:
+**Frontend**
 
-1. Natural Language Intake → Structured Ticket Prediction
+- **Framework:** React + TypeScript
+- **Bundler/Dev:** Vite
+- **Styling:** Tailwind CSS
+- **Key components:**
+  - `frontend/src/Search.tsx` – main search console + feedback UI + Insights tab
+    - Keyword vs AI semantic search toggle
+    - Results list + ticket inspector
+    - Feedback form and submit handler
+    - Insights tab with patterns summary and click-through to Search
 
-Convert a customer sentence into predicted category/subcategory/tags.
+**CI / Tooling**
 
-Suggest canonical language via embeddings-based similarity.
+- `ruff` for linting
+- `pyright` for static type checking
+- `pytest` for tests
+- GitHub Actions workflow in `.github/workflows/ci.yml`
 
-Auto-fill a ticket form (editable by agents).
+---
 
-2. Semantic Search Over Tickets & Docs
+## 🚀 Getting Started
 
-Jira ingestion for a test project.
+### Prerequisites
 
-Embedding-based similarity for:
+- Python 3.11+ (or compatible version used in the repo)
+- Node.js + npm
+- (Optional) `virtualenv` / `venv` for Python dependencies
 
-historical tickets
+### 1. Clone and install backend dependencies
 
-KB documents
+```bash
+git clone <your-repo-url>.git
+cd Echo-Help   # or your repo folder
 
-Rank results based on:
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 
-semantic relevance
+pip install -r backend/requirements.txt
+```
 
-usefulness feedback
+### 2. Initialize the database
 
-3. Agent Feedback → Continuous Learning
+From the repo root:
 
-“Did this help?” rating system.
+```bash
+chmod +x scripts/db_init.sh scripts/db_reset.sh
 
-Use feedback to adjust future ranking.
+# Create tables + seed demo tickets + (optionally) seed embeddings via db_init
+./scripts/db_init.sh
 
-Foundation for a self-improving search engine.
+# Or, if you want a completely fresh DB:
+./scripts/db_reset.sh
+```
 
-4. Document Viewer with Concept Highlighting (v0.1)
+If embeddings are not yet populated, run:
 
-Basic in-app article viewer.
+```bash
+PYTHONPATH=. python3 scripts/backfill_ticket_embeddings.py
+```
 
-Highlight phrases → create early-stage concept markers.
+### 3. Run the backend
 
-Store concept mentions for future graph linking.
+```bash
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-5. Clean Architecture • Modest UI • Demo Ready
+The API root will be at: `http://127.0.0.1:8000`.
 
-FastAPI backend
+### 4. Install frontend dependencies and run dev server
 
-Next.js frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-Embedding model: sentence-transformers
+By default Vite will start on something like `http://localhost:5173` or `http://localhost:5175` (check the terminal output).
 
-Local Postgres or SQLite
+### 5. Build frontend for production
 
-Can be deployed to Vercel/Render for demonstration
+From `frontend/`:
 
-The MVP aims to prove the intelligence layer works and show the future potential of a fully self-evolving support knowledge system.
+```bash
+npm run build
+```
 
-🧱 Architecture Summary (Simplified MVP)
-Backend (FastAPI)
+---
 
-/intake: analyze text → structured fields + suggestions
+## 🔍 Key API Endpoints
 
-/search: semantic + keyword hybrid ranking
+All endpoints are prefixed with `/api`.
 
-/feedback: store helpfulness ratings
+### `POST /api/search`
 
-Jira ingestion tasks (tickets + comments)
+Keyword search across tickets using SQL `ILIKE`.
 
-Embedding generator service
+**Request body:**
 
-Vector search + ranking logic
+```json
+{
+  "q": "password reset"
+}
+```
 
-Frontend (Next.js)
-
-Intake page (text → predicted fields → suggestions)
-
-Search results page
-
-Simple article viewer (with concept highlighting)
-
-Basic analytics placeholder
-
-Database
-
-tickets
-
-documents
-
-embeddings
-
-categories
-
-canonical_terms
-
-feedback
-
-concepts + concept_mentions (stubbed for future)
-
-📁 Repository Structure (Recommended)
-echohelp/
-  README.md
-  docs/
-    PRODUCT_BRIEF.md
-    ARCHITECTURE_V0.md
-    WIREFRAMES.md
-    ROADMAP.md
-    DATA_MODEL.md
-  backend/
-    app/
-      main.py
-      api/
-      models/
-      services/
-      vector/
-    tests/
-  frontend/
-    src/
-      app/
-      components/
-      lib/
-  scripts/
-    ingest_jira.py
-    ingest_docs.py
-  examples/
-    sample_tickets/
-    sample_kb/
-
-🚀 MVP Feature Checklist
-🔌 Jira Integration
-
- Connect to test Jira Cloud project
-
- Pull issues + comments
-
- Normalize to DB
-
- Trigger manual sync
-
-🧠 Semantic Engine
-
- Encode tickets/docs with embeddings
-
- Vector search engine
-
- Hybrid scoring (keyword + semantic)
-
-📝 AI Intake Assistant
-
- Predict category/subcategory/tags
-
- Suggest canonical terms
-
- Show related tickets
-
- Show related docs
-
- Prefill ticket form
-
-⭐ Suggestions Engine
-
- Rank tickets/docs
-
- Short summaries (LLM optional)
-
- “Did this help?” feedback capture
-
-🔄 Feedback Loop
-
- Store ratings
-
- Adjust ranking weights
-
- Basic trend stats
-
-📚 Early Knowledge Graph
-
- Highlight phrases in docs
-
- Store concept markers
-
- Link concepts to tickets/docs (v0.2)
-
-🎛️ UI/UX
-
- Intake UI
-
- Search UI
-
- Article viewer
-
- Minimal analytics page
-
-🌱 Future Expansion (Beyond MVP)
-Knowledge Graph Layer
-
-Concept nodes
-
-Graph visualization
-
-Tightly linked articles, tickets, clusters
-
-Doc Enrichment Engine
-
-Post-resolution agent input:
-
-“What solved the issue that wasn’t in the doc?”
-
-AI proposes fallback solutions
-
-Peer-review workflow
-
-Hygiene Engine
-
-Content health scoring
-
-Least-used article purge list
-
-Rewrite/merge tools
-
-Desktop Companion Agent
-
-Local daemon
-
-System info collector
-
-Guided troubleshooting
-
-AI-driven playbooks
-
-Enterprise Connectors
-
-Zendesk
-
-ServiceNow
-
-Salesforce Service Cloud
-
-Confluence
-
-GitHub Issues
-
-🔒 Licensing
-
-This project is currently private and proprietary.
-Default license: All Rights Reserved until further structure or commercial licensing is defined.
-
-🙌 Contributing (Private Stage)
-
-Closed to external contributors.
-Collaboration allowed by explicit invitation only.
-
-🎬 Demo (Will Be Added After MVP)
-
-Video walkthrough will be added once core features are functional and integrated.
-
-📩 Contact / Notes
-
-Internal project for experimental and professional development.
-Not yet affiliated with any employer or organization.
-
-### GET `/api/feedback-suggestions`
-
-Returns the most common "actual fix" phrases from ticket feedback. This is
-intended to power future insights features (e.g. surfacing missing knowledge
-base articles based on what actually solved tickets in the field).
-
-**Query parameters**
-
-- `limit` (int, optional, default `50`): maximum number of phrases to return.
-
-**Response**
+**Response:**
 
 ```json
 [
   {
-    "phrase": "reset user password",
-    "count": 14
-  },
-  {
-    "phrase": "rebooted modem",
-    "count": 8
+    "id": 1,
+    "summary": "Password reset not working",
+    "description": "User cannot reset password via portal...",
+    ...
   }
 ]
 ```
+
+---
+
+### `POST /api/semantic-search`
+
+Embedding-based semantic search using precomputed ticket embeddings.
+
+**Request body:**
+
+```json
+{
+  "q": "password reset issues",
+  "limit": 5
+}
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1,
+    "summary": "Password reset not working",
+    "description": "User cannot reset password via portal...",
+    "ai_score": 0.91
+  },
+  ...
+]
+```
+
+(The exact shape may differ slightly depending on how you normalize `ai_score` on the frontend.)
+
+---
+
+### `POST /api/ticket-feedback/`
+
+Record feedback on a ticket.
+
+**Request body:**
+
+```json
+{
+  "ticket_id": 1,
+  "rating": 4,
+  "helped": true,
+  "resolution_notes": "Cleared browser cache and retried",
+  "query_text": "password reset not working"
+}
+```
+
+---
+
+### `GET /api/patterns/summary`
+
+Return aggregated feedback statistics.
+
+**Sample response:**
+
+```json
+{
+  "total_feedback": 12,
+  "by_ticket": [
+    {
+      "ticket_id": 1,
+      "summary": "Password reset not working",
+      "total_feedback": 5,
+      "unresolved": 2
+    }
+  ],
+  "top_unresolved": [
+    {
+      "ticket_id": 1,
+      "summary": "Password reset not working",
+      "total_feedback": 5,
+      "unresolved": 2
+    }
+  ]
+}
+```
+
+---
+
+## 🧪 Testing & CI
+
+Run backend tests from the repo root:
+
+```bash
+PYTHONPATH=$PWD pytest
+```
+
+Run a focused feedback endpoint test:
+
+```bash
+PYTHONPATH=$PWD pytest tests/test_ticket_feedback_endpoint.py
+```
+
+CI (GitHub Actions) will automatically:
+
+* Install backend dependencies
+* Run `ruff`, `pyright`, and `pytest` on push / pull request
+
+---
+
+## 🗺️ Roadmap / Ideas
+
+* More advanced pattern analysis (clusters, time-series of unresolved issues).
+* Attachments and richer ticket metadata.
+* Integrations with existing ticketing tools (Jira, Zendesk, etc.).
+* Authentication / multi-tenant support.
+* Deeper AI features: suggested KB articles, automated troubleshooting flows.
+
+---
+
+## 🎯 Why this project
+
+EchoHelp is designed as a realistic full-stack portfolio project:
+
+* Shows experience with **Python/FastAPI/SQLModel** and **React/TypeScript/Tailwind**.
+* Demonstrates **AI integration** via semantic search and embeddings.
+* Includes **CI, tests, and DB tooling**, not just a demo UI.
+* Models a real-world use case for IT teams: turning support tickets into a growing knowledge base and analytics engine.
+
+---
+
+## 🎬 Demo (Will Be Added After MVP)
+
+Video walkthrough will be added once core features are functional and integrated.
+
+---
+
+## 📩 Contact / Notes
+
+Internal project for experimental and professional development.
+Not yet affiliated with any employer or organization.

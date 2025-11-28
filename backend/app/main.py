@@ -1,9 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import feedback, feedback_suggestions, health, intake, search, semantic_search, tickets
-from .api.routes import insights, ticket_feedback
-from .api import semantic_clusters
+from .api import (
+    feedback,
+    feedback_suggestions,
+    health,
+    intake,
+    search,
+    semantic_clusters,
+    semantic_search,
+    tickets,
+)
+from .api.routes import insights, ticket_feedback, patterns
 
 # ...existing imports...
 from .db import init_db
@@ -49,11 +57,12 @@ app.include_router(tickets.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
 app.include_router(intake.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
-app.include_router(ticket_feedback.router)
+app.include_router(ticket_feedback.router, prefix="/api")
 app.include_router(insights.router, prefix="/api")
 app.include_router(feedback_suggestions.router, prefix="/api")
 app.include_router(semantic_search.router, prefix="/api")
 app.include_router(semantic_clusters.router, prefix="/api")
+app.include_router(patterns.router, prefix="/api", tags=["patterns"])
 
 
 @app.get("/")

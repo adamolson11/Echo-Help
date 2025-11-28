@@ -5,6 +5,8 @@ from sqlmodel import Field, SQLModel
 
 class TicketFeedbackBase(SQLModel):
     ticket_id: int
+    query_text: str
+    rating: int
     helped: bool | None = None
     resolution_notes: str | None = None
     # AI stubs for future use

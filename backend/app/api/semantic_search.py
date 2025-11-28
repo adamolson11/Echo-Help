@@ -10,6 +10,7 @@ from ..models.embedding import Embedding
 from ..models.ticket import Ticket
 from ..schemas.semantic_search import SemanticSearchRequest, SemanticSearchResult
 from ..services.embeddings import embed_text
+from sqlalchemy import or_, and_
 
 router = APIRouter(tags=["semantic-search"])
 
@@ -25,22 +26,56 @@ def semantic_search(
     query_vec = embed_text(q)
     query_arr = np.asarray(query_vec, dtype=float)
 
-    # Load embeddings that are associated with tickets
-    emb_rows = list(
-        session.exec(select(Embedding).where(Embedding.ticket_id.is_not(None)))  # type: ignore[reportAttributeAccessIssue]
-    )
-    if not emb_rows:
+    # Build a statement joining embeddings to their tickets and apply filters
+    stmt = select(Embedding, Ticket).join(Ticket, Ticket.id == Embedding.ticket_id)
+
+    # Apply status filter if provided
+    if getattr(body, "status", None) and body.status != "all":
+        s = body.status.lower()
+        if s == "open":
+            stmt = stmt.where(Ticket.status.ilike("%open%"))
+        elif s == "closed":
+            stmt = stmt.where(or_(Ticket.status.ilike("%closed%"), Ticket.status.ilike("%resolved%")))
+        elif s == "other":
+            stmt = stmt.where(~Ticket.status.ilike("%open%"))
+            stmt = stmt.where(~Ticket.status.ilike("%closed%"))
+            stmt = stmt.where(~Ticket.status.ilike("%resolved%"))
+        else:
+            # attempt direct match
+            stmt = stmt.where(Ticket.status.ilike(f"%{body.status}%"))
+
+    # Apply priority filter if provided
+    if getattr(body, "priority", None) and body.priority != "all":
+        p = body.priority.lower()
+        stmt = stmt.where(Ticket.priority.ilike(f"%{p}%"))
+
+    rows = list(session.exec(stmt))
+    if not rows:
         return []
 
     # Ensure all embedding vectors have the same dimensionality as the query.
     # Some tests insert small dummy vectors; skip those that don't match to avoid
     # matmul dimension errors.
     expected_dim = query_arr.shape[0]
-    filtered_rows = [e for e in emb_rows if isinstance(e.vector, (list, tuple)) and len(e.vector) == expected_dim]
-    if not filtered_rows:
+    # rows contain (Embedding, Ticket) tuples
+    valid_pairs: list[tuple[Embedding, Ticket]] = []
+    for pair in rows:
+        # SQLModel may return Row objects; support both tuple and row-style access
+        if isinstance(pair, tuple) or isinstance(pair, list):
+            emb_obj, ticket_obj = pair[0], pair[1]
+        else:
+            emb_obj, ticket_obj = pair
+
+        if not isinstance(emb_obj.vector, (list, tuple)):
+            continue
+        if len(emb_obj.vector) != expected_dim:
+            continue
+        valid_pairs.append((emb_obj, ticket_obj))
+
+    if not valid_pairs:
         return []
 
-    matrix = np.asarray([e.vector for e in filtered_rows], dtype=float)  # type: ignore[reportUnknownArgumentType]
+    matrix = np.asarray([e.vector for e, _ in valid_pairs], dtype=float)  # type: ignore[reportUnknownArgumentType]
 
     # Compute cosine similarity
     query_norm = np.linalg.norm(query_arr)
@@ -57,18 +92,15 @@ def semantic_search(
 
     results: list[SemanticSearchResult] = []
     for i in idxs:
-        emb = filtered_rows[int(i)]
-        if emb.ticket_id is None:
-            continue
-        ticket = session.get(Ticket, emb.ticket_id)
-        if ticket is None:
+        emb_obj, ticket_obj = valid_pairs[int(i)]
+        if ticket_obj is None:
             continue
         results.append(
             SemanticSearchResult(
-                ticket_id=ticket.id,  # type: ignore[arg-type]
+                ticket_id=ticket_obj.id,  # type: ignore[arg-type]
                 score=float(scores[int(i)]),
-                summary=ticket.summary or "",
-                description=ticket.description,
+                summary=ticket_obj.summary or "",
+                description=ticket_obj.description,
             )
         )
 

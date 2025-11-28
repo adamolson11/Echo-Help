@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
@@ -11,10 +9,9 @@ from ..models.embedding import Embedding
 from ..models.ticket import Ticket
 from ..schemas.semantic_clusters import (
     SemanticCluster,
-    SemanticClusterTicket,
     SemanticClustersRequest,
+    SemanticClusterTicket,
 )
-from ..services.embeddings import embed_text
 
 router = APIRouter(
     prefix="/insights",
@@ -22,7 +19,7 @@ router = APIRouter(
 )
 
 
-def _kmeans_numpy(matrix: np.ndarray, n_clusters: int, max_iter: int = 100, rng: Optional[np.random.Generator] = None):
+def _kmeans_numpy(matrix: np.ndarray, n_clusters: int, max_iter: int = 100, rng: np.random.Generator | None = None):
     """
     Simple KMeans implementation using numpy. Returns labels and centroids.
     """
