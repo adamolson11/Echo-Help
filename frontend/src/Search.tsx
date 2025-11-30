@@ -565,59 +565,48 @@ export default function Search() {
   };
 
     return (
-      <div className="space-y-6">
-        {/* Header */}
-        <header className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-50">EchoHelp</h1>
-          <p className="text-sm text-slate-400">AI-powered resolution memory for IT tickets and support teams.</p>
-        </header>
-
-        {/* Main console card */}
-        <div className="rounded-2xl bg-slate-900/70 border border-slate-800 shadow-xl backdrop-blur-md p-4 sm:p-6 space-y-4">
-          <div className="mx-auto max-w-3xl bg-slate-800/80 border border-slate-700 rounded-xl p-6 md:p-8 shadow-lg text-slate-100">
-            <h2 className="text-xl font-semibold mb-1">Ticket Search</h2>
-            <p className="text-xs text-slate-400 mb-1">Search your raw tickets by keyword or AI semantic relevance.</p>
-            <p className="text-xs text-slate-400 mb-4">Try: <span className="font-mono">password reset</span>, <span className="font-mono">vpn</span>, <span className="font-mono">onboarding</span>.</p>
+      <div className="mx-auto max-w-3xl bg-slate-800/80 border border-slate-700 rounded-xl p-6 md:p-8 shadow-lg text-slate-100">
+      <h2 className="text-xl font-semibold mb-1">Ticket Search</h2>
+      <p className="text-xs text-slate-400 mb-1">
+        Search your raw tickets by keyword or AI semantic relevance.
+      </p>
+      <p className="text-xs text-slate-400 mb-4">
+        Try: <span className="font-mono">password reset</span>, <span className="font-mono">vpn</span>, <span className="font-mono">onboarding</span>.
+      </p>
 
       {/* Tab header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="inline-flex rounded-xl bg-slate-900/70 p-1 border border-slate-800">
+      <div className="mb-4 border-b border-slate-700 flex items-center justify-between">
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={() => setActiveTab("search")}
-            className={
-              `px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                activeTab === "search"
-                  ? "bg-slate-800 text-slate-100 shadow-sm"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/60"
-              }`
-            }
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+              activeTab === "search"
+                ? "border-indigo-500 text-indigo-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
           >
             Ticket Search
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("insights")}
-            className={
-              `px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                activeTab === "insights"
-                  ? "bg-slate-800 text-slate-100 shadow-sm"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/60"
-              }`
-            }
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+              activeTab === "insights"
+                ? "border-indigo-500 text-indigo-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
           >
             Insights
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("kb")}
-            className={
-              `px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                activeTab === "kb"
-                  ? "bg-slate-800 text-slate-100 shadow-sm"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/60"
-              }`
-            }
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+              activeTab === "kb"
+                ? "border-indigo-500 text-indigo-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
           >
             Knowledge Base
           </button>
@@ -637,7 +626,7 @@ export default function Search() {
         <input
           ref={searchInputRef}
           type="text"
-          className="w-full rounded-lg bg-slate-900/60 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+          className="flex-1 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           placeholder="Describe the issue or paste an error message…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -645,7 +634,7 @@ export default function Search() {
         />
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={loading}
         >
           {loading ? "Searching…" : "Search"}
