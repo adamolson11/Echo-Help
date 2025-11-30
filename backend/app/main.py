@@ -51,7 +51,10 @@ app.add_middleware(
     allow_headers=["*"],  # allow all headers
 )
 
-init_db()
+# Note: `init_db()` will be invoked at application startup via
+# the `startup` event handler below. This ensures tests can set
+# `ECHOHELP_DB_PATH` before the app lifecycle triggers schema
+# creation and avoids creating the DB at import time.
 
 # ⬅️ include your routers AFTER the middleware is added
 app.include_router(health.router, prefix="/api")
@@ -102,3 +105,12 @@ async def health_check():
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    # Ensure DB schema exists at application startup. This is important
+    # for TestClient-based tests which import `app` and start the ASGI
+    # app lifecycle; calling `init_db()` here makes table creation
+    # deterministic regardless of test import order.
+    init_db()

@@ -12,7 +12,14 @@ from ...schemas.insights import (
     TicketFeedbackInsights,
     UnhelpfulExample,
 )
+from ...schemas.insights import (
+    PatternRadarResponse,
+)
+from ...services.pattern_radar import get_pattern_radar_summary
+from ...models.ask_echo_log import AskEchoLog
 from ...services.embeddings import embed_text
+from ...models.ticket_feedback import TicketFeedback
+from ...schemas.ticket_feedback import TicketFeedbackRead
 
 router = APIRouter(
     prefix="/insights",
@@ -123,3 +130,31 @@ def get_ticket_feedback_clusters(
     results.sort(key=lambda c: c.size, reverse=True)
 
     return results
+
+
+@router.get("/pattern-radar", response_model=PatternRadarResponse)
+def get_pattern_radar(session: Session = Depends(get_session)) -> PatternRadarResponse:
+    """Return a small summary of snippet patterns: frequent and risky snippets plus aggregates."""
+    return get_pattern_radar_summary(session)
+
+
+@router.get("/ask-echo-logs")
+def get_ask_echo_logs(limit: int = 50, session: Session = Depends(get_session)):
+    stmt = select(AskEchoLog).order_by(AskEchoLog.created_at.desc()).limit(limit)
+    rows = session.exec(stmt).all()
+    return rows
+
+
+@router.get("/ask-echo-feedback", response_model=list[TicketFeedbackRead])
+def get_ask_echo_feedback(limit: int = 100, helped: bool | None = None, session: Session = Depends(get_session)):
+    """Return recent ticket feedback rows. This endpoint is primarily used by the Insights UI.
+
+    Optionally filter by `helped` (true/false). Results are ordered newest-first.
+    """
+    query = select(TicketFeedback)
+    if helped is not None:
+        query = query.where(TicketFeedback.helped == helped)
+
+    query = query.order_by(TicketFeedback.created_at.desc()).limit(limit)
+    rows = session.exec(query).all()
+    return [TicketFeedbackRead.model_validate(r) for r in rows]

@@ -33,3 +33,6 @@ class SnippetSearchResult(BaseModel):
     title: str
     summary: Optional[str]
     echo_score: float
+    success_count: Optional[int] = 0
+    failure_count: Optional[int] = 0
+    ticket_id: Optional[int] = None

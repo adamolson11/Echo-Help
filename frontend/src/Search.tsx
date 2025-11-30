@@ -104,7 +104,7 @@ export default function Search() {
   >("all");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   // Tabs: search | insights
-  const [activeTab, setActiveTab] = useState<"search" | "insights">("search");
+  const [activeTab, setActiveTab] = useState<"search" | "insights" | "kb">("search");
   // When an Insights item requests a ticket that isn't loaded yet,
   // store its id here so we can auto-select it after a broad search.
   const [pendingInsightsTicketId, setPendingInsightsTicketId] = useState<number | null>(null);
@@ -128,6 +128,11 @@ export default function Search() {
   const [ticketFeedbackHistory, setTicketFeedbackHistory] = useState<any[]>([]);
   const [ticketFeedbackLoading, setTicketFeedbackLoading] = useState(false);
   const [isPendingInsightsSelection, setIsPendingInsightsSelection] = useState(false);
+  // KB library state
+  const [kbQuery, setKbQuery] = useState("");
+  const [kbSnippets, setKbSnippets] = useState<any[]>([]);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbError, setKbError] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -321,6 +326,25 @@ export default function Search() {
     }
   };
 
+  // Listen for global ticket-selection events (dispatched by AskEchoWidget)
+  // so clicking a reference will open the Search tab and select the ticket.
+  useEffect(() => {
+    function onSelect(e: any) {
+      try {
+        const detail = e?.detail ?? {};
+        const ticketId = detail?.ticketId ?? detail?.ticket_id ?? null;
+        if (ticketId) {
+          handleInsightsTicketClick(Number(ticketId));
+        }
+      } catch (err) {
+        // no-op
+      }
+    }
+
+    window.addEventListener("echo-select-ticket", onSelect as EventListener);
+    return () => window.removeEventListener("echo-select-ticket", onSelect as EventListener);
+  }, [results, filteredResults]);
+
   // Send snippet feedback to backend using ticket_id so snippets can be
   // auto-created/updated via ensure_snippet_for_feedback.
   async function handleSnippetFeedback(ticketId: string | number, helped: boolean, notes?: string) {
@@ -430,6 +454,30 @@ export default function Search() {
     fetchPatterns();
   }, [activeTab, patterns, patternsLoading]);
 
+  async function fetchKbSnippets(query: string) {
+    try {
+      setKbLoading(true);
+      setKbError(null);
+      const params = new URLSearchParams();
+      if (query && query.trim().length > 0) params.set("q", query.trim());
+      const res = await fetch(`/api/snippets/search?${params.toString()}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const detail = body?.detail ?? `HTTP ${res.status}`;
+        throw new Error(detail);
+      }
+      const data = await res.json();
+      setKbSnippets(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("KB search error", err);
+      setKbError(err?.message || "Knowledge Base search failed");
+      setKbSnippets([]);
+    } finally {
+      setKbLoading(false);
+    }
+  }
+
   async function handleSubmitFeedback() {
     if (!selectedTicket) return;
 
@@ -507,11 +555,11 @@ export default function Search() {
     return (
       <div className="mx-auto max-w-3xl bg-slate-800/80 border border-slate-700 rounded-xl p-6 md:p-8 shadow-lg text-slate-100">
       <h2 className="text-xl font-semibold mb-1">Ticket Search</h2>
+      <p className="text-xs text-slate-400 mb-1">
+        Search your raw tickets by keyword or AI semantic relevance.
+      </p>
       <p className="text-xs text-slate-400 mb-4">
-        Search across tickets by keyword. Try:{" "}
-        <span className="font-mono">password reset</span>,{" "}
-        <span className="font-mono">vpn</span>,{" "}
-        <span className="font-mono">onboarding</span>.
+        Try: <span className="font-mono">password reset</span>, <span className="font-mono">vpn</span>, <span className="font-mono">onboarding</span>.
       </p>
 
       {/* Tab header */}
@@ -526,7 +574,7 @@ export default function Search() {
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            Search
+            Ticket Search
           </button>
           <button
             type="button"
@@ -538,6 +586,17 @@ export default function Search() {
             }`}
           >
             Insights
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("kb")}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition ${
+              activeTab === "kb"
+                ? "border-indigo-500 text-indigo-300"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Knowledge Base
           </button>
         </div>
       </div>
@@ -664,6 +723,9 @@ export default function Search() {
 
       {activeTab === "insights" && (
         <div className="space-y-4">
+          <p className="text-xs text-slate-400 mb-1">
+            View patterns, system behavior, and AI routing signals from Ask Echo.
+          </p>
           {/* Friendly empty state when there is no feedback at all */}
           {patterns && patterns.total_feedback === 0 && !patternsLoading && (
             <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/70 p-4 text-xs text-slate-300">
@@ -738,6 +800,54 @@ export default function Search() {
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "kb" && (
+        <div className="mt-2">
+          <p className="text-xs text-slate-400 mb-2">
+            Search reusable solution snippets created from past tickets and resolutions.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              fetchKbSnippets(kbQuery);
+            }}
+            className="mb-3 flex gap-2"
+          >
+            <input
+              type="text"
+              value={kbQuery}
+              onChange={(e) => setKbQuery(e.target.value)}
+              placeholder="Search knowledge base..."
+              className="flex-1 border rounded px-2 py-1 text-sm bg-slate-900/50"
+            />
+            <button
+              type="submit"
+              className="border rounded px-3 py-1 text-sm"
+              disabled={kbLoading}
+            >
+              {kbLoading ? "Searching..." : "Search"}
+            </button>
+          </form>
+
+          {kbError && <div className="mb-2 text-xs text-rose-400">{kbError}</div>}
+
+          {!kbLoading && kbSnippets.length === 0 && !kbError && (
+            <div className="text-xs text-slate-400">No snippets yet. Try submitting feedback from tickets or use a broader query.</div>
+          )}
+
+          <div className="space-y-2 mt-3">
+            {kbSnippets.map((s: any) => (
+              <div key={s.id} className="border rounded p-2 text-sm bg-slate-900/60">
+                <div className="font-medium text-slate-100">{s.title ?? s.summary ?? '(no title)'}</div>
+                <div className="mt-1 text-xs text-slate-400">
+                  Echo score: {typeof s.echo_score === 'number' ? `${Math.round((s.echo_score||0)*100)}%` : '—'} · Successes: {s.success_count ?? 0} · Failures: {s.failure_count ?? 0} · Ticket: {s.ticket_id ?? '—'}
+                </div>
+                {s.summary && <div className="mt-2 text-xs text-slate-200 whitespace-pre-wrap">{s.summary}</div>}
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -1,5 +1,7 @@
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import AskEchoLogsPanel from "./AskEchoLogsPanel";
+import AskEchoFeedbackPanel from "./AskEchoFeedbackPanel";
 
 type UnhelpfulExample = {
   ticket_id: number;
@@ -22,10 +24,31 @@ type FeedbackCluster = {
   example_notes: string[];
 };
 
+type SnippetPatternSummary = {
+  id: number;
+  problem_summary: string;
+  echo_score: number;
+  success_count: number;
+  failure_count: number;
+  failure_rate: number;
+  source_ticket_id?: number | null;
+};
+
+type PatternRadarResponse = {
+  stats: {
+    total_snippets: number;
+    total_successes: number;
+    total_failures: number;
+  };
+  top_frequent_snippets: SnippetPatternSummary[];
+  top_risky_snippets: SnippetPatternSummary[];
+};
+
 
 export default function InsightsPanel() {
   const [insights, setInsights] = useState<FeedbackInsights | null>(null);
   const [clusters, setClusters] = useState<FeedbackCluster[]>([]);
+  const [patternRadar, setPatternRadar] = useState<PatternRadarResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,9 +58,10 @@ export default function InsightsPanel() {
       setError(null);
 
       try {
-        const [insightsRes, clustersRes] = await Promise.all([
+        const [insightsRes, clustersRes, radarRes] = await Promise.all([
           fetch(`/api/insights/feedback`),
           fetch(`/api/insights/feedback/clusters?n_clusters=5&max_examples_per_cluster=3`),
+          fetch(`/api/insights/pattern-radar`),
         ]);
 
         if (!insightsRes.ok) {
@@ -46,12 +70,17 @@ export default function InsightsPanel() {
         if (!clustersRes.ok) {
           throw new Error(`Clusters error: ${clustersRes.status}`);
         }
+        if (!radarRes.ok) {
+          throw new Error(`Pattern radar error: ${radarRes.status}`);
+        }
 
         const insightsJson: FeedbackInsights = await insightsRes.json();
         const clustersJson: FeedbackCluster[] = await clustersRes.json();
+        const radarJson: PatternRadarResponse = await radarRes.json();
 
         setInsights(insightsJson);
         setClusters(clustersJson);
+        setPatternRadar(radarJson);
       } catch (err: any) {
         console.error("Error loading insights:", err);
         setError(err?.message ?? "Failed to load insights");
@@ -84,7 +113,8 @@ export default function InsightsPanel() {
   }
 
   return (
-    <div className="mt-6 grid gap-4 md:grid-cols-[1.2fr,2fr]">
+    <React.Fragment>
+      <div className="mt-6 grid gap-4 md:grid-cols-[1.2fr,2fr]">
       {/* Stats card */}
       <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -134,8 +164,7 @@ export default function InsightsPanel() {
                 className="rounded-lg bg-slate-800/60 p-2"
               >
                 <div className="mb-1 text-[11px] text-slate-400">
-                  Ticket #{ex.ticket_id} •{" "}
-                  {new Date(ex.created_at).toLocaleString()}
+                  Ticket #{ex.ticket_id} • {new Date(ex.created_at).toLocaleString()}
                 </div>
                 <div className="text-[12px]">
                   {ex.resolution_notes ?? "(no notes provided)"}
@@ -144,6 +173,16 @@ export default function InsightsPanel() {
             ))}
           </div>
         </div>
+
+        {/* Pattern radar quick stats */}
+        {patternRadar && (
+          <div className="mt-4 border-t border-slate-800 pt-3">
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Knowledge Base Stats</h3>
+            <div className="text-xs text-slate-300">
+              Snippets: {patternRadar.stats.total_snippets} · Successes: {patternRadar.stats.total_successes} · Failures: {patternRadar.stats.total_failures}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Clusters card */}
@@ -151,6 +190,29 @@ export default function InsightsPanel() {
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
           Repeating Fix Patterns
         </h2>
+        {patternRadar && (
+          <div className="mb-3">
+            <div className="text-xs font-semibold text-slate-300 mb-1">Most Frequent Issues</div>
+            <div className="space-y-2">
+              {patternRadar.top_frequent_snippets.map((s) => (
+                <div key={s.id} className="rounded-lg bg-slate-800/60 p-2 text-xs">
+                  <div className="font-medium text-slate-100">{s.problem_summary || `Snippet ${s.id}`}</div>
+                  <div className="text-slate-400">Attempts: {s.success_count + s.failure_count} · Echo: {Math.round((s.echo_score||0)*100)}%</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 text-xs font-semibold text-slate-300 mb-1">Riskiest Fixes</div>
+            <div className="space-y-2">
+              {patternRadar.top_risky_snippets.map((s) => (
+                <div key={`r-${s.id}`} className="rounded-lg bg-slate-800/60 p-2 text-xs">
+                  <div className="font-medium text-slate-100">{s.problem_summary || `Snippet ${s.id}`}</div>
+                  <div className="text-slate-400">Failure rate: {Math.round((s.failure_rate||0)*100)}% · Echo: {Math.round((s.echo_score||0)*100)}%</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {clusters.length === 0 ? (
           <div className="text-sm text-slate-400">
             Not enough feedback yet to detect patterns. As more techs add notes,
@@ -185,6 +247,11 @@ export default function InsightsPanel() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+      <AskEchoLogsPanel />
+      <div className="mt-4">
+        <AskEchoFeedbackPanel />
+      </div>
+    </React.Fragment>
   );
 }

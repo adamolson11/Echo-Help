@@ -2,8 +2,8 @@ from fastapi.testclient import TestClient
 
 from backend.app.db import init_db
 from backend.app.main import app
-from sqlmodel import Session, select
-from backend.app.db import engine
+from sqlmodel import select
+from backend.app.db import SessionLocal
 from backend.app.models.embedding import Embedding
 from backend.app.models.ticket import Ticket
 
@@ -37,7 +37,7 @@ def test_unresolved_thread_creates_ticket_only():
     assert rows == []
 
     # verify an embedding exists for the created ticket
-    with Session(engine) as session:
+    with SessionLocal() as session:
         tickets = session.exec(select(Ticket).where(Ticket.external_key == payload["external_id"])).all()
         assert len(tickets) >= 1
         t = tickets[-1]
@@ -73,7 +73,7 @@ def test_resolved_thread_creates_ticket_and_feedback():
     assert payload["resolution_notes"] in fb["resolution_notes"]
 
     # verify embedding created for resolved ticket as well
-    with Session(engine) as session:
+    with SessionLocal() as session:
         tickets = session.exec(select(Ticket).where(Ticket.external_key == payload["external_id"])).all()
         assert len(tickets) >= 1
         t = tickets[-1]

@@ -25,3 +25,26 @@ class FeedbackCluster(SQLModel):
     size: int
     example_ticket_ids: list[int]
     example_notes: list[str]
+
+
+# Pattern Radar schemas
+class SnippetPatternSummary(SQLModel):
+    id: int
+    problem_summary: str
+    echo_score: float = 0.0
+    success_count: int = 0
+    failure_count: int = 0
+    failure_rate: float = 0.0
+    source_ticket_id: int | None = None
+
+
+class PatternRadarStats(SQLModel):
+    total_snippets: int
+    total_successes: int
+    total_failures: int
+
+
+class PatternRadarResponse(SQLModel):
+    stats: PatternRadarStats
+    top_frequent_snippets: list[SnippetPatternSummary]
+    top_risky_snippets: list[SnippetPatternSummary]

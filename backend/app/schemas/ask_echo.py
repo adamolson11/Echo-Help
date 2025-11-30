@@ -1,7 +1,12 @@
 from pydantic import BaseModel
-from typing import Any, List
+from typing import Any, List, Optional
 
 from backend.app.schemas.snippets import SnippetSearchResult
+
+
+class AskEchoReference(BaseModel):
+    ticket_id: int
+    confidence: Optional[float] = None
 
 
 class AskEchoRequest(BaseModel):
@@ -16,4 +21,6 @@ class AskEchoResponse(BaseModel):
     snippets: List[SnippetSearchResult] = []
     kb_backed: bool = False
     kb_confidence: float = 0.0
-    mode: None | str = None
+    # mode: either 'kb_answer' (grounded in KB/tickets) or 'general_answer' (no matches)
+    mode: str | None = None
+    references: List[AskEchoReference] = []

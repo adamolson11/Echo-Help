@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
-from backend.app.db import init_db, engine
+from backend.app.db import init_db, SessionLocal
 from backend.app.main import app
-from sqlmodel import Session, select
+from sqlmodel import select
 from backend.app.models.snippets import SolutionSnippet
 
 
@@ -26,7 +26,7 @@ def test_create_snippet_success():
 
     # verify persisted
     sid = data["id"]
-    with Session(engine) as session:
+    with SessionLocal() as session:
         rows = session.exec(select(SolutionSnippet).where(SolutionSnippet.id == sid)).all()
         assert len(rows) == 1
 
@@ -50,7 +50,7 @@ def test_snippet_feedback_updates_counters_and_score():
     assert "echo_score" in j
 
     # verify counters in DB via session
-    with Session(engine) as session:
+    with SessionLocal() as session:
         rows = session.exec(select(SolutionSnippet).where(SolutionSnippet.id == sid)).all()
         assert len(rows) == 1
         snippet = rows[0]
@@ -106,11 +106,11 @@ def test_feedback_accepts_optional_resolution_notes():
     assert resp.status_code == 200
 
     # verify a feedback row persists with notes
-    from sqlmodel import Session, select
-    from backend.app.db import engine
+    from sqlmodel import select
+    from backend.app.db import SessionLocal
     from backend.app.models.snippets import SnippetFeedback
 
-    with Session(engine) as session:
+    with SessionLocal() as session:
         rows = session.exec(select(SnippetFeedback).where(SnippetFeedback.snippet_id == sid)).all()
         assert len(rows) >= 1
         assert any(r.notes and note in r.notes for r in rows)

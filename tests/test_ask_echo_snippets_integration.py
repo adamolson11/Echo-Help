@@ -41,7 +41,7 @@ def test_ask_echo_returns_snippets_field_and_ordering():
     # verify answer metadata
     assert data.get("kb_backed") is True
     assert data.get("kb_confidence", 0.0) >= 0.0
-    assert data.get("mode") in ("KB_ONLY", "KB_AND_TICKETS")
+    assert data.get("mode") in ("kb_answer", "general_answer")
 
 
 def test_ask_echo_handles_no_snippets_and_no_tickets():
@@ -55,4 +55,4 @@ def test_ask_echo_handles_no_snippets_and_no_tickets():
     # verify metadata for no-kb case (may still surface tickets)
     assert data.get("kb_backed") is False
     assert data.get("kb_confidence") == 0.0
-    assert data.get("mode") in ("NO_KB", "TICKETS_ONLY")
+    assert data.get("mode") in ("general_answer", "kb_answer") or data.get("mode") is None

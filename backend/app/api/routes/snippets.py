@@ -82,5 +82,16 @@ def search_snippets(q: str = Query("", description="Search query"), limit: int =
         return []
 
     rows = repo_search_snippets(session, qv, limit=limit, offset=offset)
-    results = [SnippetSearchResult(id=r.id, title=r.title, summary=r.summary, echo_score=r.echo_score) for r in rows]
+    results = [
+        SnippetSearchResult(
+            id=r.id,
+            title=r.title,
+            summary=r.summary,
+            echo_score=r.echo_score,
+            success_count=getattr(r, "success_count", 0),
+            failure_count=getattr(r, "failure_count", 0),
+            ticket_id=getattr(r, "ticket_id", None),
+        )
+        for r in rows
+    ]
     return results

@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from backend.app.schemas.ask_echo import AskEchoRequest, AskEchoResponse
+from backend.app.schemas.ask_echo import AskEchoRequest, AskEchoResponse, AskEchoReference
 from backend.app.services.semantic_search import semantic_search_tickets
 from backend.app.db import get_session
 from backend.app.models.ticket import Ticket
+from backend.app.models.ask_echo_log import AskEchoLog
 from backend.app.services.snippet_repository import search_snippets as repo_search_snippets
 import logging
-from typing import Tuple
+from typing import Tuple, List
 
 
 def _truncate(text: str | None, length: int = 240) -> str:
@@ -20,50 +21,36 @@ def _truncate(text: str | None, length: int = 240) -> str:
     return t[:length].rsplit(" ", 1)[0] + "..."
 
 
-def build_ask_echo_answer(query: str, snippets: list, tickets: list) -> Tuple[str, bool, float, str]:
-    """Compose a human-readable answer string and KB metadata from snippets and tickets.
+def build_kb_answer(query: str, scored_tickets: List[tuple], snippets: list) -> tuple[str, List[AskEchoReference]]:
+    """Construct a simple KB-grounded answer and return references to tickets.
 
-    Returns: (answer, kb_backed, kb_confidence, mode)
-    mode is one of: 'KB_ONLY', 'KB_AND_TICKETS', 'TICKETS_ONLY', 'NO_KB'
+    Uses top up to 3 tickets from `scored_tickets` (list of (score, Ticket)).
     """
-    if snippets:
-        # Use top 3 snippets
-        top = sorted(snippets, key=lambda s: (s.echo_score or 0.0, s.success_count or 0), reverse=True)
-        top_snips = top[:3]
-        bullets = []
-        for s in top_snips:
-            title = s.title or s.summary or f"Snippet {s.id}"
-            resolution = _truncate(s.content_md or s.summary or "")
-            bullets.append(f"- {title}: {resolution}")
+    bullets: List[str] = []
+    refs: List[AskEchoReference] = []
+    # take top 3
+    for score, t in (scored_tickets[:3] if scored_tickets else []):
+        ticket_id = getattr(t, "id", None)
+        title = getattr(t, "summary", None) or getattr(t, "title", None) or f"Ticket {ticket_id}"
+        snippet = (getattr(t, "description", "") or "").split("\n")[0][:200]
+        bullets.append(f"- {title} (Ticket #{ticket_id}): {snippet}")
+        if ticket_id is not None:
+            refs.append(AskEchoReference(ticket_id=int(ticket_id), confidence=float(score) if score is not None else None))
 
-        answer = "Here’s what has worked most often in your environment:\n" + "\n".join(bullets)
-        kb_confidence = float(getattr(top_snips[0], "echo_score", 0.0) or 0.0)
-        kb_backed = True
-        if tickets:
-            mode = "KB_AND_TICKETS"
-        else:
-            mode = "KB_ONLY"
-        return answer, kb_backed, kb_confidence, mode
+    if bullets:
+        answer = "Based on your past tickets, here are the most relevant related issues:\n" + "\n".join(bullets)
+    else:
+        answer = "I found some tickets that may be related, but couldn't format them clearly."
 
-    # No snippets
-    if tickets:
-        parts = []
-        for t in tickets[:3]:
-            title = getattr(t, "summary", None) or getattr(t, "title", None) or f"ticket-{t.id}"
-            parts.append(f"- Ticket #{t.id}: {_truncate(title, 120)}")
-        answer = (
-            "I didn’t find a stored solution snippet, but these prior tickets may help:\n"
-            + "\n".join(parts)
-        )
-        return answer, False, 0.0, "TICKETS_ONLY"
+    return answer, refs
 
-    # No KB and no tickets
+
+def build_general_answer(query: str) -> tuple[str, List[AskEchoReference]]:
     answer = (
-        "I couldn’t find any matching tickets or saved solutions in your knowledge base for this query.\n\n"
-        "This means the answer is not yet in your EchoHelp database. You can still try general troubleshooting, "
-        "and once you resolve it, log the fix so EchoHelp remembers it next time."
+        "I couldn't find any matching tickets or prior solutions in your history for this question. "
+        "Here's general guidance based on typical IT issues, but it's not specific to your environment."
     )
-    return answer, False, 0.0, "NO_KB"
+    return answer, []
 
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
 
@@ -76,28 +63,8 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
     # Run semantic search to gather top related tickets (score, Ticket)
     scored = semantic_search_tickets(session=session, query=req.q, limit=req.limit)
 
+    # Extract tickets for compatibility
     tickets = [t for _, t in scored]
-
-    # Build a concise answer: count + top title + short bullets
-    if tickets:
-        top = tickets[0]
-        top_title = getattr(top, "summary", None) or getattr(top, "title", None) or "a related ticket"
-        parts = []
-        for t in tickets:
-            title = getattr(t, "summary", "") or getattr(t, "title", "")
-            desc = (getattr(t, "description", "") or "").strip()
-            snippet = desc[:200].split("\n")[0]
-            parts.append(f"- {title}: {snippet}")
-
-        answer = (
-            f"I found {len(tickets)} relevant prior ticket(s). The top match appears to be '{top_title}'.\n"
-            "\n" + "\n".join(parts)
-        )
-    else:
-        answer = "I couldn't find relevant tickets."
-
-    # Safety note for experimental AI output
-    answer = answer + "\n\nNote: This is experimental AI output — verify details before applying fixes." 
 
     # Find matching snippets in the KB and sort by echo_score desc
     try:
@@ -115,16 +82,59 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
             "summary": s.summary,
             "echo_score": s.echo_score,
             "success_count": s.success_count,
-            "ticket_id": s.ticket_id,
+            "failure_count": getattr(s, "failure_count", 0),
+            "ticket_id": getattr(s, "ticket_id", None),
         }
         for s in snippets
     ]
 
-    # Compose a richer answer using snippets and tickets
-    answer_text, kb_backed, kb_confidence, mode = build_ask_echo_answer(req.q, snippets, tickets)
+    # Decide whether we have KB grounding. Prefer snippet evidence; otherwise fall back to ticket similarity.
+    scores = [float(score) for score, _ in scored if score is not None]
+    max_score = max(scores) if scores else 0.0
+    KB_THRESHOLD = 0.6
+
+    if snippets:
+        # KB-backed because we found relevant snippets
+        answer_text, references = build_kb_answer(req.q, scored, snippets)
+        mode = "kb_answer"
+        kb_backed = True
+        kb_confidence = float(snippets[0].echo_score) if snippets and getattr(snippets[0], "echo_score", None) is not None else (max_score if max_score else 0.0)
+    elif max_score >= KB_THRESHOLD and scored:
+        # No snippets, but strong ticket match
+        answer_text, references = build_kb_answer(req.q, scored, snippets)
+        mode = "kb_answer"
+        kb_backed = True
+        kb_confidence = float(max_score)
+    else:
+        # No KB data and no strong ticket match — general guidance
+        answer_text, references = build_general_answer(req.q)
+        mode = "general_answer"
+        kb_backed = False
+        kb_confidence = 0.0
 
     # Append experimental note
     answer_text = answer_text + "\n\nNote: This is experimental AI output — verify details before applying fixes."
+
+    # Persist a small telemetry log for tuning KB threshold and behavior
+    try:
+        top_score_val = float(max_score) if 'max_score' in locals() else 0.0
+        refs_count = len(references) if references is not None else 0
+        log = AskEchoLog(
+            query=req.q,
+            top_score=top_score_val,
+            kb_confidence=float(kb_confidence or 0.0),
+            mode=mode,
+            references_count=refs_count,
+        )
+        try:
+            session.add(log)
+            session.commit()
+        except Exception:
+            # be defensive: if logging fails, don't break Ask Echo
+            logging.exception("failed to persist ask-echo log")
+    except Exception:
+        # swallow any logging errors
+        logging.exception("ask-echo logging error")
 
     return AskEchoResponse(
         query=req.q,
@@ -134,4 +144,5 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
         kb_backed=kb_backed,
         kb_confidence=kb_confidence,
         mode=mode,
+        references=references,
     )
