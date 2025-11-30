@@ -108,6 +108,7 @@ export default function Search() {
   // When an Insights item requests a ticket that isn't loaded yet,
   // store its id here so we can auto-select it after a broad search.
   const [pendingInsightsTicketId, setPendingInsightsTicketId] = useState<number | null>(null);
+  const [flashTicketId, setFlashTicketId] = useState<string | null>(null);
 
   interface TicketPattern {
     ticket_id: number;
@@ -301,10 +302,13 @@ export default function Search() {
           const ticket = normalized[idx];
           setSelectedTicket(ticket);
           setActiveIndex(idx);
-          // scroll into view
+          // scroll into view and flash
           setTimeout(() => {
-            const el = document.getElementById(`ticket-row-${ticket.id}`);
-            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            const el = document.querySelector<HTMLElement>(`[data-ticket-id=\"${ticket.id}\"]`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            setFlashTicketId(String(ticket.id));
           }, 50);
         }
         setPendingInsightsTicketId(null);
@@ -344,6 +348,13 @@ export default function Search() {
     window.addEventListener("echo-select-ticket", onSelect as EventListener);
     return () => window.removeEventListener("echo-select-ticket", onSelect as EventListener);
   }, [results, filteredResults]);
+
+  // Clear temporary flash highlight after a short duration
+  useEffect(() => {
+    if (!flashTicketId) return;
+    const t = window.setTimeout(() => setFlashTicketId(null), 1500);
+    return () => window.clearTimeout(t);
+  }, [flashTicketId]);
 
   // Send snippet feedback to backend using ticket_id so snippets can be
   // auto-created/updated via ensure_snippet_for_feedback.
@@ -537,10 +548,11 @@ export default function Search() {
       // Also try to set the active index so the row is highlighted if visible
       const idx = filteredResults.findIndex((t) => String(t.id) === String(ticketId));
       if (idx >= 0) setActiveIndex(idx);
-      // Scroll into view
+      // Scroll into view and flash the row
       setTimeout(() => {
-        const el = document.getElementById(`ticket-row-${ticketId}`);
+        const el = document.querySelector<HTMLElement>(`[data-ticket-id=\"${ticket.id}\"]`);
         if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setFlashTicketId(String(ticket.id));
       }, 50);
       return;
     }
@@ -910,11 +922,13 @@ export default function Search() {
                       <Fragment key={ticket.id}>
                         <tr
                           id={`ticket-row-${ticket.id}`}
+                          data-ticket-id={ticket.id}
                           className={
                             "border-t border-slate-800 cursor-pointer " +
                             (isActive
                               ? "bg-slate-800/90 ring-1 ring-indigo-500"
-                              : "hover:bg-slate-800/80")
+                              : "hover:bg-slate-800/80") +
+                            (flashTicketId && String(flashTicketId) === String(ticket.id) ? " ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900" : "")
                           }
                           onClick={() => {
                             setSelectedTicket(ticket);
