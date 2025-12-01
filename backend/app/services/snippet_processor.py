@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 
 from sqlmodel import Session, select
 
-from backend.app.models.snippets import SolutionSnippet, SnippetFeedback
+from backend.app.models.snippets import SnippetFeedback, SolutionSnippet
 from backend.app.models.ticket import Ticket
 
 
@@ -66,10 +66,14 @@ def create_snippet_from_feedback_payload(
 
     content_md = f"### Reported fix\n\n{feedback_notes}\n"
 
-    snippet = generate_snippet_from_feedback(title=title, content_md=content_md, session=session, ticket_id=ticket_id)
+    snippet = generate_snippet_from_feedback(
+        title=title, content_md=content_md, session=session, ticket_id=ticket_id
+    )
 
     # Store the feedback row
-    fb = SnippetFeedback(snippet_id=snippet.id, helped=bool(helped), notes=feedback_notes)
+    fb = SnippetFeedback(
+        snippet_id=snippet.id, helped=bool(helped), notes=feedback_notes
+    )
     session.add(fb)
     session.commit()
 
@@ -89,7 +93,9 @@ def summarize_resolution_with_ai(query: str, notes: str) -> str:
     return f"**Summary for**: {query}\n\n{excerpt}\n"
 
 
-def ensure_snippet_for_feedback(session: Session, ticket_id: int, feedback_notes: str) -> SolutionSnippet:
+def ensure_snippet_for_feedback(
+    session: Session, ticket_id: int, feedback_notes: str
+) -> SolutionSnippet:
     """Find or create a snippet associated with `ticket_id`.
 
     If a snippet already exists for the ticket, return it. Otherwise create
@@ -99,7 +105,9 @@ def ensure_snippet_for_feedback(session: Session, ticket_id: int, feedback_notes
         raise ValueError("ticket_id required")
 
     # Try to find existing snippet for ticket
-    existing = session.exec(select(SolutionSnippet).where(SolutionSnippet.ticket_id == ticket_id)).first()
+    existing = session.exec(
+        select(SolutionSnippet).where(SolutionSnippet.ticket_id == ticket_id)
+    ).first()
     if existing:
         return existing
 
@@ -114,5 +122,7 @@ def ensure_snippet_for_feedback(session: Session, ticket_id: int, feedback_notes
 
     content_md = f"### Auto-generated snippet from feedback\n\n{feedback_notes or ''}\n"
 
-    snippet = generate_snippet_from_feedback(title=title, content_md=content_md, session=session, ticket_id=ticket_id)
+    snippet = generate_snippet_from_feedback(
+        title=title, content_md=content_md, session=session, ticket_id=ticket_id
+    )
     return snippet

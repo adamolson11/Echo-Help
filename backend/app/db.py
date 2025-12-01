@@ -1,8 +1,9 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
-from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import Session, SQLModel, create_engine
+
 from backend.app import models
 
 # Allow configuring the DB path via env var to support Docker volumes.
@@ -77,6 +78,7 @@ def ensure_engine():
         # set `ECHOHELP_DB_PATH` at module import time.
         try:
             from . import models  # noqa: F401
+
             SQLModel.metadata.create_all(engine)
         except Exception:
             # Non-fatal; if creation fails later init_db() will attempt again.

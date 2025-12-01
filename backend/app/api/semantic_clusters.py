@@ -7,11 +7,9 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..models.embedding import Embedding
 from ..models.ticket import Ticket
-from ..schemas.semantic_clusters import (
-    SemanticCluster,
-    SemanticClustersRequest,
-    SemanticClusterTicket,
-)
+from ..schemas.semantic_clusters import (SemanticCluster,
+                                         SemanticClustersRequest,
+                                         SemanticClusterTicket)
 
 router = APIRouter(
     prefix="/insights",
@@ -19,7 +17,12 @@ router = APIRouter(
 )
 
 
-def _kmeans_numpy(matrix: np.ndarray, n_clusters: int, max_iter: int = 100, rng: np.random.Generator | None = None):
+def _kmeans_numpy(
+    matrix: np.ndarray,
+    n_clusters: int,
+    max_iter: int = 100,
+    rng: np.random.Generator | None = None,
+):
     """
     Simple KMeans implementation using numpy. Returns labels and centroids.
     """
@@ -67,7 +70,9 @@ def semantic_clusters(
         return []
 
     # Filter out any rows where vector is missing or malformed
-    items = [e for e in emb_rows if isinstance(e.vector, (list, tuple)) and len(e.vector) > 0]
+    items = [
+        e for e in emb_rows if isinstance(e.vector, (list, tuple)) and len(e.vector) > 0
+    ]
     if not items:
         return []
 
@@ -118,7 +123,12 @@ def semantic_clusters(
             label = tickets[0].summary
 
         results.append(
-            SemanticCluster(cluster_index=int(cluster_idx), label=label, size=len(indices), tickets=tickets)
+            SemanticCluster(
+                cluster_index=int(cluster_idx),
+                label=label,
+                size=len(indices),
+                tickets=tickets,
+            )
         )
 
     # sort clusters by size desc

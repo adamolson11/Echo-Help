@@ -1,23 +1,15 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from .api import (
-    feedback,
-    feedback_suggestions,
-    health,
-    intake,
-    search,
-    semantic_clusters,
-    semantic_search,
-    tickets,
-)
-from .api.routes import insights, ticket_feedback, patterns, ingest, ask_echo
-from .api.routes import snippets
-
-# ...existing imports...
-from .db import init_db, engine
 from sqlalchemy import text
-import os
+
+from .api import (feedback, feedback_suggestions, health, intake, search,
+                  semantic_clusters, semantic_search, tickets)
+from .api.routes import (ask_echo, ingest, insights, patterns, snippets,
+                         ticket_feedback)
+# ...existing imports...
+from .db import engine, init_db
 
 app = FastAPI()
 

@@ -1,4 +1,5 @@
 from sqlmodel import Session, select
+
 from backend.app.models.ticket import Ticket
 
 

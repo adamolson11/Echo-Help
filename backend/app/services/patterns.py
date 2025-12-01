@@ -1,8 +1,9 @@
 from collections import Counter
+
 from sqlmodel import Session, select
 
-from ..models.ticket_feedback import TicketFeedback
 from ..models.ticket import Ticket
+from ..models.ticket_feedback import TicketFeedback
 
 
 def get_feedback_patterns(session: Session) -> dict:

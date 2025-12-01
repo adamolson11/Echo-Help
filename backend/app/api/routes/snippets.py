@@ -1,29 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session
 from typing import List
 
-from backend.app.db import get_session
-from backend.app.schemas.snippets import (
-    CreateSnippetRequest,
-    CreateSnippetResponse,
-    SnippetFeedbackRequest,
-    SnippetSearchResult,
-)
-from backend.app.services.snippet_processor import generate_snippet_from_feedback
-from backend.app.services.confidence_calculator import calculate_echo_score
-from backend.app.models.snippets import SnippetFeedback
-from backend.app.services.snippet_repository import (
-    get_snippet_by_id,
-    search_snippets as repo_search_snippets,
-    increment_feedback_and_recalculate_score,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session
 
+from backend.app.db import get_session
+from backend.app.models.snippets import SnippetFeedback
+from backend.app.schemas.snippets import (CreateSnippetRequest,
+                                          CreateSnippetResponse,
+                                          SnippetFeedbackRequest,
+                                          SnippetSearchResult)
+from backend.app.services.confidence_calculator import calculate_echo_score
+from backend.app.services.snippet_processor import \
+    generate_snippet_from_feedback
+from backend.app.services.snippet_repository import (
+    get_snippet_by_id, increment_feedback_and_recalculate_score)
+from backend.app.services.snippet_repository import \
+    search_snippets as repo_search_snippets
 
 router = APIRouter(tags=["snippets"])
 
 
 @router.post("/snippets/create", response_model=CreateSnippetResponse)
-def create_snippet(payload: CreateSnippetRequest, session: Session = Depends(get_session)):
+def create_snippet(
+    payload: CreateSnippetRequest, session: Session = Depends(get_session)
+):
     # basic validation is enforced by Pydantic schema; enforce non-empty title/content
     if not payload.title or not payload.content_md:
         raise HTTPException(status_code=400, detail="title and content_md are required")
@@ -46,7 +46,9 @@ def create_snippet(payload: CreateSnippetRequest, session: Session = Depends(get
 
 
 @router.post("/snippets/feedback")
-def submit_snippet_feedback(payload: SnippetFeedbackRequest, session: Session = Depends(get_session)):
+def submit_snippet_feedback(
+    payload: SnippetFeedbackRequest, session: Session = Depends(get_session)
+):
     # Validate presence of an identifier
     if not payload.snippet_id and not payload.ticket_id:
         raise HTTPException(status_code=400, detail="snippet_id or ticket_id required")
@@ -56,16 +58,25 @@ def submit_snippet_feedback(payload: SnippetFeedbackRequest, session: Session = 
     if not snippet_id and payload.ticket_id:
         # try to ensure a snippet exists for that ticket
         try:
-            from backend.app.services.snippet_processor import ensure_snippet_for_feedback
+            from backend.app.services.snippet_processor import \
+                ensure_snippet_for_feedback
 
-            snippet = ensure_snippet_for_feedback(session=session, ticket_id=payload.ticket_id, feedback_notes=payload.notes or "")
+            snippet = ensure_snippet_for_feedback(
+                session=session,
+                ticket_id=payload.ticket_id,
+                feedback_notes=payload.notes or "",
+            )
             snippet_id = snippet.id
         except Exception:
-            raise HTTPException(status_code=500, detail="failed to ensure snippet for ticket")
+            raise HTTPException(
+                status_code=500, detail="failed to ensure snippet for ticket"
+            )
 
     # Increment counters and recalc atomically
     try:
-        updated = increment_feedback_and_recalculate_score(session, snippet_id, payload.helped, payload.notes)
+        updated = increment_feedback_and_recalculate_score(
+            session, snippet_id, payload.helped, payload.notes
+        )
     except ValueError as e:
         # bubble up not found as 404
         if str(e).lower().startswith("snippet not found"):
@@ -76,7 +87,12 @@ def submit_snippet_feedback(payload: SnippetFeedbackRequest, session: Session = 
 
 
 @router.get("/snippets/search", response_model=List[SnippetSearchResult])
-def search_snippets(q: str = Query("", description="Search query"), limit: int = Query(10, ge=1, le=100), offset: int = Query(0, ge=0), session: Session = Depends(get_session)):
+def search_snippets(
+    q: str = Query("", description="Search query"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    session: Session = Depends(get_session),
+):
     qv = (q or "").strip()
     if not qv:
         return []

@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from backend.app.db import get_session
+from backend.app.models.ticket import Ticket
 from backend.app.schemas.ingest import IngestThread
 from backend.app.services.ingest import ingest_thread
-from backend.app.models.ticket import Ticket
 
 router = APIRouter(tags=["ingest"])
 

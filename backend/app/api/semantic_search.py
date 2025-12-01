@@ -3,14 +3,15 @@ from __future__ import annotations
 # ruff: noqa: B008
 import numpy as np
 from fastapi import APIRouter, Depends
+from sqlalchemy import and_, or_
 from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models.embedding import Embedding
 from ..models.ticket import Ticket
-from ..schemas.semantic_search import SemanticSearchRequest, SemanticSearchResult
+from ..schemas.semantic_search import (SemanticSearchRequest,
+                                       SemanticSearchResult)
 from ..services.embeddings import embed_text
-from sqlalchemy import or_, and_
 
 router = APIRouter(tags=["semantic-search"])
 
@@ -35,7 +36,9 @@ def semantic_search(
         if s == "open":
             stmt = stmt.where(Ticket.status.ilike("%open%"))
         elif s == "closed":
-            stmt = stmt.where(or_(Ticket.status.ilike("%closed%"), Ticket.status.ilike("%resolved%")))
+            stmt = stmt.where(
+                or_(Ticket.status.ilike("%closed%"), Ticket.status.ilike("%resolved%"))
+            )
         elif s == "other":
             stmt = stmt.where(~Ticket.status.ilike("%open%"))
             stmt = stmt.where(~Ticket.status.ilike("%closed%"))

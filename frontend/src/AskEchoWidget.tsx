@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import AskEchoReasoningDetails, { type AskEchoReasoning } from "./components/AskEchoReasoning";
 
 export default function AskEchoWidget() {
   const [q, setQ] = useState("");
@@ -190,6 +191,10 @@ export default function AskEchoWidget() {
                   <span>Mode: {response.mode ?? "unknown"}</span>
                 )}
               </div>
+
+              {response.reasoning && (
+                <AskEchoReasoningDetails reasoning={response.reasoning as AskEchoReasoning} />
+              )}
 
               {Array.isArray(response.references) && response.references.length > 0 && (
                 <div className="mt-2 text-xs text-slate-300">

@@ -19,4 +19,3 @@ class Embedding(SQLModel, table=True):
     vector: list[float] = Field(sa_column=Column(JSON))  # type: ignore[reportUnknownMemberType]
     model_name: str = Field(default="all-MiniLM-L6-v2")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-

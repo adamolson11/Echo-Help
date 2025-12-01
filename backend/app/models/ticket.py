@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, JSON, Text
+from sqlalchemy import JSON, Column, Text
 from sqlmodel import Field, SQLModel
 
 
 class Ticket(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    short_id: str | None = Field(default=None, sa_column=Column("short_id", Text, unique=True))
+    short_id: str | None = Field(
+        default=None, sa_column=Column("short_id", Text, unique=True)
+    )
     external_key: str
     source: str
     project_key: str

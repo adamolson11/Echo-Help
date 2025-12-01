@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 
-from .db import init_db, engine
+from .db import engine, init_db
 from .models.ticket import Ticket
 
 SEED_TICKETS = [

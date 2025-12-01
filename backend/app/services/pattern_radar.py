@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from typing import List
+
 from sqlmodel import Session, select
 
 from ..models.snippets import SolutionSnippet
-from ..schemas.insights import (
-    PatternRadarResponse,
-    PatternRadarStats,
-    SnippetPatternSummary,
-)
+from ..schemas.insights import (PatternRadarResponse, PatternRadarStats,
+                                SnippetPatternSummary)
 
 TOP_N = 5
 

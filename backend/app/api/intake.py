@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
 from ..db import get_session
-from ..schemas.intake import IntakeRequest, IntakeResponse, IntakeSuggestedTicket
+from ..schemas.intake import (IntakeRequest, IntakeResponse,
+                              IntakeSuggestedTicket)
 from ..services.semantic_search import semantic_search_tickets
 
 router = APIRouter(tags=["intake"])

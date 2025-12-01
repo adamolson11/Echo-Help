@@ -6,10 +6,7 @@ from sqlmodel import Session, select
 
 from ...db import get_session
 from ...models.ticket_feedback import TicketFeedback
-from ...schemas.ticket_feedback import (
-    TicketFeedbackCreate,
-    TicketFeedbackRead,
-)
+from ...schemas.ticket_feedback import TicketFeedbackCreate, TicketFeedbackRead
 
 router = APIRouter(
     prefix="/ticket-feedback",

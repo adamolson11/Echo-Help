@@ -6,20 +6,13 @@ from sklearn.cluster import KMeans
 from sqlmodel import Session, select
 
 from ...db import get_session
-from ...models.ticket_feedback import TicketFeedback
-from ...schemas.insights import (
-    FeedbackCluster,
-    TicketFeedbackInsights,
-    UnhelpfulExample,
-)
-from ...schemas.insights import (
-    PatternRadarResponse,
-)
-from ...services.pattern_radar import get_pattern_radar_summary
 from ...models.ask_echo_log import AskEchoLog
-from ...services.embeddings import embed_text
 from ...models.ticket_feedback import TicketFeedback
+from ...schemas.insights import (FeedbackCluster, PatternRadarResponse,
+                                 TicketFeedbackInsights, UnhelpfulExample)
 from ...schemas.ticket_feedback import TicketFeedbackRead
+from ...services.embeddings import embed_text
+from ...services.pattern_radar import get_pattern_radar_summary
 
 router = APIRouter(
     prefix="/insights",
@@ -84,7 +77,9 @@ def get_ticket_feedback_clusters(
         for f in feedback_items
         if f.resolution_notes and f.resolution_notes.strip()
     ]
-    items = [f for f in feedback_items if f.resolution_notes and f.resolution_notes.strip()]
+    items = [
+        f for f in feedback_items if f.resolution_notes and f.resolution_notes.strip()
+    ]
 
     if not items:
         return []
@@ -146,7 +141,11 @@ def get_ask_echo_logs(limit: int = 50, session: Session = Depends(get_session)):
 
 
 @router.get("/ask-echo-feedback", response_model=list[TicketFeedbackRead])
-def get_ask_echo_feedback(limit: int = 100, helped: bool | None = None, session: Session = Depends(get_session)):
+def get_ask_echo_feedback(
+    limit: int = 100,
+    helped: bool | None = None,
+    session: Session = Depends(get_session),
+):
     """Return recent ticket feedback rows. This endpoint is primarily used by the Insights UI.
 
     Optionally filter by `helped` (true/false). Results are ordered newest-first.

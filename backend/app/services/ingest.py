@@ -1,10 +1,10 @@
 from sqlmodel import Session
 
+from backend.app.models.embedding import Embedding
 from backend.app.models.ticket import Ticket
 from backend.app.models.ticket_feedback import TicketFeedback
-from backend.app.models.embedding import Embedding
 from backend.app.schemas.ingest import IngestThread
-from backend.app.services.embeddings import embed_text, MODEL_NAME
+from backend.app.services.embeddings import MODEL_NAME, embed_text
 from backend.app.services.tickets import assign_short_id
 
 

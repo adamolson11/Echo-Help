@@ -1,5 +1,8 @@
 
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef } from "react";
+import AskEchoWidget from "./AskEchoWidget";
+import SnippetCard from "./components/SnippetCard";
+import TicketResultCard from "./components/TicketResultCard";
 
 type TicketResult = {
   id: string | number;
@@ -644,6 +647,7 @@ export default function Search() {
       <div className="mb-4">
         <div className="text-xs text-slate-400">Try asking a question or describing what happened — e.g. "I can't log in after password reset".</div>
       </div>
+      {/* (moved below, before Results) */}
 
       {/* Error banner */}
       {error && (
@@ -852,20 +856,39 @@ export default function Search() {
 
           <div className="space-y-2 mt-3">
             {kbSnippets.map((s: any) => (
-              <div key={s.id} className="border rounded p-2 text-sm bg-slate-900/60">
-                <div className="font-medium text-slate-100">{s.title ?? s.summary ?? '(no title)'}</div>
-                <div className="mt-1 text-xs text-slate-400">
-                  Echo score: {typeof s.echo_score === 'number' ? `${Math.round((s.echo_score||0)*100)}%` : '—'} · Successes: {s.success_count ?? 0} · Failures: {s.failure_count ?? 0} · Ticket: {s.ticket_id ?? '—'}
-                </div>
-                {s.summary && <div className="mt-2 text-xs text-slate-200 whitespace-pre-wrap">{s.summary}</div>}
-              </div>
+              <SnippetCard
+                key={s.id}
+                id={s.id}
+                title={s.title ?? null}
+                summary={s.summary ?? null}
+                echo_score={s.echo_score ?? null}
+                success_count={s.success_count ?? 0}
+                failure_count={s.failure_count ?? 0}
+                ticket_id={s.ticket_id ?? null}
+              />
             ))}
           </div>
         </div>
       )}
 
+      {/* Ask Echo helper card */}
+      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">Ask Echo (AI assistant)</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Ask a natural-language question about your issues. Echo will search past tickets and snippets, then explain why it chose its answer.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <AskEchoWidget />
+        </div>
+      </div>
+
       {/* Results + inspector layout */}
-      <div className="mt-2 grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)] gap-3 items-start">
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)] gap-3 items-start">
         {/* Results table */}
         <div className="bg-slate-900/60 border border-slate-700 rounded-lg">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
@@ -918,89 +941,65 @@ export default function Search() {
                 <tbody>
                   {filteredResults.map((ticket, index) => {
                     const isActive = index === activeIndex;
-                    return (
-                      <Fragment key={ticket.id}>
-                        <tr
-                          id={`ticket-row-${ticket.id}`}
-                          data-ticket-id={ticket.id}
-                          className={
-                            "border-t border-slate-800 cursor-pointer " +
-                            (isActive
-                              ? "bg-slate-800/90 ring-1 ring-indigo-500"
-                              : "hover:bg-slate-800/80") +
-                            (flashTicketId && String(flashTicketId) === String(ticket.id) ? " ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900" : "")
-                          }
-                          onClick={() => {
+                    const isFlashing =
+                      !!flashTicketId && String(flashTicketId) === String(ticket.id);
+
+                    const highlightedTitle = highlightQuery(
+                      String(ticket.title ?? ticket.summary ?? ""),
+                      query,
+                    );
+
+                    const statusPill = <StatusPill status={ticket.status} />;
+                    const priorityCell = <>{ticket.priority ?? "-"}</>;
+                    const createdAtCell = <>{ticket.created_at ? formatDate(ticket.created_at) : "-"}</>;
+
+                    const feedbackButtons = (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedTicket(ticket);
-                            setActiveIndex(index);
+                            handleSnippetFeedback(ticket.id, true);
                           }}
+                          title="This helped"
+                          className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs"
                         >
-                          <td className="px-4 py-2 font-mono text-xs text-slate-400">
-                            {ticket.id}
-                          </td>
-                          <td className="px-4 py-2">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 flex items-center gap-2">
-                                <div className="flex-1">
-                                  {highlightQuery(
-                                    String(ticket.title ?? ticket.summary ?? ""),
-                                    query
-                                  )}
-                                </div>
-                                {ticket.source && (
-                                  <div className="flex-shrink-0">
-                                    <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
-                                      {String(ticket.source).toUpperCase()}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                              {useSemantic && (ticket as any).ai_score !== undefined && (
-                                <div className="flex-shrink-0">
-                                  <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-200 text-xs font-medium">
-                                    <span className="font-mono text-[11px]">AI</span>
-                                    <span>{((ticket as any).ai_score as number).toFixed(2)}</span>
-                                  </span>
-                                </div>
-                              )}
-                              {/* Feedback buttons (quick). Stop propagation so clicking doesn't open the inspector accidentally. */}
-                              <div className="flex-shrink-0 ml-2 flex items-center gap-1">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedTicket(ticket);
-                                    handleSnippetFeedback(ticket.id, true);
-                                  }}
-                                  title="This helped"
-                                  className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs"
-                                >
-                                  👍
-                                </button>
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    setSelectedTicket(ticket);
-                                    const note = window.prompt("What actually fixed it or why this didn't help? (optional)");
-                                    await handleSnippetFeedback(ticket.id, false, note ?? "");
-                                  }}
-                                  title="Didn't help"
-                                  className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-xs"
-                                >
-                                  👎
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2">
-                            <StatusPill status={ticket.status} />
-                          </td>
-                          <td className="px-4 py-2">{ticket.priority ?? "-"}</td>
-                          <td className="px-4 py-2 text-xs text-slate-400">
-                            {ticket.created_at ? formatDate(ticket.created_at) : "-"}
-                          </td>
-                        </tr>
-                        
-                      </Fragment>
+                          👍
+                        </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setSelectedTicket(ticket);
+                            const note = window.prompt(
+                              "What actually fixed it or why this didn't help? (optional)",
+                            );
+                            await handleSnippetFeedback(ticket.id, false, note ?? "");
+                          }}
+                          title="Didn't help"
+                          className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-xs"
+                        >
+                          👎
+                        </button>
+                      </>
+                    );
+
+                    return (
+                      <TicketResultCard
+                        key={ticket.id}
+                        ticket={ticket as any}
+                        isActive={isActive}
+                        isFlashing={isFlashing}
+                        onSelect={() => {
+                          setSelectedTicket(ticket);
+                          setActiveIndex(index);
+                        }}
+                        highlightedTitle={highlightedTitle}
+                        statusPill={statusPill}
+                        priorityCell={priorityCell}
+                        createdAtCell={createdAtCell}
+                        feedbackButtons={feedbackButtons}
+                        useSemantic={useSemantic}
+                      />
                     );
                   })}
                 </tbody>
