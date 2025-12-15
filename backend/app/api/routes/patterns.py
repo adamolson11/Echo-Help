@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from ...db import get_session
@@ -8,5 +8,16 @@ router = APIRouter()
 
 
 @router.get("/patterns/summary")
-def patterns_summary(session: Session = Depends(get_session)) -> dict:
-    return get_feedback_patterns(session)
+def patterns_summary(
+    days: int = Query(30, ge=1, le=365),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Return a lightweight summary of Ask Echo ticket feedback patterns.
+
+    This endpoint is intentionally simple and read-only. It reports how many
+    feedback events were seen in the last ``days`` days, and a coarse
+    positive/negative breakdown. It is designed to be cheap to compute and
+    stable over time.
+    """
+
+    return get_feedback_patterns(session, days=days)

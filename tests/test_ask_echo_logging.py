@@ -1,11 +1,3 @@
-import os
-import tempfile
-
-# Use a temp DB for this test
-td = tempfile.NamedTemporaryFile(prefix="echohelp_test_", suffix=".db", delete=False)
-td.close()
-os.environ["ECHOHELP_DB_PATH"] = td.name
-
 from fastapi.testclient import TestClient
 from sqlmodel import select
 

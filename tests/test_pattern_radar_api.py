@@ -1,12 +1,3 @@
-import os
-import tempfile
-
-# Use an isolated temp SQLite DB for these tests so they don't pick up
-# existing developer data in the repo DB file.
-td = tempfile.NamedTemporaryFile(prefix="echohelp_test_", suffix=".db", delete=False)
-td.close()
-os.environ["ECHOHELP_DB_PATH"] = td.name
-
 from fastapi.testclient import TestClient
 
 from backend.app.db import init_db, SessionLocal

@@ -1,0 +1,58 @@
+# EchoHelp Dev Notes
+
+This document captures intentional tradeoffs, known rough edges, and “not yet” decisions.
+
+## Current priorities
+
+Phase 1 (foundation hardening):
+- Deterministic tests (no shared DB leakage)
+- Explicit, versioned response contracts
+- Idempotent ingest + predictable feedback behavior
+- Defensive frontend rendering (fail soft)
+
+## Known tradeoffs (intentional)
+
+- **SQLite-first**: We use SQLite for local dev and tests. The DB path is configurable via `ECHOHELP_DB_PATH`.
+- **Cheap insights**: v1 insights are designed to be inexpensive and easy to reason about. We prefer counts and simple aggregations over “smart” inference.
+- **Additive evolution**: API responses should evolve additively. If we need breaking changes, we create a new versioned endpoint.
+
+## Contracts
+
+Guideline: “public” JSON responses should include:
+
+```json
+{ "meta": { "kind": "...", "version": "v1" } }
+```
+
+If a response is intentionally a bare list for convenience, it should be treated as legacy and migrated to an envelope (`{meta, items}`) when touching it.
+
+## Testing notes
+
+- Tests run against a per-test isolated temp SQLite DB via `tests/conftest.py`.
+- Avoid module-import-time `os.environ["ECHOHELP_DB_PATH"] = ...` patterns.
+
+## Frontend notes
+
+- Defensive rendering is required: never call `.map`/`.filter` on values that may be `undefined`.
+- Prefer explicit normalization of backend responses at fetch boundaries.
+
+## Ingest idempotency
+
+`POST /api/ingest/thread` is designed to be idempotent by `external_id`:
+- Re-ingesting the same `external_id` updates the existing ticket.
+- Embeddings are created once per ticket.
+- Resolved threads create at most one “resolved via ingest” feedback row.
+
+## Deprecation warnings
+
+You may see warnings about `datetime.utcnow()` deprecation. We’ll migrate to timezone-aware timestamps (`datetime.now(datetime.UTC)`) in a targeted pass once Phase 1 stability gates are fully satisfied.
+
+## Not yet (explicit)
+
+We are intentionally not building (for now):
+- A ticketing system replacement
+- Multi-agent orchestration
+- Auto-remediation
+- Predictive ML beyond basic aggregation
+
+If a feature request drifts into these areas, pause and reassess against the product north star.

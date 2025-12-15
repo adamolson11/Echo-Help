@@ -4,15 +4,22 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sklearn.cluster import KMeans
 from sqlmodel import Session, select
+from sqlalchemy import desc
 
 from ...db import get_session
 from ...models.ask_echo_log import AskEchoLog
 from ...models.ticket_feedback import TicketFeedback
-from ...schemas.insights import (FeedbackCluster, PatternRadarResponse,
-                                 TicketFeedbackInsights, UnhelpfulExample)
+from ...schemas.insights import (
+    AskEchoFeedbackResponse,
+    AskEchoLogsResponse,
+    FeedbackCluster,
+    FeedbackClustersResponse,
+    TicketFeedbackInsights,
+    UnhelpfulExample,
+)
 from ...schemas.ticket_feedback import TicketFeedbackRead
 from ...services.embeddings import embed_text
-from ...services.pattern_radar import get_pattern_radar_summary
+from ...services.pattern_radar import extract_ticket_patterns, get_snippet_pattern_radar
 
 router = APIRouter(
     prefix="/insights",
@@ -57,12 +64,12 @@ def get_ticket_feedback_insights(
 
 
 # --- Feedback Clustering Endpoint ---
-@router.get("/feedback/clusters", response_model=list[FeedbackCluster])
+@router.get("/feedback/clusters", response_model=FeedbackClustersResponse)
 def get_ticket_feedback_clusters(
     n_clusters: int = 5,
     max_examples_per_cluster: int = 3,
     session: Session = Depends(get_session),
-) -> list[FeedbackCluster]:
+) -> FeedbackClustersResponse:
     # 1. Load feedback with non-empty resolution_notes
     query = select(TicketFeedback).where(
         TicketFeedback.resolution_notes.is_not(None)  # type: ignore[reportAttributeAccessIssue]
@@ -70,7 +77,7 @@ def get_ticket_feedback_clusters(
     feedback_items: list[TicketFeedback] = list(session.exec(query).all())
 
     if not feedback_items:
-        return []
+        return FeedbackClustersResponse(clusters=[])
 
     texts = [
         f.resolution_notes.strip()
@@ -82,7 +89,7 @@ def get_ticket_feedback_clusters(
     ]
 
     if not items:
-        return []
+        return FeedbackClustersResponse(clusters=[])
 
     n_clusters = max(1, min(n_clusters, len(items)))
 
@@ -124,23 +131,36 @@ def get_ticket_feedback_clusters(
     # sort clusters by size desc
     results.sort(key=lambda c: c.size, reverse=True)
 
-    return results
+    return FeedbackClustersResponse(clusters=results)
 
 
-@router.get("/pattern-radar", response_model=PatternRadarResponse)
-def get_pattern_radar(session: Session = Depends(get_session)) -> PatternRadarResponse:
-    """Return a small summary of snippet patterns: frequent and risky snippets plus aggregates."""
-    return get_pattern_radar_summary(session)
+@router.get("/pattern-radar")
+def get_pattern_radar(
+    session: Session = Depends(get_session),
+) -> dict:
+    """Return snippet-based pattern radar stats (backwards compatible)."""
+    return get_snippet_pattern_radar(session)
 
 
-@router.get("/ask-echo-logs")
-def get_ask_echo_logs(limit: int = 50, session: Session = Depends(get_session)):
-    stmt = select(AskEchoLog).order_by(AskEchoLog.created_at.desc()).limit(limit)
+@router.get("/ticket-pattern-radar")
+def get_ticket_pattern_radar(
+    days: int = 14,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Return basic ticket pattern stats for the last ``days`` days."""
+    return extract_ticket_patterns(session, days=days)
+
+
+@router.get("/ask-echo-logs", response_model=AskEchoLogsResponse)
+def get_ask_echo_logs(limit: int = 50, session: Session = Depends(get_session)) -> AskEchoLogsResponse:
+    stmt = select(AskEchoLog).order_by(desc(AskEchoLog.created_at)).limit(limit)
     rows = session.exec(stmt).all()
-    return rows
+    # Keep response stable and JSON-friendly without leaking ORM internals.
+    items = [r.model_dump() for r in rows]
+    return AskEchoLogsResponse(items=items)
 
 
-@router.get("/ask-echo-feedback", response_model=list[TicketFeedbackRead])
+@router.get("/ask-echo-feedback", response_model=AskEchoFeedbackResponse)
 def get_ask_echo_feedback(
     limit: int = 100,
     helped: bool | None = None,
@@ -154,6 +174,7 @@ def get_ask_echo_feedback(
     if helped is not None:
         query = query.where(TicketFeedback.helped == helped)
 
-    query = query.order_by(TicketFeedback.created_at.desc()).limit(limit)
+    query = query.order_by(desc(TicketFeedback.created_at)).limit(limit)
     rows = session.exec(query).all()
-    return [TicketFeedbackRead.model_validate(r) for r in rows]
+    items = [TicketFeedbackRead.model_validate(r).model_dump() for r in rows]
+    return AskEchoFeedbackResponse(items=items)

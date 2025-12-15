@@ -69,3 +69,74 @@
 - Text embeddings are generated for tickets (and possibly snippets) during ingestion.
 - Semantic search endpoints use these embeddings to find similar tickets.
 - Ask Echo uses semantic search to ground answers and drive the reasoning data it logs.
+
+## Pattern & Insights Endpoints
+
+Echo exposes three orthogonal “pattern” surfaces. They answer different questions and are designed to evolve independently.
+
+### 1. Snippet Pattern Radar (KB performance)
+
+**Endpoint**
+
+- `GET /api/insights/pattern-radar`
+
+**Question it answers**
+
+> "How well is our knowledge base / snippet layer performing?"
+
+**Response shape (v1)**
+
+- `stats.total_snippets` – number of snippets in the radar window.
+- `stats.total_successes` – how often snippets were marked as successful.
+- `stats.total_failures` – how often snippets were associated with failed resolutions.
+- `top_frequent_snippets` – snippets ranked by total uses.
+- `top_risky_snippets` – snippets ranked by failures.
+- `meta`:
+   - `kind: "snippet"`
+   - `version: "v1"`
+
+Design stance: **stable / legacy-friendly**. This is the v1 contract for snippet radar; new behavior should be added additively or via a new versioned endpoint.
+
+### 2. Ticket Pattern Radar (queue themes)
+
+**Endpoint**
+
+- `GET /api/insights/ticket-pattern-radar?days=14`
+
+**Question it answers**
+
+> "What is the ticket queue trying to tell us right now?"
+
+**Response shape (v1)**
+
+- `top_keywords: { keyword: string; count: number }[]` – word-level patterns across ticket text fields.
+- `frequent_titles: { title: string; count: number }[]` – recurring ticket titles/summaries.
+- `semantic_clusters: []` – reserved for future semantic grouping (currently placeholder).
+- `stats`:
+   - `total_tickets` – tickets considered in the window.
+   - `window_days` – the size of the time window (e.g. 7, 14, 30).
+- `meta`:
+   - `kind: "ticket"`
+   - `version: "v1"`
+
+Design stance: **primary growth surface** for Pattern Radar. We can add fields (e.g., clusters, per-queue breakdowns) as long as existing keys remain stable.
+
+### 3. Feedback Pattern Summary (user sentiment about Echo)
+
+**Endpoint**
+
+- `GET /api/patterns/summary`
+
+**Question it answers**
+
+> "What are users telling us about Echo’s answers?"
+
+This surface focuses on Ask Echo feedback and related signals (e.g., thumbs up/down, free-text comments). It is intentionally **kept separate** from ticket and snippet radar so we don’t mix “what the queue is doing” with “how Echo is perceived” in a single response blob.
+
+### Versioning & evolution
+
+- New dimensions should be added:
+   - As new top-level keys on existing endpoints, **or**
+   - As new sibling endpoints (e.g., `/api/insights/ticket-pattern-radar/clusters`) when payloads become large/expensive.
+- Existing keys (`stats`, `top_keywords`, `frequent_titles`, etc.) should not be removed or renamed without introducing a clearly versioned alternative (e.g., `/ticket-pattern-radar-v2`).
+

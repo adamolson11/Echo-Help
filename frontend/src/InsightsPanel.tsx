@@ -10,6 +10,10 @@ type UnhelpfulExample = {
 };
 
 type FeedbackInsights = {
+  meta?: {
+    kind: string;
+    version: string;
+  };
   total_feedback: number;
   helped_true: number;
   helped_false: number;
@@ -24,33 +28,71 @@ type FeedbackCluster = {
   example_notes: string[];
 };
 
-type SnippetPatternSummary = {
-  id: number;
-  problem_summary: string;
-  echo_score: number;
-  success_count: number;
-  failure_count: number;
-  failure_rate: number;
-  source_ticket_id?: number | null;
+type FeedbackClustersResponse = {
+  meta?: {
+    kind: string;
+    version: string;
+  };
+  clusters: FeedbackCluster[];
 };
 
-type PatternRadarResponse = {
+type FeedbackPatternsResponse = {
   stats: {
-    total_snippets: number;
-    total_successes: number;
-    total_failures: number;
+    total_feedback: number;
+    positive: number;
+    negative: number;
+    window_days: number;
   };
-  top_frequent_snippets: SnippetPatternSummary[];
-  top_risky_snippets: SnippetPatternSummary[];
+  top_comments: any[];
+  meta?: {
+    kind: "feedback";
+    version: string;
+  };
+};
+
+type PatternKeyword = { keyword: string; count: number };
+type PatternTitle = { title: string; count: number };
+
+type PatternRadarResponse = {
+  top_keywords: PatternKeyword[];
+  frequent_titles: PatternTitle[];
+  semantic_clusters: any[];
+  stats: {
+    total_tickets: number;
+    window_days: number;
+    first_ticket_at?: string | null;
+    last_ticket_at?: string | null;
+  };
+  meta?: {
+    kind: string;
+    version: string;
+  };
 };
 
 
 export default function InsightsPanel() {
   const [insights, setInsights] = useState<FeedbackInsights | null>(null);
   const [clusters, setClusters] = useState<FeedbackCluster[]>([]);
+  const [feedbackPatterns, setFeedbackPatterns] = useState<FeedbackPatternsResponse | null>(null);
   const [patternRadar, setPatternRadar] = useState<PatternRadarResponse | null>(null);
+  const [patternRadarDays, setPatternRadarDays] = useState<number>(14);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function fetchPatternRadar(days: number) {
+    setPatternRadar(null);
+      try {
+        const res = await fetch(`/api/insights/ticket-pattern-radar?days=${days}`);
+      if (!res.ok) {
+        throw new Error(`Pattern radar error: ${res.status}`);
+      }
+      const radarJson: PatternRadarResponse = await res.json();
+      setPatternRadar(radarJson);
+    } catch (err: any) {
+      console.error("Pattern Radar error:", err);
+      setError(err?.message ?? "Failed to load pattern radar");
+    }
+  }
 
   useEffect(() => {
     const fetchInsights = async () => {
@@ -58,10 +100,10 @@ export default function InsightsPanel() {
       setError(null);
 
       try {
-        const [insightsRes, clustersRes, radarRes] = await Promise.all([
+        const [insightsRes, clustersRes, feedbackPatternsRes] = await Promise.all([
           fetch(`/api/insights/feedback`),
           fetch(`/api/insights/feedback/clusters?n_clusters=5&max_examples_per_cluster=3`),
-          fetch(`/api/insights/pattern-radar`),
+          fetch(`/api/patterns/summary?days=30`),
         ]);
 
         if (!insightsRes.ok) {
@@ -70,17 +112,22 @@ export default function InsightsPanel() {
         if (!clustersRes.ok) {
           throw new Error(`Clusters error: ${clustersRes.status}`);
         }
-        if (!radarRes.ok) {
-          throw new Error(`Pattern radar error: ${radarRes.status}`);
+
+        if (!feedbackPatternsRes.ok) {
+          throw new Error(`Feedback patterns error: ${feedbackPatternsRes.status}`);
         }
 
         const insightsJson: FeedbackInsights = await insightsRes.json();
-        const clustersJson: FeedbackCluster[] = await clustersRes.json();
-        const radarJson: PatternRadarResponse = await radarRes.json();
+        const clustersRaw = await clustersRes.json();
+        const clustersJson: FeedbackCluster[] = Array.isArray(clustersRaw)
+          ? clustersRaw
+          : (clustersRaw as FeedbackClustersResponse).clusters ?? [];
+        const feedbackPatternsJson: FeedbackPatternsResponse = await feedbackPatternsRes.json();
 
         setInsights(insightsJson);
         setClusters(clustersJson);
-        setPatternRadar(radarJson);
+        setFeedbackPatterns(feedbackPatternsJson);
+        void fetchPatternRadar(patternRadarDays);
       } catch (err: any) {
         console.error("Error loading insights:", err);
         setError(err?.message ?? "Failed to load insights");
@@ -174,14 +221,120 @@ export default function InsightsPanel() {
           </div>
         </div>
 
-        {/* Pattern radar quick stats */}
-        {patternRadar && (
-          <div className="mt-4 border-t border-slate-800 pt-3">
-            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Knowledge Base Stats</h3>
-            <div className="text-xs text-slate-300">
-              Snippets: {patternRadar.stats.total_snippets} · Successes: {patternRadar.stats.total_successes} · Failures: {patternRadar.stats.total_failures}
-            </div>
+        {/* Pattern radar quick stats (ticket-based) */}
+        <div className="mt-4 border-t border-slate-800 pt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Ticket Pattern Radar
+            </h3>
+            <select
+              className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-200"
+              value={patternRadarDays}
+              onChange={(e) => {
+                const days = Number(e.target.value) || 14;
+                setPatternRadarDays(days);
+                void fetchPatternRadar(days);
+              }}
+            >
+              <option value={7}>Last 7 days</option>
+              <option value={14}>Last 14 days</option>
+              <option value={30}>Last 30 days</option>
+            </select>
           </div>
+
+          {!patternRadar && (
+            <div className="text-xs text-slate-400">Loading ticket patterns…</div>
+          )}
+
+          {patternRadar && (
+            <div className="space-y-3 text-xs text-slate-300">
+              <div className="flex flex-col gap-0.5 text-[11px] text-slate-400">
+                <span className="font-semibold text-slate-200">
+                  Ticket Pattern Radar {patternRadar.meta?.version ? `(v${patternRadar.meta.version})` : ""}
+                </span>
+                <span>
+                  {patternRadar.stats.total_tickets} tickets in the last {patternRadar.stats.window_days} days
+                </span>
+                {patternRadar.stats.last_ticket_at && (
+                  <span>
+                    Last signal: {new Date(patternRadar.stats.last_ticket_at).toLocaleString()}
+                  </span>
+                )}
+              </div>
+
+              <div className="rounded-md border border-slate-800 bg-slate-950/60 p-2">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Top Keywords
+                </div>
+                {patternRadar.top_keywords.length === 0 ? (
+                  <div className="text-[11px] text-slate-500">
+                    No clear keyword patterns detected in this window.
+                  </div>
+                ) : (
+                  <ul className="grid grid-cols-2 gap-1 text-[11px]">
+                    {patternRadar.top_keywords.slice(0, 10).map((k) => (
+                      <li key={k.keyword} className="flex justify-between">
+                        <span className="truncate pr-2">{k.keyword}</span>
+                        <span className="text-slate-400">{k.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="rounded-md border border-slate-800 bg-slate-950/60 p-2">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Frequent Titles
+                </div>
+                {patternRadar.frequent_titles.length === 0 ? (
+                  <div className="text-[11px] text-slate-500">
+                    No repeating titles found in this window.
+                  </div>
+                ) : (
+                  <ul className="space-y-1 text-[11px]">
+                    {patternRadar.frequent_titles.slice(0, 8).map((t, idx) => (
+                      <li key={`${t.title}-${idx}`} className="flex justify-between">
+                        <span className="truncate pr-2">{t.title}</span>
+                        <span className="text-slate-400">{t.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {patternRadar.top_keywords.length === 0 &&
+                patternRadar.frequent_titles.length === 0 && (
+                  <div className="text-[11px] text-slate-500">
+                    No clear patterns detected in this window yet.
+                  </div>
+                )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Feedback Patterns card */}
+      <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Feedback Patterns {feedbackPatterns?.meta?.version ? `(v${feedbackPatterns.meta.version})` : ""}
+        </h2>
+        {feedbackPatterns ? (
+          <div className="space-y-2 text-xs text-slate-300">
+            <div>
+              {feedbackPatterns.stats.total_feedback} feedback events in the last {feedbackPatterns.stats.window_days} days
+            </div>
+            <div className="flex gap-3 text-[11px] text-slate-200">
+              <span className="text-emerald-300">Positive: {feedbackPatterns.stats.positive}</span>
+              <span className="text-amber-300">Negative: {feedbackPatterns.stats.negative}</span>
+            </div>
+            {feedbackPatterns.stats.total_feedback === 0 && (
+              <div className="text-[11px] text-slate-500">
+                No feedback received in this window yet.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-xs text-slate-400">Loading feedback patterns…</div>
         )}
       </div>
 
@@ -190,29 +343,7 @@ export default function InsightsPanel() {
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
           Repeating Fix Patterns
         </h2>
-        {patternRadar && (
-          <div className="mb-3">
-            <div className="text-xs font-semibold text-slate-300 mb-1">Most Frequent Issues</div>
-            <div className="space-y-2">
-              {patternRadar.top_frequent_snippets.map((s) => (
-                <div key={s.id} className="rounded-lg bg-slate-800/60 p-2 text-xs">
-                  <div className="font-medium text-slate-100">{s.problem_summary || `Snippet ${s.id}`}</div>
-                  <div className="text-slate-400">Attempts: {s.success_count + s.failure_count} · Echo: {Math.round((s.echo_score||0)*100)}%</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 text-xs font-semibold text-slate-300 mb-1">Riskiest Fixes</div>
-            <div className="space-y-2">
-              {patternRadar.top_risky_snippets.map((s) => (
-                <div key={`r-${s.id}`} className="rounded-lg bg-slate-800/60 p-2 text-xs">
-                  <div className="font-medium text-slate-100">{s.problem_summary || `Snippet ${s.id}`}</div>
-                  <div className="text-slate-400">Failure rate: {Math.round((s.failure_rate||0)*100)}% · Echo: {Math.round((s.echo_score||0)*100)}%</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Existing snippet-based pattern radar now focuses on clusters only */}
         {clusters.length === 0 ? (
           <div className="text-sm text-slate-400">
             Not enough feedback yet to detect patterns. As more techs add notes,

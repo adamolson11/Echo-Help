@@ -1,25 +1,31 @@
-import Search from "./Search";
+import { useState } from "react";
+import ConsoleShell, { getInitialConsoleRoute, type ConsoleRoute } from "./ConsoleShell";
+import AskEchoPage from "./pages/AskEchoPage";
+import SearchPage from "./pages/SearchPage";
+import KnowledgeBasePage from "./pages/KnowledgeBasePage";
+import InsightsPage from "./pages/InsightsPage";
+import IntakePage from "./pages/IntakePage";
 
 export default function App() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-900 text-slate-100 flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-5xl space-y-6">
-        {/* App header */}
-        <header className="text-center space-y-1">
-          <h1 className="text-4xl font-bold tracking-tight">
-            EchoHelp
-          </h1>
-          <p className="text-sm text-slate-300">
-            AI-powered resolution memory for busy IT teams
-          </p>
-        </header>
+  const [route, setRoute] = useState<ConsoleRoute>(() => getInitialConsoleRoute());
 
-        {/* Main console card */}
-        <main className="rounded-2xl border border-slate-800 bg-slate-900/70 shadow-2xl backdrop-blur-md p-4 sm:p-6 lg:p-8">
-          <Search />
-        </main>
-        {/* Floating Ask Echo widget removed: inline AskEchoWidget is used inside Search.tsx */}
-      </div>
-    </div>
+  function renderRoute(r: ConsoleRoute) {
+    if (r === "ask") return <AskEchoPage />;
+    if (r === "search") return <SearchPage />;
+    if (r === "kb") return <KnowledgeBasePage />;
+    if (r === "insights") return <InsightsPage />;
+    if (r === "intake") return <IntakePage />;
+    return <AskEchoPage />;
+  }
+
+  return (
+    <ConsoleShell
+      route={route}
+      onRouteChange={setRoute}
+      title="EchoHelp"
+      subtitle="AI-powered resolution memory for busy IT teams"
+    >
+      {renderRoute(route)}
+    </ConsoleShell>
   );
 }

@@ -1,68 +1,188 @@
 from __future__ import annotations
 
-from typing import List
+from collections import Counter
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
-from ..models.snippets import SolutionSnippet
-from ..schemas.insights import (PatternRadarResponse, PatternRadarStats,
-                                SnippetPatternSummary)
-
-TOP_N = 5
+from ..models.snippets import SolutionSnippet, SnippetFeedback
+from ..models.ticket import Ticket
 
 
-def get_pattern_radar_summary(session: Session) -> PatternRadarResponse:
-    query = select(SolutionSnippet)
-    snippets: List[SolutionSnippet] = list(session.exec(query).all())
+def extract_ticket_patterns(session: Session, days: int = 14) -> Dict[str, Any]:
+    """Compute simple ticket patterns over the last ``days`` days.
 
-    total_snippets = len(snippets)
-    total_successes = sum((s.success_count or 0) for s in snippets)
-    total_failures = sum((s.failure_count or 0) for s in snippets)
+    Returns a JSON-serializable dict with:
+    - top_keywords: list[{keyword, count}]
+    - frequent_titles: list[{title, count}]
+    - semantic_clusters: list[dict] (placeholder for now)
+    - stats: {total_tickets, window_days}
+    """
 
-    # Frequent: highest total attempts
-    frequent_sorted = sorted(
-        snippets,
-        key=lambda s: ((s.success_count or 0) + (s.failure_count or 0)),
-        reverse=True,
-    )
+    cutoff = datetime.utcnow() - timedelta(days=days)
 
-    # Risky: sort by failure rate first, then by low echo_score
-    def failure_rate(s: SolutionSnippet) -> float:
-        total = (s.success_count or 0) + (s.failure_count or 0)
-        if total <= 0:
-            return 0.0
-        return (s.failure_count or 0) / total
+    stmt = select(Ticket).where(Ticket.created_at >= cutoff)  # type: ignore[attr-defined]
+    tickets: List[Ticket] = list(session.exec(stmt).all())
 
-    risky_sorted = sorted(
-        snippets,
-        key=lambda s: (failure_rate(s), 1.0 - (s.echo_score or 0.0)),
-        reverse=True,
-    )
+    total = len(tickets)
 
-    def to_summary(s: SolutionSnippet) -> SnippetPatternSummary:
-        total = (s.success_count or 0) + (s.failure_count or 0)
-        fr = (s.failure_count or 0) / total if total > 0 else 0.0
-        return SnippetPatternSummary(
-            id=s.id or 0,
-            problem_summary=(s.summary or s.title or "")[:1000],
-            echo_score=(s.echo_score or 0.0),
-            success_count=(s.success_count or 0),
-            failure_count=(s.failure_count or 0),
-            failure_rate=round(fr, 4),
-            source_ticket_id=(s.ticket_id if hasattr(s, "ticket_id") else None),
-        )
+    word_counter: Counter[str] = Counter()
+    title_counter: Counter[str] = Counter()
 
-    top_frequent = [to_summary(s) for s in frequent_sorted[:TOP_N]]
-    top_risky = [to_summary(s) for s in risky_sorted[:TOP_N]]
+    first_created_at: datetime | None = None
+    last_created_at: datetime | None = None
 
-    stats = PatternRadarStats(
-        total_snippets=total_snippets,
-        total_successes=total_successes,
-        total_failures=total_failures,
-    )
+    for t in tickets:
+        created = getattr(t, "created_at", None)
+        if isinstance(created, datetime):
+            if first_created_at is None or created < first_created_at:
+                first_created_at = created
+            if last_created_at is None or created > last_created_at:
+                last_created_at = created
+        title = (getattr(t, "title", None) or getattr(t, "summary", "") or "").strip()
+        if title:
+            title_counter[title] += 1
 
-    return PatternRadarResponse(
-        stats=stats,
-        top_frequent_snippets=top_frequent,
-        top_risky_snippets=top_risky,
-    )
+        parts: List[str] = []
+        for attr in ("title", "summary", "description", "body"):
+            value = getattr(t, attr, None)
+            if isinstance(value, str):
+                parts.append(value)
+        text = " ".join(parts).lower()
+
+        for word in _tokenize_words(text):
+            word_counter[word] += 1
+
+    top_keywords = [{"keyword": w, "count": c} for w, c in word_counter.most_common(25)]
+    frequent_titles = [{"title": title, "count": c} for title, c in title_counter.most_common(25)]
+
+    semantic_clusters: List[Dict[str, Any]] = []
+
+    return {
+        "top_keywords": top_keywords,
+        "frequent_titles": frequent_titles,
+        "semantic_clusters": semantic_clusters,
+        "stats": {
+            "total_tickets": total,
+            "window_days": days,
+            "first_ticket_at": first_created_at.isoformat() if first_created_at else None,
+            "last_ticket_at": last_created_at.isoformat() if last_created_at else None,
+        },
+        "meta": {
+            "kind": "ticket",
+            "version": "v1",
+        },
+    }
+
+
+def _tokenize_words(text: str) -> List[str]:
+    import re
+
+    # Basic tokenization with a small, pragmatic stopword list so
+    # Ticket Pattern Radar surfaces meaningful patterns instead of noise.
+    stopwords = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "this",
+        "that",
+        "have",
+        "has",
+        "are",
+        "was",
+        "were",
+        "issue",
+        "ticket",
+        "error",
+        "problem",
+        "help",
+    }
+
+    words: List[str] = []
+    for word in re.findall(r"[a-z0-9_]+", text):
+        if len(word) <= 2:
+            continue
+        if word in stopwords:
+            continue
+        words.append(word)
+    return words
+
+
+def get_snippet_pattern_radar(session: Session) -> Dict[str, Any]:
+    """Compute snippet-based pattern radar stats used by existing tests.
+
+    Returns a JSON-serializable dict with:
+    - stats: {total_snippets, total_successes, total_failures}
+    - top_frequent_snippets: list[dict]
+    - top_risky_snippets: list[dict]
+    """
+
+    total_snippets = session.exec(select(func.count(SolutionSnippet.id))).one()
+
+    feedback_rows: list[SnippetFeedback] = list(session.exec(select(SnippetFeedback)).all())
+    counts: dict[int, dict[str, int]] = {}
+
+    for fb in feedback_rows:
+        sid = fb.snippet_id
+        bucket = counts.setdefault(sid, {"total": 0, "successes": 0, "failures": 0})
+        bucket["total"] += 1
+        if fb.helped is True:
+            bucket["successes"] += 1
+        elif fb.helped is False:
+            bucket["failures"] += 1
+
+    total_successes = 0
+    total_failures = 0
+
+    frequent = []
+    risky = []
+
+    snippet_by_id: Dict[int, SolutionSnippet] = {
+        s.id: s for s in session.exec(select(SolutionSnippet)).all()
+    }
+
+    for snippet_id, agg in counts.items():
+        total = agg["total"]
+        successes = agg["successes"]
+        failures = agg["failures"]
+
+        total_successes += successes
+        total_failures += failures
+
+        snippet = snippet_by_id.get(snippet_id)
+        if not snippet:
+            continue
+
+        summary = snippet.summary or snippet.title or str(snippet.id)
+        item = {
+            "snippet_id": snippet.id,
+            "problem_summary": summary,
+            "total_uses": int(total),
+            "successes": int(successes),
+            "failures": int(failures),
+        }
+
+        frequent.append(item)
+
+        if failures > 0:
+            risky.append(item)
+
+    frequent.sort(key=lambda x: x["total_uses"], reverse=True)
+    risky.sort(key=lambda x: x["failures"], reverse=True)
+
+    return {
+        "stats": {
+            "total_snippets": int(total_snippets or 0),
+            "total_successes": int(total_successes),
+            "total_failures": int(total_failures),
+        },
+        "top_frequent_snippets": frequent[:10],
+        "top_risky_snippets": risky[:10],
+        "meta": {
+            "kind": "snippet",
+            "version": "v1",
+        },
+    }

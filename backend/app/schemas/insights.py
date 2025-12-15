@@ -5,6 +5,11 @@ from datetime import datetime
 from sqlmodel import SQLModel
 
 
+class Meta(SQLModel):
+    kind: str
+    version: str
+
+
 class UnhelpfulExample(SQLModel):
     ticket_id: int
     resolution_notes: str | None = None
@@ -12,6 +17,7 @@ class UnhelpfulExample(SQLModel):
 
 
 class TicketFeedbackInsights(SQLModel):
+    meta: Meta = Meta(kind="ticket_feedback_insights", version="v1")
     total_feedback: int
     helped_true: int
     helped_false: int
@@ -25,6 +31,21 @@ class FeedbackCluster(SQLModel):
     size: int
     example_ticket_ids: list[int]
     example_notes: list[str]
+
+
+class FeedbackClustersResponse(SQLModel):
+    meta: Meta = Meta(kind="ticket_feedback_clusters", version="v1")
+    clusters: list[FeedbackCluster]
+
+
+class AskEchoLogsResponse(SQLModel):
+    meta: Meta = Meta(kind="ask_echo_logs", version="v1")
+    items: list[dict]
+
+
+class AskEchoFeedbackResponse(SQLModel):
+    meta: Meta = Meta(kind="ask_echo_feedback", version="v1")
+    items: list[dict]
 
 
 # Pattern Radar schemas

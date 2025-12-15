@@ -455,7 +455,15 @@ export default function Search() {
         if (!res.ok) throw new Error(`Patterns request failed: ${res.status}`);
 
         const data = await res.json();
-        setPatterns(data as PatternsSummary);
+        // Defensive: support both newer lightweight feedback summary
+        // (`{stats:{total_feedback,...}}`) and older patterns shapes.
+        const normalized: PatternsSummary = {
+          total_feedback:
+            (data?.total_feedback ?? data?.stats?.total_feedback ?? 0) as number,
+          by_ticket: Array.isArray(data?.by_ticket) ? data.by_ticket : [],
+          top_unresolved: Array.isArray(data?.top_unresolved) ? data.top_unresolved : [],
+        };
+        setPatterns(normalized);
       } catch (err: any) {
         // eslint-disable-next-line no-console
         console.error("Patterns fetch error:", err);
@@ -761,7 +769,7 @@ export default function Search() {
               <div className="text-xs text-slate-400">Tickets with Unresolved Feedback</div>
               <div className="mt-1 text-2xl font-semibold">
                 {patterns
-                  ? patterns.by_ticket.filter((t) => t.unresolved > 0).length
+                  ? (patterns.by_ticket ?? []).filter((t) => t.unresolved > 0).length
                   : patternsLoading
                   ? "…"
                   : "0"}
@@ -771,8 +779,8 @@ export default function Search() {
             <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
               <div className="text-xs text-slate-400">Most Unresolved Ticket</div>
               <div className="mt-1 text-sm font-semibold line-clamp-2">
-                {patterns && patterns.top_unresolved.length > 0
-                  ? patterns.top_unresolved[0].summary || `Ticket #${patterns.top_unresolved[0].ticket_id}`
+                {patterns && (patterns.top_unresolved ?? []).length > 0
+                  ? (patterns.top_unresolved ?? [])[0].summary || `Ticket #${(patterns.top_unresolved ?? [])[0].ticket_id}`
                   : patternsLoading
                   ? "Loading…"
                   : "No data"}
@@ -792,13 +800,13 @@ export default function Search() {
               {patternsLoading && <span className="text-xs text-slate-400">Loading…</span>}
             </div>
 
-            {patterns && patterns.top_unresolved.length === 0 && !patternsLoading && (
+            {patterns && (patterns.top_unresolved ?? []).length === 0 && !patternsLoading && (
               <p className="text-xs text-slate-400">No unresolved feedback yet. Once users start saying “No, this didn’t help”, they will show up here.</p>
             )}
 
-            {patterns && patterns.top_unresolved.length > 0 && (
+            {patterns && (patterns.top_unresolved ?? []).length > 0 && (
               <ul className="divide-y divide-slate-800">
-                {patterns.top_unresolved.map((item) => (
+                {(patterns.top_unresolved ?? []).map((item) => (
                   <li
                     key={item.ticket_id}
                     onClick={() => handleInsightsTicketClick(item.ticket_id)}

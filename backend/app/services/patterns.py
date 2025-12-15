@@ -1,47 +1,55 @@
 from collections import Counter
+from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from ..models.ticket import Ticket
 from ..models.ticket_feedback import TicketFeedback
 
 
-def get_feedback_patterns(session: Session) -> dict:
-    feedback = session.exec(select(TicketFeedback)).all()
+def get_feedback_patterns(session: Session, days: int = 30) -> dict:
+    """Aggregate Ask Echo-style ticket feedback into a simple pattern view.
 
-    by_ticket = Counter()
-    unresolved_by_ticket = Counter()
+    This is intentionally lightweight and focuses on a few core stats that are
+    cheap to compute and easy to explain. It does not perform any NLP or
+    clustering; those can be layered on later via separate endpoints.
+    """
 
-    for fb in feedback:
-        by_ticket[fb.ticket_id] += 1
-        if fb.helped is False:
-            unresolved_by_ticket[fb.ticket_id] += 1
+    cutoff = datetime.utcnow() - timedelta(days=days)
 
-    tickets = session.exec(select(Ticket)).all()
-    ticket_map = {t.id: t for t in tickets}
+    feedback_rows: list[TicketFeedback] = list(
+        session.exec(
+            select(TicketFeedback).where(TicketFeedback.created_at >= cutoff)
+        ).all()
+    )
 
-    def ticket_info(ticket_id: int) -> dict:
-        t = ticket_map.get(ticket_id)
-        if not t:
-            return {"ticket_id": ticket_id}
-        return {
-            "ticket_id": ticket_id,
-            "summary": getattr(t, "summary", getattr(t, "title", "")),
-        }
+    total_feedback = len(feedback_rows)
+    positive = 0
+    negative = 0
 
-    by_ticket_list = [
-        {
-            **ticket_info(ticket_id),
-            "total_feedback": total,
-            "unresolved": unresolved_by_ticket.get(ticket_id, 0),
-        }
-        for ticket_id, total in by_ticket.most_common()
-    ]
-
-    top_unresolved = sorted(by_ticket_list, key=lambda x: x["unresolved"], reverse=True)
+    # Basic sentiment buckets using existing fields
+    for fb in feedback_rows:
+        # Prefer explicit rating if present; fall back to helped flag
+        if fb.rating is not None:
+            if fb.rating >= 4:
+                positive += 1
+            elif fb.rating <= 2:
+                negative += 1
+        else:
+            if fb.helped is True:
+                positive += 1
+            elif fb.helped is False:
+                negative += 1
 
     return {
-        "total_feedback": len(feedback),
-        "by_ticket": by_ticket_list,
-        "top_unresolved": top_unresolved[:10],
+        "stats": {
+            "total_feedback": total_feedback,
+            "positive": positive,
+            "negative": negative,
+            "window_days": days,
+        },
+        "top_comments": [],  # placeholder for future NLP / clustering
+        "meta": {
+            "kind": "feedback",
+            "version": "v1",
+        },
     }

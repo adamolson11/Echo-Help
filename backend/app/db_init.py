@@ -43,6 +43,15 @@ def main() -> None:
     init_db()
     seed_tickets()
 
+    # Optional demo seed (idempotent) so Ask Echo has grounding.
+    # Opt-in to keep default init small and fast.
+    try:
+        from scripts.seed_demo_org import seed_demo_org  # type: ignore
+
+        seed_demo_org()
+    except Exception:
+        pass
+
 
 if __name__ == "__main__":
     main()
