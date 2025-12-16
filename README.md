@@ -128,6 +128,8 @@ chmod +x scripts/db_init.sh scripts/db_reset.sh
 ./scripts/db_reset.sh
 
 # Optional: seed demo org data (explicit opt-in)
+SEED_DEMO=1 ./scripts/db_reset.sh
+# (alias)
 ECHOHELP_SEED_DEMO=1 ./scripts/db_reset.sh
 ```
 

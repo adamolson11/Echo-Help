@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from sqlmodel import select
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from backend.app.db import SessionLocal, init_db
+from backend.app.models.ask_echo_feedback import AskEchoFeedback
+from backend.app.models.ask_echo_log import AskEchoLog
+from backend.app.models.snippets import SnippetFeedback, SolutionSnippet
 from backend.app.models.ticket import Ticket
 from backend.app.models.ticket_feedback import TicketFeedback
-from backend.app.models.snippets import SolutionSnippet, SnippetFeedback
-from backend.app.services.embeddings import MODEL_NAME, embed_text
-from backend.app.models.embedding import Embedding
+
+DEMO_SOURCE = "demo"
+DEMO_PREFIX = "DEMO"
+DEMO_REASONING_NOTES = '{"demo": true}'
 
 
-def _now_utc() -> datetime:
-    # Keep timezone-naive UTC for now to match existing codebase usage.
-    return datetime.utcnow()
+def _seed_base_time() -> datetime:
+    return datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def ensure_ticket(
@@ -33,53 +34,36 @@ def ensure_ticket(
 ) -> Ticket:
     existing = session.exec(select(Ticket).where(Ticket.external_key == external_key)).first()
     if existing is None:
-        t = Ticket(
+        existing = Ticket(
             external_key=external_key,
+            source=source,
+            project_key=project_key,
             summary=summary,
             description=description,
             status=status,
             priority=priority,
-            source=source,
-            project_key=project_key,
             created_at=created_at,
+            updated_at=created_at,
         )
-        session.add(t)
+        session.add(existing)
         session.commit()
-        session.refresh(t)
-        existing = t
+        session.refresh(existing)
     else:
-        # keep idempotent but update content if we change the seed
+        existing.source = source
+        existing.project_key = project_key
         existing.summary = summary
         existing.description = description
         existing.status = status
         existing.priority = priority
-        existing.source = source
-        existing.project_key = project_key
+        existing.updated_at = created_at
         session.add(existing)
         session.commit()
-    # Ensure body_md is present so KB/Ask Echo has consistent content
-    if not getattr(existing, "body_md", None):
+
+    if not existing.body_md:
         existing.body_md = f"# {existing.summary}\n\n{existing.description}\n"
         session.add(existing)
         session.commit()
     return existing
-
-
-def ensure_embedding(session: Session, ticket: Ticket) -> None:
-    if ticket.id is None:
-        return
-    existing = session.exec(select(Embedding).where(Embedding.ticket_id == ticket.id)).first()
-    if existing is not None:
-        return
-    text = f"{ticket.summary}\n\n{ticket.description or ''}".strip()
-    try:
-        vector = embed_text(text)
-        emb = Embedding(ticket_id=ticket.id, text=text, vector=vector, model_name=MODEL_NAME)
-        session.add(emb)
-        session.commit()
-    except Exception:
-        # Demo seed should not block if embeddings are unavailable.
-        session.rollback()
 
 
 def ensure_ticket_feedback(
@@ -88,265 +72,441 @@ def ensure_ticket_feedback(
     ticket_id: int,
     query_text: str,
     helped: bool | None,
-    rating: int | None,
+    rating: int,
     resolution_notes: str | None,
     created_at: datetime,
-) -> None:
+) -> TicketFeedback:
     existing = session.exec(
         select(TicketFeedback).where(
             TicketFeedback.ticket_id == ticket_id,
             TicketFeedback.query_text == query_text,
+            TicketFeedback.rating == rating,
             TicketFeedback.helped == helped,
+            TicketFeedback.ai_cluster_id == DEMO_SOURCE,
         )
     ).first()
-    if existing is not None:
-        return
-    fb = TicketFeedback(
-        ticket_id=ticket_id,
-        query_text=query_text,
-        helped=helped,
-        rating=rating,
-        resolution_notes=resolution_notes,
-        created_at=created_at,
-    )
-    session.add(fb)
-    session.commit()
+
+    if existing is None:
+        existing = TicketFeedback(
+            ticket_id=ticket_id,
+            query_text=query_text,
+            rating=rating,
+            helped=helped,
+            resolution_notes=resolution_notes,
+            ai_cluster_id=DEMO_SOURCE,
+            created_at=created_at,
+        )
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+    else:
+        existing.resolution_notes = resolution_notes
+        existing.ai_cluster_id = DEMO_SOURCE
+        existing.created_at = created_at
+        session.add(existing)
+        session.commit()
+
+    return existing
 
 
 def ensure_snippet(
     session: Session,
     *,
     title: str,
-    content_md: str,
     summary: str,
+    content_md: str,
     source: str,
     echo_score: float,
-    created_from_ticket_id: int | None = None,
+    ticket_id: int | None,
+    created_at: datetime,
 ) -> SolutionSnippet:
-    existing = session.exec(select(SolutionSnippet).where(SolutionSnippet.title == title)).first()
+    existing = session.exec(
+        select(SolutionSnippet).where(
+            SolutionSnippet.title == title,
+            SolutionSnippet.source == source,
+        )
+    ).first()
+
     if existing is None:
-        s = SolutionSnippet(
+        existing = SolutionSnippet(
             title=title,
-            content_md=content_md,
             summary=summary,
+            content_md=content_md,
             source=source,
             echo_score=echo_score,
-            ticket_id=created_from_ticket_id,
+            ticket_id=ticket_id,
+            created_at=created_at,
+            updated_at=created_at,
         )
-        session.add(s)
+        session.add(existing)
         session.commit()
-        session.refresh(s)
-        return s
-
-    existing.content_md = content_md
-    existing.summary = summary
-    existing.source = source
-    existing.echo_score = echo_score
-    if created_from_ticket_id is not None:
-        existing.ticket_id = created_from_ticket_id
-    session.add(existing)
-    session.commit()
-    session.refresh(existing)
+        session.refresh(existing)
+    else:
+        existing.summary = summary
+        existing.content_md = content_md
+        existing.echo_score = echo_score
+        existing.ticket_id = ticket_id
+        existing.source = source
+        existing.updated_at = created_at
+        session.add(existing)
+        session.commit()
     return existing
 
 
-def ensure_snippet_feedback(session: Session, *, snippet_id: int, helped: bool, created_at: datetime) -> None:
+def ensure_snippet_feedback(
+    session: Session,
+    *,
+    snippet_id: int,
+    helped: bool,
+    notes: str | None,
+    created_at: datetime,
+) -> SnippetFeedback:
     existing = session.exec(
         select(SnippetFeedback).where(
             SnippetFeedback.snippet_id == snippet_id,
             SnippetFeedback.helped == helped,
+            SnippetFeedback.notes == notes,
         )
     ).first()
-    if existing is not None:
-        return
-    sf = SnippetFeedback(snippet_id=snippet_id, helped=helped, created_at=created_at)
-    session.add(sf)
-    session.commit()
+
+    if existing is None:
+        existing = SnippetFeedback(
+            snippet_id=snippet_id,
+            helped=helped,
+            notes=notes,
+            created_at=created_at,
+        )
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+    else:
+        existing.created_at = created_at
+        session.add(existing)
+        session.commit()
+    return existing
+
+
+def ensure_ask_echo_log(
+    session: Session,
+    *,
+    query: str,
+    mode: str,
+    kb_confidence: float,
+    echo_score: float,
+    created_at: datetime,
+) -> AskEchoLog:
+    existing = session.exec(
+        select(AskEchoLog).where(
+            AskEchoLog.query == query,
+            AskEchoLog.mode == mode,
+            AskEchoLog.reasoning_notes == DEMO_REASONING_NOTES,
+        )
+    ).first()
+    if existing is None:
+        existing = AskEchoLog(
+            query=query,
+            mode=mode,
+            kb_confidence=kb_confidence,
+            echo_score=echo_score,
+            reasoning_notes=DEMO_REASONING_NOTES,
+            created_at=created_at,
+        )
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+    else:
+        existing.kb_confidence = kb_confidence
+        existing.echo_score = echo_score
+        existing.created_at = created_at
+        session.add(existing)
+        session.commit()
+    return existing
+
+
+def ensure_ask_echo_feedback(
+    session: Session,
+    *,
+    ask_echo_log_id: int,
+    helped: bool,
+    notes: str | None,
+    created_at: datetime,
+) -> AskEchoFeedback:
+    existing = session.exec(
+        select(AskEchoFeedback).where(
+            AskEchoFeedback.ask_echo_log_id == ask_echo_log_id,
+            AskEchoFeedback.helped == helped,
+            AskEchoFeedback.notes == notes,
+        )
+    ).first()
+    if existing is None:
+        existing = AskEchoFeedback(
+            ask_echo_log_id=ask_echo_log_id,
+            helped=helped,
+            notes=notes,
+            created_at=created_at,
+        )
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+    else:
+        existing.created_at = created_at
+        session.add(existing)
+        session.commit()
+    return existing
 
 
 def seed_demo_org() -> None:
     init_db()
-
-    now = _now_utc()
-    rng = random.Random(1337)
+    base = _seed_base_time()
 
     tickets_spec = [
+        # password reset
         {
-            "external_key": "DEMO-PR-001",
-            "summary": "Password reset link loops back to login",
-            "description": "User reports the password reset link opens, but after entering a new password the page redirects back to login without confirmation.",
-            "status": "closed",
+            "external_key": "DEMO-PWRESET-001",
+            "summary": "Password reset doesn't work (login loop)",
+            "description": "Customer says: password reset doesn't work. After setting a new password, user is redirected back to login without confirmation.",
+            "status": "open",
             "priority": "high",
             "project_key": "IT",
         },
         {
-            "external_key": "DEMO-PR-002",
+            "external_key": "DEMO-PWRESET-002",
             "summary": "Password reset email not received",
-            "description": "Reset email not arriving for specific domain users. Mail logs show DMARC alignment failures.",
+            "description": "Reset email missing for a subset of users. DMARC alignment failures for the sender domain.",
             "status": "open",
             "priority": "medium",
             "project_key": "IT",
         },
+        # MFA
         {
-            "external_key": "DEMO-SSO-003",
-            "summary": "SSO cookie causes reset flow to fail",
-            "description": "SSO session persists across reset flow; user gets forced into old session. Clearing cookies/incognito resolves.",
-            "status": "closed",
-            "priority": "medium",
-            "project_key": "IT",
-        },
-        {
-            "external_key": "DEMO-AUTH-004",
-            "summary": "Account locked after repeated MFA failures",
-            "description": "Multiple MFA attempts triggered lockout. User cannot request reset until lockout cleared.",
-            "status": "closed",
+            "external_key": "DEMO-MFA-001",
+            "summary": "MFA code not delivered",
+            "description": "SMS MFA codes are delayed or never arrive. Email verification works.",
+            "status": "open",
             "priority": "high",
             "project_key": "SEC",
         },
         {
-            "external_key": "DEMO-NET-005",
+            "external_key": "DEMO-MFA-002",
+            "summary": "Authenticator codes rejected due to clock drift",
+            "description": "Authenticator app produces invalid codes; device time is off by ~90 seconds.",
+            "status": "closed",
+            "priority": "medium",
+            "project_key": "SEC",
+        },
+        # VPN
+        {
+            "external_key": "DEMO-VPN-001",
             "summary": "VPN auth_failed when connecting",
-            "description": "VPN client returns auth_failed. Cert bundle may be stale; rotating certs and re-auth works.",
+            "description": "VPN client returns auth_failed. Rotating cert bundle and re-auth resolves.",
             "status": "open",
             "priority": "high",
             "project_key": "NET",
         },
+        {
+            "external_key": "DEMO-VPN-002",
+            "summary": "VPN disconnects every few minutes",
+            "description": "Intermittent VPN disconnects, especially when switching networks.",
+            "status": "open",
+            "priority": "medium",
+            "project_key": "NET",
+        },
+        # printer
+        {
+            "external_key": "DEMO-PRINTER-001",
+            "summary": "Printer queue stuck paused",
+            "description": "Queue stuck in paused state; spooler restart temporarily helps.",
+            "status": "open",
+            "priority": "low",
+            "project_key": "IT",
+        },
+        {
+            "external_key": "DEMO-PRINTER-002",
+            "summary": "Printer prints blank pages",
+            "description": "Print job completes but pages are blank; driver mismatch suspected.",
+            "status": "closed",
+            "priority": "low",
+            "project_key": "IT",
+        },
+        # SSO cookie loop
+        {
+            "external_key": "DEMO-SSO-001",
+            "summary": "SSO cookie loop blocks login",
+            "description": "SSO session persists across auth redirect; clearing cookies/incognito resolves.",
+            "status": "closed",
+            "priority": "medium",
+            "project_key": "IT",
+        },
+        # lockout
+        {
+            "external_key": "DEMO-LOCKOUT-001",
+            "summary": "Account locked after repeated MFA failures",
+            "description": "Multiple MFA attempts triggered lockout; user cannot authenticate until lockout cleared.",
+            "status": "closed",
+            "priority": "high",
+            "project_key": "SEC",
+        },
+        # bad / incomplete
+        {
+            "external_key": "DEMO-BAD-001",
+            "summary": "Login broken",
+            "description": "",
+            "status": "open",
+            "priority": "medium",
+            "project_key": "IT",
+        },
+        {
+            "external_key": "DEMO-BAD-002",
+            "summary": "Something is wrong with SSO",
+            "description": "User reports issues but no repro steps provided.",
+            "status": "open",
+            "priority": "low",
+            "project_key": "IT",
+        },
     ]
-
-    # Expand with some "messy" tickets so search/semantic has more to chew on
-    extras = []
-    for i in range(6, 26):
-        extras.append(
-            {
-                "external_key": f"DEMO-MISC-{i:03d}",
-                "summary": rng.choice(
-                    [
-                        "Laptop fails to join Wi-Fi after sleep",
-                        "Printer queue stuck in paused state",
-                        "Build agent out of disk space",
-                        "Intermittent 502 from internal service",
-                        "Slack notifications delayed",
-                        "Password reset shows expired token",
-                    ]
-                ),
-                "description": rng.choice(
-                    [
-                        "Observed after OS update. Restarting network stack helps.",
-                        "Clearing local spooler and re-adding printer resolves.",
-                        "Deleted old artifacts; expanded volume.",
-                        "Restarted ingress controller; checked upstream health.",
-                        "Backlog cleared after reconnect; rate limits suspected.",
-                        "Token TTL too short; user clock skew involved.",
-                    ]
-                ),
-                "status": rng.choice(["open", "closed"]),
-                "priority": rng.choice(["low", "medium", "high"]),
-                "project_key": rng.choice(["IT", "OPS", "ENG"]),
-            }
-        )
-
-    tickets_spec.extend(extras)
 
     with SessionLocal() as session:
         created: list[Ticket] = []
         for idx, spec in enumerate(tickets_spec):
-            created_at = now - timedelta(days=30) + timedelta(days=idx % 14)
-            t = ensure_ticket(
-                session,
-                external_key=spec["external_key"],
-                summary=spec["summary"],
-                description=spec["description"],
-                status=spec["status"],
-                priority=spec["priority"],
-                source="demo_seed",
-                project_key=spec["project_key"],
-                created_at=created_at,
-            )
-            ensure_embedding(session, t)
-            created.append(t)
-
-        # Add some feedback events with resolution_notes so clustering/patterns have data
-        pw_ticket = next(t for t in created if t.external_key == "DEMO-PR-001")
-        if pw_ticket.id is not None:
-            ensure_ticket_feedback(
-                session,
-                ticket_id=pw_ticket.id,
-                query_text="Password reset doesn't work",
-                helped=True,
-                rating=4,
-                resolution_notes="Cleared SSO cookies and re-issued reset link; user completed reset in incognito.",
-                created_at=now - timedelta(days=2),
-            )
-            ensure_ticket_feedback(
-                session,
-                ticket_id=pw_ticket.id,
-                query_text="Reset link loops back",
-                helped=False,
-                rating=2,
-                resolution_notes="User was behind captive portal; reset page couldn't reach IdP reliably.",
-                created_at=now - timedelta(days=1),
+            created.append(
+                ensure_ticket(
+                    session,
+                    external_key=spec["external_key"],
+                    summary=spec["summary"],
+                    description=spec["description"],
+                    status=spec["status"],
+                    priority=spec["priority"],
+                    source=DEMO_SOURCE,
+                    project_key=spec["project_key"],
+                    created_at=base + timedelta(hours=idx),
+                )
             )
 
-        sso_ticket = next(t for t in created if t.external_key == "DEMO-SSO-003")
-        if sso_ticket.id is not None:
-            ensure_ticket_feedback(
-                session,
-                ticket_id=sso_ticket.id,
-                query_text="Password reset loop",
-                helped=True,
-                rating=5,
-                resolution_notes="Incognito window + cleared cookies fixed the reset loop.",
-                created_at=now - timedelta(days=3),
-            )
+        by_key = {t.external_key: t for t in created}
 
-        # Seed a few snippets that are relevant to password reset
+        def tid(key: str) -> int:
+            ticket = by_key[key]
+            assert ticket.id is not None
+            return int(ticket.id)
+
+        # 3+ resolvable via resolution_notes
+        fb_base = base + timedelta(days=1)
+        ensure_ticket_feedback(
+            session,
+            ticket_id=tid("DEMO-PWRESET-001"),
+            query_text="password reset doesn't work",
+            helped=True,
+            rating=5,
+            resolution_notes="Clear SSO cookies / incognito; invalidate sessions; retry reset flow. Confirm user clock is correct.",
+            created_at=fb_base,
+        )
+        ensure_ticket_feedback(
+            session,
+            ticket_id=tid("DEMO-VPN-001"),
+            query_text="vpn auth_failed",
+            helped=True,
+            rating=4,
+            resolution_notes="Rotate VPN cert bundle, re-enroll device, and re-authenticate.",
+            created_at=fb_base + timedelta(hours=1),
+        )
+        ensure_ticket_feedback(
+            session,
+            ticket_id=tid("DEMO-MFA-002"),
+            query_text="mfa codes invalid",
+            helped=True,
+            rating=4,
+            resolution_notes="Sync device clock (enable automatic time) and retry MFA.",
+            created_at=fb_base + timedelta(hours=2),
+        )
+
+        snip_base = base + timedelta(days=2)
         s1 = ensure_snippet(
             session,
-            title="Password reset loop (SSO cookies)",
-            summary="If reset flow loops back to login, clear SSO cookies or use incognito.",
+            title="password reset doesn't work — fix login loop",
+            summary="password reset doesn't work — clear cookies and invalidate sessions",
             content_md=(
-                "## Symptoms\n"
-                "- Reset link redirects to login repeatedly\n\n"
-                "## Fix\n"
-                "1. Clear SSO cookies for the IdP domain\n"
-                "2. Retry in an incognito/private window\n"
-                "3. Re-issue the reset link\n"
+                "### Fix: password reset doesn't work (login loop)\n\n"
+                "1) Clear SSO cookies (or use incognito)\n"
+                "2) Invalidate existing sessions\n"
+                "3) Retry password reset\n\n"
+                "If token still fails: check user clock and token TTL.\n"
             ),
-            source="demo_seed",
-            echo_score=0.82,
-            created_from_ticket_id=sso_ticket.id,
+            source=DEMO_SOURCE,
+            echo_score=0.9,
+            ticket_id=tid("DEMO-PWRESET-001"),
+            created_at=snip_base,
         )
         s2 = ensure_snippet(
             session,
-            title="Password reset email missing (DMARC)",
-            summary="If reset email isn't received, check DMARC/SPF alignment and mail logs.",
+            title="VPN auth_failed — rotate cert bundle",
+            summary="vpn auth_failed — rotate cert bundle",
             content_md=(
-                "## Symptoms\n"
-                "- User never receives reset email\n"
-                "- Mail logs show DMARC alignment failures\n\n"
-                "## Fix\n"
-                "- Verify SPF/DKIM for sending domain\n"
-                "- Check DMARC policy and alignment\n"
-                "- Confirm provider isn't quarantining\n"
+                "### Fix: VPN auth_failed\n\n"
+                "- Rotate cert bundle\n"
+                "- Re-enroll device\n"
+                "- Re-authenticate\n"
             ),
-            source="demo_seed",
-            echo_score=0.74,
+            source=DEMO_SOURCE,
+            echo_score=0.8,
+            ticket_id=tid("DEMO-VPN-001"),
+            created_at=snip_base + timedelta(hours=1),
+        )
+        s3 = ensure_snippet(
+            session,
+            title="MFA codes invalid — fix clock drift",
+            summary="mfa codes invalid — fix clock drift",
+            content_md="### Fix: MFA codes invalid\n\nEnable automatic time sync on the device; retry MFA.\n",
+            source=DEMO_SOURCE,
+            echo_score=0.75,
+            ticket_id=tid("DEMO-MFA-002"),
+            created_at=snip_base + timedelta(hours=2),
+        )
+        s4 = ensure_snippet(
+            session,
+            title="SSO cookie loop — clear cookies",
+            summary="sso cookie loop — clear cookies",
+            content_md="### Fix: SSO cookie loop\n\nClear cookies for the IdP/app domain; try incognito.\n",
+            source=DEMO_SOURCE,
+            echo_score=0.7,
+            ticket_id=tid("DEMO-SSO-001"),
+            created_at=snip_base + timedelta(hours=3),
+        )
+        s5 = ensure_snippet(
+            session,
+            title="Printer queue paused — restart spooler",
+            summary="printer queue paused — restart spooler",
+            content_md="### Fix: printer queue paused\n\nRestart spooler and re-add printer if needed.\n",
+            source=DEMO_SOURCE,
+            echo_score=0.6,
+            ticket_id=tid("DEMO-PRINTER-001"),
+            created_at=snip_base + timedelta(hours=4),
         )
 
-        # Add snippet feedback so snippet radar has signal
-        for helped, days_ago in [(True, 5), (True, 4), (False, 2)]:
+        for i, snippet in enumerate([s1, s2, s3, s4, s5]):
+            assert snippet.id is not None
             ensure_snippet_feedback(
                 session,
-                snippet_id=int(s1.id),
-                helped=helped,
-                created_at=now - timedelta(days=days_ago),
+                snippet_id=int(snippet.id),
+                helped=True,
+                notes=f"{DEMO_PREFIX}: helpful",
+                created_at=snip_base + timedelta(days=1, hours=i),
             )
-        for helped, days_ago in [(True, 6), (False, 3), (False, 1)]:
-            ensure_snippet_feedback(
+
+        log = ensure_ask_echo_log(
+            session,
+            query="password reset doesn't work",
+            mode="kb_answer",
+            kb_confidence=0.9,
+            echo_score=0.9,
+            created_at=base + timedelta(days=3),
+        )
+        if log.id is not None:
+            ensure_ask_echo_feedback(
                 session,
-                snippet_id=int(s2.id),
-                helped=helped,
-                created_at=now - timedelta(days=days_ago),
+                ask_echo_log_id=int(log.id),
+                helped=True,
+                notes=f"{DEMO_PREFIX}: worked",
+                created_at=base + timedelta(days=3, hours=1),
             )
 
 
