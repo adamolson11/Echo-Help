@@ -192,6 +192,16 @@ response followed by the search results.
 If you see zero results, check that the backend you're running is the same one used by the demo
 script (use `ECHOHELP_API_BASE` to point to another host/port).
 
+### 🧪 Ask Echo baseline evaluation (offline)
+
+If you’ve collected some Ask Echo feedback (via the UI or `POST /api/ask-echo/feedback`), you can export labeled rows from the DB and evaluate a simple threshold baseline:
+
+```bash
+bash scripts/dev_eval_ask_echo_baseline.sh --grid-search
+```
+
+This script writes a JSON export to `/tmp/ask_echo_training_export.json` and prints metrics + a small calibration table.
+
 
 
 ### 4. Install frontend dependencies and run dev server
