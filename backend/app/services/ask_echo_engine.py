@@ -1,0 +1,206 @@
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Iterable
+
+from sqlmodel import Session
+
+from backend.app.schemas.ask_echo import (
+    AskEchoReasoning,
+    AskEchoReasoningSnippet,
+    AskEchoReference,
+    AskEchoTicketSummary,
+)
+from backend.app.services.ask_echo_templates import AskEchoTemplates
+from backend.app.services.semantic_search import semantic_search_tickets
+from backend.app.services.snippet_repository import search_snippets as repo_search_snippets
+
+
+@dataclass(frozen=True)
+class AskEchoEngineRequest:
+    query: str
+    limit: int = 5
+
+
+@dataclass(frozen=True)
+class AskEchoEngineResult:
+    answer_text: str
+    answer_kind: str  # "grounded" | "ungrounded"
+    mode: str
+    kb_backed: bool
+    kb_confidence: float
+    top_ticket_score: float
+    references: list[AskEchoReference]
+    reasoning: AskEchoReasoning
+    ticket_summaries: list[AskEchoTicketSummary]
+    snippet_summaries: list[dict]
+
+
+def _first_line(text: str | None, max_len: int = 200) -> str:
+    if not text:
+        return ""
+    return (str(text).split("\n")[0])[:max_len]
+
+
+def _build_kb_answer(
+    templates: AskEchoTemplates,
+    query: str,
+    scored_tickets: list[tuple[float, object]],
+) -> tuple[str, list[AskEchoReference]]:
+    bullets: list[str] = []
+    refs: list[AskEchoReference] = []
+
+    for score, t in (scored_tickets[:3] if scored_tickets else []):
+        ticket_id = getattr(t, "id", None)
+        title = (
+            getattr(t, "summary", None)
+            or getattr(t, "title", None)
+            or f"Ticket {ticket_id}"
+        )
+        snippet = _first_line(getattr(t, "description", ""))
+        bullets.append(f"- {title} (Ticket #{ticket_id}): {snippet}")
+        if ticket_id is not None:
+            refs.append(
+                AskEchoReference(
+                    ticket_id=int(ticket_id),
+                    confidence=float(score) if score is not None else None,
+                )
+            )
+
+    if bullets:
+        return templates.grounded_prefix + "\n".join(bullets), refs
+
+    return templates.grounded_fallback, refs
+
+
+def _build_general_answer(templates: AskEchoTemplates, query: str) -> tuple[str, list[AskEchoReference]]:
+    return templates.ungrounded_answer, []
+
+
+def _build_ticket_summaries(scored: list[tuple[float, object]]) -> list[AskEchoTicketSummary]:
+    tickets = [t for _, t in scored]
+    return [
+        AskEchoTicketSummary(
+            id=int(getattr(t, "id")),
+            summary=(getattr(t, "summary", None) or getattr(t, "title", None)),
+            title=getattr(t, "title", None),
+        )
+        for t in tickets
+        if getattr(t, "id", None) is not None
+    ]
+
+
+def _build_snippet_summaries(snippets: Iterable[object]) -> list[dict]:
+    return [
+        {
+            "id": getattr(s, "id", None),
+            "title": getattr(s, "title", None),
+            "summary": getattr(s, "summary", None),
+            "echo_score": getattr(s, "echo_score", None),
+            "success_count": getattr(s, "success_count", None),
+            "failure_count": getattr(s, "failure_count", 0),
+            "ticket_id": getattr(s, "ticket_id", None),
+        }
+        for s in snippets
+    ]
+
+
+class AskEchoEngine:
+    """Pure-ish Ask Echo logic.
+
+    This intentionally separates:
+    - retrieval/scoring (tickets + snippets)
+    - answer templating (string templates)
+
+    so the "language" part can be swapped for an LLM later without
+    rewriting the route, persistence, or tests.
+    """
+
+    def __init__(
+        self,
+        *,
+        templates: AskEchoTemplates | None = None,
+        kb_threshold: float = 0.6,
+    ) -> None:
+        self.templates = templates or AskEchoTemplates()
+        self.kb_threshold = kb_threshold
+
+    def run(self, *, session: Session, req: AskEchoEngineRequest) -> AskEchoEngineResult:
+        q = (req.query or "").strip()
+        if not q:
+            raise ValueError("query required")
+
+        scored = semantic_search_tickets(session=session, query=q, limit=req.limit)
+        ticket_summaries = _build_ticket_summaries([(score, t) for score, t in scored])
+
+        try:
+            snippets = repo_search_snippets(session, q, limit=req.limit)
+            snippets = sorted(snippets, key=lambda s: (getattr(s, "echo_score", 0.0) or 0.0), reverse=True)
+        except Exception:
+            logging.exception("snippet search failed")
+            snippets = []
+
+        snippet_summaries = _build_snippet_summaries(snippets)
+
+        scores = [float(score) for score, _ in scored if score is not None]
+        max_score = max(scores) if scores else 0.0
+
+        if snippets:
+            answer_text, references = _build_kb_answer(self.templates, q, [(float(s), t) for s, t in scored])
+            mode = "kb_answer"
+            kb_backed = True
+            top_snip_score = getattr(snippets[0], "echo_score", None)
+            kb_confidence = float(top_snip_score) if top_snip_score is not None else float(max_score or 0.0)
+        elif max_score >= self.kb_threshold and scored:
+            answer_text, references = _build_kb_answer(self.templates, q, [(float(s), t) for s, t in scored])
+            mode = "kb_answer"
+            kb_backed = True
+            kb_confidence = float(max_score)
+        else:
+            answer_text, references = _build_general_answer(self.templates, q)
+            mode = "general_answer"
+            kb_backed = False
+            kb_confidence = 0.0
+
+        answer_kind = "grounded" if kb_backed else "ungrounded"
+
+        # reasoning (snippet candidates)
+        candidate_pairs: list[tuple[object, float]] = []
+        for s in snippets:
+            score_val = getattr(s, "echo_score", None)
+            candidate_pairs.append((s, float(score_val) if score_val is not None else 0.0))
+
+        chosen_snippets = snippets if snippets else []
+        best_score = max((score for _, score in candidate_pairs), default=None)
+
+        reasoning = AskEchoReasoning(
+            candidate_snippets=[
+                AskEchoReasoningSnippet(
+                    id=int(getattr(s, "id")),
+                    title=getattr(s, "title", None),
+                    score=float(score),
+                )
+                for (s, score) in candidate_pairs
+                if getattr(s, "id", None) is not None
+            ],
+            chosen_snippet_ids=[
+                int(getattr(s, "id")) for s in chosen_snippets if getattr(s, "id", None) is not None
+            ],
+            echo_score=float(best_score) if best_score is not None else None,
+        )
+
+        answer_text = answer_text + self.templates.experimental_note
+
+        return AskEchoEngineResult(
+            answer_text=answer_text,
+            answer_kind=answer_kind,
+            mode=mode,
+            kb_backed=kb_backed,
+            kb_confidence=float(kb_confidence or 0.0),
+            top_ticket_score=float(max_score or 0.0),
+            references=references,
+            reasoning=reasoning,
+            ticket_summaries=ticket_summaries,
+            snippet_summaries=snippet_summaries,
+        )
