@@ -288,8 +288,8 @@ def seed_demo_org() -> None:
         },
         {
             "external_key": "DEMO-MFA-002",
-            "summary": "Authenticator codes rejected due to clock drift",
-            "description": "Authenticator app produces invalid codes; device time is off by ~90 seconds.",
+            "summary": "mfa codes invalid (clock drift)",
+            "description": "Customer reports: mfa codes invalid. Authenticator app produces invalid codes; device time is off by ~90 seconds.",
             "status": "closed",
             "priority": "medium",
             "project_key": "SEC",
@@ -314,8 +314,8 @@ def seed_demo_org() -> None:
         # printer
         {
             "external_key": "DEMO-PRINTER-001",
-            "summary": "Printer queue stuck paused",
-            "description": "Queue stuck in paused state; spooler restart temporarily helps.",
+            "summary": "printer queue paused",
+            "description": "Customer reports: printer queue paused. Queue stuck in paused state; spooler restart temporarily helps.",
             "status": "open",
             "priority": "low",
             "project_key": "IT",
@@ -331,8 +331,8 @@ def seed_demo_org() -> None:
         # SSO cookie loop
         {
             "external_key": "DEMO-SSO-001",
-            "summary": "SSO cookie loop blocks login",
-            "description": "SSO session persists across auth redirect; clearing cookies/incognito resolves.",
+            "summary": "SSO loop back to login",
+            "description": "Customer reports: SSO loop back to login. SSO session persists across auth redirect; clearing cookies/incognito resolves.",
             "status": "closed",
             "priority": "medium",
             "project_key": "IT",
@@ -463,9 +463,9 @@ def seed_demo_org() -> None:
         )
         s4 = ensure_snippet(
             session,
-            title="SSO cookie loop — clear cookies",
-            summary="sso cookie loop — clear cookies",
-            content_md="### Fix: SSO cookie loop\n\nClear cookies for the IdP/app domain; try incognito.\n",
+            title="SSO loop back to login — clear cookies",
+            summary="SSO loop back to login — clear cookies",
+            content_md="### Fix: SSO loop back to login\n\nClear cookies for the IdP/app domain; try incognito.\n",
             source=DEMO_SOURCE,
             echo_score=0.7,
             ticket_id=tid("DEMO-SSO-001"),
