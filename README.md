@@ -137,10 +137,10 @@ PYTHONPATH=. python3 scripts/backfill_ticket_embeddings.py
 ### 3. Run the backend
 
 ```bash
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-The API root will be at: `http://127.0.0.1:8000`.
+The API root will be at: `http://127.0.0.1:8001`.
 
 ### 🚀 Quick Demo (Search)
 
@@ -150,10 +150,10 @@ A tiny CLI demo script is included to exercise the real HTTP API and print frien
 
 ```bash
 # Example: start the FastAPI dev server
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-2. Run the demo script (defaults to `http://localhost:8000`):
+2. Run the demo script (defaults to `http://localhost:8001`):
 
 ```bash
 PYTHONPATH=. python -m scripts.demo_echohelp
@@ -162,7 +162,7 @@ PYTHONPATH=. python -m scripts.demo_echohelp
 If your backend is running on a different host/port, set `ECHOHELP_API_BASE`:
 
 ```bash
-export ECHOHELP_API_BASE="http://127.0.0.1:8000"
+export ECHOHELP_API_BASE="http://127.0.0.1:8001"
 PYTHONPATH=. python -m scripts.demo_echohelp
 ```
 
@@ -176,7 +176,7 @@ pipeline: ingest -> embedding -> search.
 1. Start the backend (from the repo root):
 
 ```bash
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 2. Run the ingest→search demo:
@@ -202,7 +202,13 @@ npm install
 npm run dev
 ```
 
-By default Vite will start on something like `http://localhost:5173` or `http://localhost:5175` (check the terminal output).
+By default Vite will start on `http://localhost:5174`.
+
+Tip: from the repo root you can run backend + frontend together via:
+
+```bash
+npm run dev
+```
 
 ### 5. Build frontend for production
 

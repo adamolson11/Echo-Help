@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-API_URL="http://localhost:8000/api"
+API_URL="http://localhost:8001/api"
 
 function assert_grep() {
   local value="$1"

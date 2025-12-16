@@ -2,7 +2,7 @@
 
 Usage:
   PYTHONPATH=. python -m scripts.demo_echohelp
-  ECHOHELP_API_BASE can be set to point to a different host (default: http://localhost:8000)
+    ECHOHELP_API_BASE can be set to point to a different host (default: http://localhost:8001)
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import requests
 from requests.exceptions import RequestException
 
 
-DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_BASE_URL = "http://localhost:8001"
 API_BASE = os.getenv("ECHOHELP_API_BASE", DEFAULT_BASE_URL).rstrip("/")
 
 

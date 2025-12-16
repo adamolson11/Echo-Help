@@ -6,13 +6,13 @@ cd "$(dirname "$0")/.."
 
 # Start backend server in background
 cd backend
-uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+uvicorn app.main:app --host 0.0.0.0 --port 8001 &
 SERVER_PID=$!
 cd ..
 
 # Wait for server to be up
 for i in {1..10}; do
-  if curl -sf http://localhost:8000/api/health >/dev/null; then
+  if curl -sf http://localhost:8001/api/health >/dev/null; then
     echo "[OK] Backend server is up."
     break
   fi
@@ -20,7 +20,7 @@ for i in {1..10}; do
   sleep 1
 done
 
-if ! curl -sf http://localhost:8000/api/health >/dev/null; then
+if ! curl -sf http://localhost:8001/api/health >/dev/null; then
   echo "[FAIL] Backend server did not start in time."
   kill $SERVER_PID || true
   exit 1
@@ -29,14 +29,14 @@ fi
 
 # Seed demo tickets
 echo "[INFO] Seeding demo tickets..."
-curl -sf -X POST http://localhost:8000/api/tickets/seed-demo || true
+curl -sf -X POST http://localhost:8001/api/tickets/seed-demo || true
 
 # Backfill embeddings
 echo "[INFO] Backfilling ticket embeddings..."
 python3 -m scripts.backfill_embeddings
 
 # Test /api/intake
-INT_RESPONSE=$(curl -s -X POST http://localhost:8000/api/intake \
+INT_RESPONSE=$(curl -s -X POST http://localhost:8001/api/intake \
   -H "Content-Type: application/json" \
   -d '{"text":"user cannot login"}')
 echo "$INT_RESPONSE" | grep "suggested_tickets" >/dev/null
