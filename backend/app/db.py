@@ -104,6 +104,16 @@ def init_db():
             db_path = _DB_PATH
             conn = sqlite3.connect(db_path)
             cur = conn.cursor()
+
+            def _get_cols(table: str) -> list[str]:
+                cur.execute(f"PRAGMA table_info({table})")
+                return [r[1] for r in cur.fetchall()]
+
+            def _add_col_if_missing(*, table: str, col_def: str, col_name: str):
+                cols = _get_cols(table)
+                if col_name not in cols:
+                    cur.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+
             cur.execute("PRAGMA table_info(ticket)")
             cols = [r[1] for r in cur.fetchall()]
 
@@ -119,17 +129,45 @@ def init_db():
 
             # Lightweight migration for Ask Echo reasoning/audit fields.
             # Older DBs may have `askecholog` without these columns.
-            cur.execute("PRAGMA table_info(askecholog)")
-            ask_cols = [r[1] for r in cur.fetchall()]
 
-            def add_ask_col(col_def: str, col_name: str):
-                if col_name not in ask_cols:
-                    cur.execute(f"ALTER TABLE askecholog ADD COLUMN {col_def}")
+            _add_col_if_missing(
+                table="askecholog",
+                col_def="candidate_snippet_ids_json TEXT",
+                col_name="candidate_snippet_ids_json",
+            )
+            _add_col_if_missing(
+                table="askecholog",
+                col_def="chosen_snippet_ids_json TEXT",
+                col_name="chosen_snippet_ids_json",
+            )
+            _add_col_if_missing(table="askecholog", col_def="echo_score REAL", col_name="echo_score")
+            _add_col_if_missing(
+                table="askecholog", col_def="reasoning_notes TEXT", col_name="reasoning_notes"
+            )
 
-            add_ask_col("candidate_snippet_ids_json TEXT", "candidate_snippet_ids_json")
-            add_ask_col("chosen_snippet_ids_json TEXT", "chosen_snippet_ids_json")
-            add_ask_col("echo_score REAL", "echo_score")
-            add_ask_col("reasoning_notes TEXT", "reasoning_notes")
+            # Ticket feedback has grown new columns over time; older DBs may be missing them.
+            _add_col_if_missing(table="ticketfeedback", col_def="helped BOOLEAN", col_name="helped")
+            _add_col_if_missing(
+                table="ticketfeedback", col_def="resolution_notes TEXT", col_name="resolution_notes"
+            )
+            _add_col_if_missing(table="ticketfeedback", col_def="ai_cluster_id TEXT", col_name="ai_cluster_id")
+            _add_col_if_missing(table="ticketfeedback", col_def="ai_summary TEXT", col_name="ai_summary")
+
+            # Snippet tables: keep older DBs compatible with newer snippet fields.
+            _add_col_if_missing(table="solutionsnippet", col_def="summary TEXT", col_name="summary")
+            _add_col_if_missing(table="solutionsnippet", col_def="content_md TEXT", col_name="content_md")
+            _add_col_if_missing(table="solutionsnippet", col_def="source TEXT", col_name="source")
+            _add_col_if_missing(table="solutionsnippet", col_def="echo_score REAL", col_name="echo_score")
+            _add_col_if_missing(table="solutionsnippet", col_def="success_count INTEGER", col_name="success_count")
+            _add_col_if_missing(table="solutionsnippet", col_def="failure_count INTEGER", col_name="failure_count")
+            _add_col_if_missing(table="solutionsnippet", col_def="tags TEXT", col_name="tags")
+            _add_col_if_missing(table="solutionsnippet", col_def="updated_at TEXT", col_name="updated_at")
+
+            _add_col_if_missing(table="snippetfeedback", col_def="notes TEXT", col_name="notes")
+
+            # Embeddings table: model + created_at were added after early iterations.
+            _add_col_if_missing(table="embedding", col_def="model_name TEXT", col_name="model_name")
+            _add_col_if_missing(table="embedding", col_def="created_at TEXT", col_name="created_at")
 
             conn.commit()
             conn.close()
