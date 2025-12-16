@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AskEchoReasoningDetails from "./components/AskEchoReasoning";
 import { formatApiError } from "./api/client";
 import {
@@ -6,6 +6,7 @@ import {
   postAskEcho,
   postAskEchoFeedback,
   postSnippetFeedback,
+  searchTicketsText,
 } from "./api/endpoints";
 import type { AskEchoResponse } from "./api/types";
 
@@ -19,6 +20,8 @@ export default function AskEchoWidget() {
   const [q, setQ] = useState("");
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [demoPresent, setDemoPresent] = useState<boolean>(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // feedback UI state
   const [fbSubmitting, setFbSubmitting] = useState(false);
@@ -43,6 +46,27 @@ export default function AskEchoWidget() {
       setLoading(false);
     }
   }
+
+  // Detect demo presence without adding a new backend endpoint.
+  // We query the existing /api/search endpoint for a DEMO- marker.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const rows = await searchTicketsText("DEMO-", ctrl.signal);
+        const found = Array.isArray(rows)
+          && rows.some((r: any) => {
+            const ek = String(r?.external_key ?? "");
+            const src = String(r?.source ?? "");
+            return ek.startsWith("DEMO-") || src === "demo";
+          });
+        setDemoPresent(Boolean(found));
+      } catch {
+        setDemoPresent(false);
+      }
+    })();
+    return () => ctrl.abort();
+  }, []);
 
   // when a new Ask Echo response arrives, auto-select a sensible ticket id for feedback
   useEffect(() => {
@@ -180,6 +204,7 @@ export default function AskEchoWidget() {
     <div className="mb-4 rounded-md bg-slate-800 p-4">
       <div className="flex gap-2">
         <input
+          ref={inputRef}
           className="flex-1 rounded-md bg-slate-700 px-3 py-2 text-slate-100"
           placeholder="Ask Echo a question about tickets..."
           value={q}
@@ -199,6 +224,35 @@ export default function AskEchoWidget() {
       <p className="text-xs text-slate-400 mt-1">
         Ask a natural-language question and get an AI-generated answer based on your tickets and knowledge base.
       </p>
+
+      {demoPresent && !q.trim() && !response && (
+        <div className="mt-1 text-xs text-slate-400">
+          <span className="mr-1">Try:</span>
+          {[
+            "password reset doesn't work",
+            "vpn auth_failed",
+            "mfa codes invalid",
+          ].map((example, idx) => (
+            <span key={example}>
+              <button
+                type="button"
+                className="underline hover:text-slate-200"
+                onClick={() => {
+                  setQ(example);
+                  try {
+                    inputRef.current?.focus();
+                  } catch {
+                    // no-op
+                  }
+                }}
+              >
+                {example}
+              </button>
+              {idx < 2 ? <span className="mx-1">·</span> : null}
+            </span>
+          ))}
+        </div>
+      )}
 
       {response && (
         <div className="mt-3">
