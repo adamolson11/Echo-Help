@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from sqlmodel import Session
+from sqlmodel import select
 
 from backend.app.schemas.ask_echo import (
     AskEchoReasoning,
@@ -12,6 +13,7 @@ from backend.app.schemas.ask_echo import (
     AskEchoReference,
     AskEchoTicketSummary,
 )
+from backend.app.models.ticket import Ticket
 from backend.app.services.ask_echo_templates import AskEchoTemplates
 from backend.app.services.semantic_search import semantic_search_tickets
 from backend.app.services.snippet_repository import search_snippets as repo_search_snippets
@@ -165,7 +167,31 @@ class AskEchoEngine:
     def _retrieve_tickets(self, *, session: Session, query: str, limit: int):
         if self._ticket_retriever is not None:
             return self._ticket_retriever(session=session, query=query, limit=limit)
-        return semantic_search_tickets(session=session, query=query, limit=limit)
+
+        # Prefer semantic search when embeddings are present.
+        scored = semantic_search_tickets(session=session, query=query, limit=limit)
+        if scored:
+            return scored
+
+        # Fallback: keyword search so Ask Echo still returns suggestions even
+        # when embeddings are missing/unavailable.
+        q = (query or "").strip()
+        if not q:
+            return []
+        pattern = f"%{q}%"
+        stmt = (
+            select(Ticket)
+            .where(
+                Ticket.summary.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
+                | Ticket.description.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
+                | Ticket.external_key.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
+            )
+            .order_by(Ticket.id.desc())  # type: ignore[reportUnknownMemberType]
+            .limit(limit)
+        )
+        tickets = list(session.exec(stmt).all())
+        pseudo_score = 0.65  # above default kb_threshold so we treat these as KB-backed
+        return [(pseudo_score, t) for t in tickets]
 
     def _retrieve_snippets(self, *, session: Session, query: str, limit: int):
         if self._snippet_retriever is not None:

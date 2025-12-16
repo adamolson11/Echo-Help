@@ -239,6 +239,67 @@ export default function AskEchoWidget() {
                 </div>
               )}
 
+              {Array.isArray(response.results) && response.results.length > 0 && (
+                <div className="mt-3 text-xs text-slate-300">
+                  <div className="font-semibold text-xs">Suggested tickets</div>
+                  <ul className="mt-1 space-y-1">
+                    {response.results.slice(0, 5).map((t) => (
+                      <li key={String(t.id)} className="text-[11px]">
+                        <button
+                          onClick={() => {
+                            try {
+                              const ev = new CustomEvent("echo-select-ticket", { detail: { ticketId: t.id } });
+                              window.dispatchEvent(ev);
+                              const el = document.querySelector("#root");
+                              if (el) el.scrollIntoView({ behavior: "smooth" });
+                            } catch (e) {
+                              // no-op
+                            }
+                          }}
+                          className="underline hover:text-slate-200"
+                        >
+                          • #{t.id} – {t.summary || t.title || `Ticket ${t.id}`}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {Array.isArray(response.snippets) && response.snippets.length > 0 && (
+                <div className="mt-3 text-xs text-slate-300">
+                  <div className="font-semibold text-xs">Suggested snippets</div>
+                  <ul className="mt-1 space-y-1">
+                    {response.snippets.slice(0, 5).map((s) => (
+                      <li key={String(s.id)} className="text-[11px]">
+                        <span className="text-slate-200">• {s.title}</span>
+                        {typeof s.echo_score === "number" && (
+                          <span className="text-slate-500 ml-2">(score {s.echo_score.toFixed(2)})</span>
+                        )}
+                        {s.summary && <div className="text-slate-400">{s.summary}</div>}
+                        {s.ticket_id && (
+                          <button
+                            onClick={() => {
+                              try {
+                                const ev = new CustomEvent("echo-select-ticket", { detail: { ticketId: s.ticket_id } });
+                                window.dispatchEvent(ev);
+                                const el = document.querySelector("#root");
+                                if (el) el.scrollIntoView({ behavior: "smooth" });
+                              } catch (e) {
+                                // no-op
+                              }
+                            }}
+                            className="underline text-slate-400 hover:text-slate-200"
+                          >
+                            View ticket #{s.ticket_id}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-xs text-slate-300">Was this helpful?</span>
                 <button

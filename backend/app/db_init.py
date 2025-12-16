@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 
-from .db import engine, init_db
+import backend.app.db as db
 from .models.ticket import Ticket
 
 SEED_TICKETS = [
@@ -26,7 +26,11 @@ SEED_TICKETS = [
 
 
 def seed_tickets() -> None:
-    with Session(engine) as session:
+    db.ensure_engine()
+    if db.engine is None:
+        raise RuntimeError("Database engine is not initialized")
+
+    with Session(db.engine) as session:
         existing = session.exec(select(Ticket)).first()
         if existing:
             # Already seeded
@@ -40,7 +44,7 @@ def seed_tickets() -> None:
 
 def main() -> None:
     # Create DB tables and seed a couple tickets if none exist
-    init_db()
+    db.init_db()
     seed_tickets()
 
     # Optional demo seed (idempotent) so Ask Echo has grounding.
