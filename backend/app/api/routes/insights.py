@@ -268,9 +268,17 @@ def get_ask_echo_feedback(
     query = query.order_by(AskEchoFeedback.created_at.desc()).limit(limit)  # type: ignore[attr-defined]
     rows = list(session.exec(query).all())
 
+    # Avoid N+1 queries: bulk load logs for the returned feedback rows.
+    log_ids = {r.ask_echo_log_id for r in rows}
+    logs_by_id: dict[int, AskEchoLog] = {}
+    if log_ids:
+        stmt = select(AskEchoLog).where(AskEchoLog.id.in_(log_ids))  # type: ignore[attr-defined]
+        logs = list(session.exec(stmt).all())
+        logs_by_id = {int(l.id): l for l in logs if l.id is not None}
+
     items: list[AskEchoFeedbackRow] = []
     for r in rows:
-        log = session.get(AskEchoLog, r.ask_echo_log_id)
+        log = logs_by_id.get(int(r.ask_echo_log_id))
         items.append(
             AskEchoFeedbackRow(
                 id=r.id or 0,

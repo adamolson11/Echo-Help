@@ -110,3 +110,58 @@ def test_init_db_migrates_ticketfeedback_missing_columns() -> None:
         },
     )
     assert r.status_code == 200
+
+
+def test_init_db_migrates_solutionsnippet_missing_columns() -> None:
+    """Regression: existing DBs may have solutionsnippet missing newer columns.
+
+    Snippets were introduced/expanded over time. Older DBs can miss fields like
+    content_md/echo_score/success_count which can break snippet creation.
+    """
+
+    db_path = os.getenv("ECHOHELP_DB_PATH")
+    assert db_path, "test isolation fixture should set ECHOHELP_DB_PATH"
+
+    # Create an old-schema solutionsnippet table missing many newer columns.
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS solutionsnippet (
+            id INTEGER PRIMARY KEY,
+            ticket_id INTEGER,
+            title TEXT NOT NULL,
+            created_at TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    init_db()
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(solutionsnippet)")
+    cols = {r[1] for r in cur.fetchall()}
+    conn.close()
+
+    # Key columns expected by current code paths
+    assert "content_md" in cols
+    assert "echo_score" in cols
+    assert "success_count" in cols
+    assert "failure_count" in cols
+    assert "updated_at" in cols
+
+    client = TestClient(app)
+    r = client.post(
+        "/api/snippets/create",
+        json={
+            "title": "schema drift snippet",
+            "content_md": "do the thing",
+            "source": "test",
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data.get("id"), int)
