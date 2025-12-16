@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backend.app.db import SessionLocal, init_db
 from backend.app.main import app
@@ -27,7 +27,7 @@ def test_ticket_pattern_radar_counts_match_inserted_tickets() -> None:
 
     # Insert a few recent tickets with overlapping words
     with SessionLocal() as session:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         tickets = [
             Ticket(
                 external_key="VPN-1",

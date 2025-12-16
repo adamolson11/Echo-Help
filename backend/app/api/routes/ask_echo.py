@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -64,7 +64,7 @@ def get_ask_echo_feedback_summary(
     if days <= 0:
         raise HTTPException(status_code=400, detail="days must be positive")
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     stmt = select(AskEchoFeedback).where(AskEchoFeedback.created_at >= cutoff)  # type: ignore[attr-defined]
     rows = list(session.exec(stmt).all())
 

@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, select
 
@@ -14,7 +14,7 @@ def get_feedback_patterns(session: Session, days: int = 30) -> dict:
     clustering; those can be layered on later via separate endpoints.
     """
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     feedback_rows: list[TicketFeedback] = list(
         session.exec(

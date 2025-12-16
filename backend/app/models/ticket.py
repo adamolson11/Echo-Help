@@ -5,6 +5,8 @@ from datetime import datetime
 from sqlalchemy import JSON, Column, Text
 from sqlmodel import Field, SQLModel
 
+from backend.app.core.time import utcnow
+
 
 class Ticket(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -24,8 +26,8 @@ class Ticket(SQLModel, table=True):
     tags: list[str] | None = Field(default=None, sa_column=Column(JSON))
     status: str
     priority: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
     resolved_at: datetime | None = None
 
 

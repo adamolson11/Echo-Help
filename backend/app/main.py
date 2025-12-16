@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,9 +10,20 @@ from .api import (feedback, feedback_suggestions, health, intake, search,
 from .api.routes import (ask_echo, ingest, insights, patterns, snippets,
                          ticket_feedback)
 # ...existing imports...
-from .db import engine, init_db
+from . import db
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure DB schema exists at application startup. This is important
+    # for TestClient-based tests which import `app` and start the ASGI
+    # app lifecycle; calling `init_db()` here makes table creation
+    # deterministic regardless of test import order.
+    db.init_db()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 ## DEV: Previously had an Eat401Middleware here that intercepted 401s
@@ -80,7 +92,10 @@ async def health_check():
     # Basic DB connectivity check
     db_ok = False
     try:
-        with engine.connect() as conn:
+        db.ensure_engine()
+        if db.engine is None:
+            raise RuntimeError("DB engine not initialized")
+        with db.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
             db_ok = True
     except Exception:
@@ -98,11 +113,3 @@ async def health_check():
 async def healthz():
     return {"status": "ok"}
 
-
-@app.on_event("startup")
-def _on_startup() -> None:
-    # Ensure DB schema exists at application startup. This is important
-    # for TestClient-based tests which import `app` and start the ASGI
-    # app lifecycle; calling `init_db()` here makes table creation
-    # deterministic regardless of test import order.
-    init_db()

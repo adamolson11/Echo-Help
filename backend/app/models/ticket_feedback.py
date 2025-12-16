@@ -2,6 +2,8 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from backend.app.core.time import utcnow
+
 
 class TicketFeedbackBase(SQLModel):
     ticket_id: int
@@ -18,4 +20,4 @@ class TicketFeedback(TicketFeedbackBase, table=True):
     # SQLModel/SQLAlchemy uses `__tablename__` declared at runtime; narrow-ignore
     __tablename__ = "ticketfeedback"  # type: ignore[reportAssignmentType]
     id: int | None = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)

@@ -6,6 +6,8 @@ from typing import Optional
 from sqlalchemy import JSON, Column, Text
 from sqlmodel import Field, SQLModel
 
+from backend.app.core.time import utcnow
+
 
 class SolutionSnippet(SQLModel, table=True):
     """A canonical solution snippet generated from ticket resolution or user feedback.
@@ -24,8 +26,8 @@ class SolutionSnippet(SQLModel, table=True):
     success_count: int = 0
     failure_count: int = 0
     tags: list[str] | None = Field(default=None, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 class SnippetFeedback(SQLModel, table=True):
@@ -39,7 +41,7 @@ class SnippetFeedback(SQLModel, table=True):
     snippet_id: int = Field(foreign_key="solutionsnippet.id")
     helped: bool
     notes: str | None = Field(default=None, sa_column=Column(Text))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class KnowledgeLink(SQLModel, table=True):

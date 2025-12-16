@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import delete
 from fastapi.testclient import TestClient
 
 from backend.app.db import SessionLocal, init_db
@@ -12,10 +13,10 @@ client = TestClient(app)
 
 def _seed_feedback() -> None:
     init_db()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     with SessionLocal() as session:
         # Ensure a clean slate so these tests don't leak state
-        session.query(TicketFeedback).delete()
+        session.exec(delete(TicketFeedback))
         rows = [
             TicketFeedback(ticket_id=1, query_text="foo", rating=5, helped=True),
             TicketFeedback(ticket_id=2, query_text="bar", rating=1, helped=False),

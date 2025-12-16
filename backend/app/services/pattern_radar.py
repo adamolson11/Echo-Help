@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 from sqlalchemy import func
@@ -21,7 +21,7 @@ def extract_ticket_patterns(session: Session, days: int = 14) -> Dict[str, Any]:
     - stats: {total_tickets, window_days}
     """
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     stmt = select(Ticket).where(Ticket.created_at >= cutoff)  # type: ignore[attr-defined]
     tickets: List[Ticket] = list(session.exec(stmt).all())

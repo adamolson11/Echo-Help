@@ -5,6 +5,8 @@ from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
+from backend.app.core.time import utcnow
+
 
 class AskEchoLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -23,4 +25,4 @@ class AskEchoLog(SQLModel, table=True):
     echo_score: Optional[float] = None
     # Optional free-text reasoning summary
     reasoning_notes: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=utcnow, index=True)

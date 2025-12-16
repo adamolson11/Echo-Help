@@ -1,5 +1,5 @@
 # ruff: noqa: E501,B008
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
@@ -22,7 +22,7 @@ def seed_demo(session: Session = Depends(get_session)) -> MessageResponse:
     if session.exec(select(Ticket)).all():
         return MessageResponse(message="Tickets already exist")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     demo = [
         Ticket(
             external_key="INC-1001",
