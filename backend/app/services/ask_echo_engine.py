@@ -35,6 +35,7 @@ class AskEchoEngineResult:
     reasoning: AskEchoReasoning
     ticket_summaries: list[AskEchoTicketSummary]
     snippet_summaries: list[dict]
+    features: dict
 
 
 def _first_line(text: str | None, max_len: int = 200) -> str:
@@ -106,6 +107,35 @@ def _build_snippet_summaries(snippets: Iterable[object]) -> list[dict]:
     ]
 
 
+def build_ask_echo_features(*, scored_tickets: list[tuple[float, object]], snippets: list[object]) -> dict:
+    """Return a stable, JSON-serializable feature dict for offline ML/eval.
+
+    Intentionally does NOT include raw ticket/snippet text.
+    """
+    scores = [float(score) for score, _ in scored_tickets if score is not None]
+    top_ticket_score = float(max(scores) if scores else 0.0)
+
+    top_snippet_echo_score: float = 0.0
+    if snippets:
+        s0 = snippets[0]
+        v = getattr(s0, "echo_score", None)
+        top_snippet_echo_score = float(v) if isinstance(v, (int, float)) else 0.0
+
+    return {
+        "version": "v1",
+        "ticket": {
+            "count": int(len(scored_tickets)),
+            "top_score": top_ticket_score,
+        },
+        "snippet": {
+            "count": int(len(snippets)),
+            "top_echo_score": top_snippet_echo_score,
+            "top_success_count": int(getattr(snippets[0], "success_count", 0) or 0) if snippets else 0,
+            "top_failure_count": int(getattr(snippets[0], "failure_count", 0) or 0) if snippets else 0,
+        },
+    }
+
+
 class AskEchoEngine:
     """Pure-ish Ask Echo logic.
 
@@ -122,20 +152,44 @@ class AskEchoEngine:
         *,
         templates: AskEchoTemplates | None = None,
         kb_threshold: float = 0.6,
+        ticket_retriever=None,
+        snippet_retriever=None,
+        grounding_decider=None,
     ) -> None:
         self.templates = templates or AskEchoTemplates()
         self.kb_threshold = kb_threshold
+        self._ticket_retriever = ticket_retriever
+        self._snippet_retriever = snippet_retriever
+        self._grounding_decider = grounding_decider
+
+    def _retrieve_tickets(self, *, session: Session, query: str, limit: int):
+        if self._ticket_retriever is not None:
+            return self._ticket_retriever(session=session, query=query, limit=limit)
+        return semantic_search_tickets(session=session, query=query, limit=limit)
+
+    def _retrieve_snippets(self, *, session: Session, query: str, limit: int):
+        if self._snippet_retriever is not None:
+            return self._snippet_retriever(session=session, query=query, limit=limit)
+        return repo_search_snippets(session, query, limit=limit)
+
+    def _decide_grounding(self, *, features: dict, has_snippets: bool, max_ticket_score: float) -> bool:
+        """Return whether the answer should be treated as KB-backed."""
+        if self._grounding_decider is not None:
+            return bool(self._grounding_decider(features=features))
+        if has_snippets:
+            return True
+        return bool(max_ticket_score >= self.kb_threshold)
 
     def run(self, *, session: Session, req: AskEchoEngineRequest) -> AskEchoEngineResult:
         q = (req.query or "").strip()
         if not q:
             raise ValueError("query required")
 
-        scored = semantic_search_tickets(session=session, query=q, limit=req.limit)
+        scored = self._retrieve_tickets(session=session, query=q, limit=req.limit)
         ticket_summaries = _build_ticket_summaries([(score, t) for score, t in scored])
 
         try:
-            snippets = repo_search_snippets(session, q, limit=req.limit)
+            snippets = self._retrieve_snippets(session=session, query=q, limit=req.limit)
             snippets = sorted(snippets, key=lambda s: (getattr(s, "echo_score", 0.0) or 0.0), reverse=True)
         except Exception:
             logging.exception("snippet search failed")
@@ -145,22 +199,22 @@ class AskEchoEngine:
 
         scores = [float(score) for score, _ in scored if score is not None]
         max_score = max(scores) if scores else 0.0
+        features = build_ask_echo_features(scored_tickets=scored, snippets=snippets)
 
-        if snippets:
+        kb_backed = self._decide_grounding(
+            features=features,
+            has_snippets=bool(snippets),
+            max_ticket_score=float(max_score or 0.0),
+        )
+
+        if kb_backed and (snippets or scored):
             answer_text, references = _build_kb_answer(self.templates, q, [(float(s), t) for s, t in scored])
             mode = "kb_answer"
-            kb_backed = True
-            top_snip_score = getattr(snippets[0], "echo_score", None)
+            top_snip_score = getattr(snippets[0], "echo_score", None) if snippets else None
             kb_confidence = float(top_snip_score) if top_snip_score is not None else float(max_score or 0.0)
-        elif max_score >= self.kb_threshold and scored:
-            answer_text, references = _build_kb_answer(self.templates, q, [(float(s), t) for s, t in scored])
-            mode = "kb_answer"
-            kb_backed = True
-            kb_confidence = float(max_score)
         else:
             answer_text, references = _build_general_answer(self.templates, q)
             mode = "general_answer"
-            kb_backed = False
             kb_confidence = 0.0
 
         answer_kind = "grounded" if kb_backed else "ungrounded"
@@ -203,4 +257,5 @@ class AskEchoEngine:
             reasoning=reasoning,
             ticket_summaries=ticket_summaries,
             snippet_summaries=snippet_summaries,
+            features=features,
         )

@@ -109,7 +109,7 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
         candidate_snippet_ids_json=(json.dumps(candidate_data) if candidate_data else None),
         chosen_snippet_ids_json=json.dumps(chosen_ids) if chosen_ids else None,
         echo_score=result.reasoning.echo_score,
-        reasoning_notes=None,
+        reasoning_notes=(json.dumps({"features": result.features}) if getattr(result, "features", None) else None),
     )
     try:
         session.add(log)
