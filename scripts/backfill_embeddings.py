@@ -2,7 +2,7 @@ import json
 
 from sqlmodel import Session, select
 
-from backend.app.db import engine
+import backend.app.db as db
 from backend.app.models import Embedding, Ticket
 from backend.app.services.embeddings import MODEL_NAME, embed_text
 
@@ -17,7 +17,11 @@ def get_ticket_embedding_text(ticket: Ticket) -> str:
 
 
 def backfill_ticket_embeddings():
-    with Session(engine) as session:
+    db.ensure_engine()
+    if db.engine is None:
+        raise RuntimeError("Database engine is not initialized")
+
+    with Session(db.engine) as session:
         tickets = session.exec(select(Ticket)).all()
         print(f"Found {len(tickets)} tickets")
         for ticket in tickets:

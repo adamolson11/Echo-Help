@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from backend.app.db import ensure_engine, engine
+import backend.app.db as db
 from backend.app.models.ask_echo_feedback import AskEchoFeedback
 from backend.app.models.ask_echo_log import AskEchoLog
 
@@ -31,11 +31,13 @@ def main() -> None:
     if args.days <= 0:
         raise SystemExit("--days must be positive")
 
-    ensure_engine()
+    db.ensure_engine()
+    if db.engine is None:
+        raise SystemExit("Database engine is not initialized")
     cutoff = datetime.utcnow() - timedelta(days=args.days)
 
     out: list[dict] = []
-    with Session(engine) as session:
+    with Session(db.engine) as session:
         stmt = (
             select(AskEchoFeedback)
             .where(AskEchoFeedback.created_at >= cutoff)  # type: ignore[attr-defined]

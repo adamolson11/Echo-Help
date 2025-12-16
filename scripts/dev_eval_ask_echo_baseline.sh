@@ -57,15 +57,17 @@ done
 echo "[INFO] Exporting Ask Echo training data..."
 PYTHONPATH=. python3 -m scripts.export_ask_echo_training_data --days "$DAYS" --limit "$LIMIT" > "$OUT"
 
-COUNT=$(python3 - <<PY
+COUNT=$(python3 - "$OUT" <<'PY'
 import json
 import sys
+if len(sys.argv) < 2:
+  raise SystemExit(2)
 p = sys.argv[1]
 with open(p, 'r', encoding='utf-8') as f:
     data = json.load(f)
 print(len(data) if isinstance(data, list) else 0)
 PY
-"$OUT")
+)
 
 if [[ "$COUNT" -le 0 ]]; then
   echo "[WARN] Export contains 0 labeled rows: $OUT" >&2

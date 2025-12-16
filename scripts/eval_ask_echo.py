@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sqlmodel import Session
 
-from backend.app.db import ensure_engine, engine
+import backend.app.db as db
 from backend.app.services.ask_echo_engine import AskEchoEngine, AskEchoEngineRequest
 
 
@@ -22,11 +22,13 @@ def main() -> None:
     if not isinstance(queries, list):
         raise SystemExit("--queries must be a JSON list")
 
-    ensure_engine()
+    db.ensure_engine()
+    if db.engine is None:
+        raise SystemExit("Database engine is not initialized")
     eng = AskEchoEngine()
 
     out = []
-    with Session(engine) as session:
+    with Session(db.engine) as session:
         for q in queries:
             if not isinstance(q, str):
                 continue

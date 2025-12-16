@@ -6,16 +6,21 @@ missing. It uses the application's engine so SQLModel metadata is created
 consistently with the rest of the app.
 """
 import sqlite3
+import os
 
 from sqlmodel import SQLModel
 
-from backend.app.db import engine
+import backend.app.db as db
 from backend.app.models.embedding import Embedding  # noqa: F401
 
-DB_PATH = "echohelp.db"
+DB_PATH = os.getenv("ECHOHELP_DB_PATH", "echohelp.db")
 
 
 def main() -> None:
+    db.ensure_engine()
+    if db.engine is None:
+        raise SystemExit("Database engine is not initialized")
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -35,7 +40,7 @@ def main() -> None:
     if not exists:
         print("Creating table 'embedding'...")
         # Use the app engine so tables are created where the app expects them.
-        SQLModel.metadata.create_all(engine)
+        SQLModel.metadata.create_all(db.engine)
         print("Done.")
     else:
         # Check for missing columns and add them non-destructively.
