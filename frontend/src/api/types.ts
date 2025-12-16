@@ -97,11 +97,10 @@ export type AskEchoLogDetailResponse = {
 
 export type AskEchoFeedbackRow = {
   id: number;
-  ticket_id: number;
-  rating: number;
-  helped: boolean | null;
-  resolution_notes?: string | null;
-  query_text?: string | null;
+  ask_echo_log_id: number;
+  helped: boolean;
+  notes: string | null;
+  query_text: string | null;
   created_at: string;
 };
 

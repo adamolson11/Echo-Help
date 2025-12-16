@@ -50,7 +50,20 @@ class AskEchoLogSummary(SQLModel):
 
 class AskEchoFeedbackResponse(SQLModel):
     meta: Meta = Meta(kind="ask_echo_feedback", version="v1")
-    items: list[dict]
+
+
+class AskEchoFeedbackRow(SQLModel):
+    id: int
+    ask_echo_log_id: int
+    helped: bool
+    notes: str | None = None
+    query_text: str | None = None
+    created_at: str | None = None
+
+
+class AskEchoFeedbackResponse(SQLModel):
+    meta: Meta = Meta(kind="ask_echo_feedback", version="v1")
+    items: list[AskEchoFeedbackRow]
 
 
 class ReasoningSnippetCandidate(SQLModel):

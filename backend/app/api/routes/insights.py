@@ -9,9 +9,11 @@ from fastapi import HTTPException
 
 from ...db import get_session
 from ...models.ask_echo_log import AskEchoLog
+from ...models.ask_echo_feedback import AskEchoFeedback
 from ...models.ticket_feedback import TicketFeedback
 from ...schemas.insights import (
     AskEchoFeedbackResponse,
+    AskEchoFeedbackRow,
     AskEchoLogDetail,
     AskEchoLogDetailResponse,
     AskEchoLogReasoning,
@@ -254,15 +256,30 @@ def get_ask_echo_feedback(
     helped: bool | None = None,
     session: Session = Depends(get_session),
 ):
-    """Return recent ticket feedback rows. This endpoint is primarily used by the Insights UI.
+    """Return recent Ask Echo feedback rows.
 
-    Optionally filter by `helped` (true/false). Results are ordered newest-first.
+    This is answer-level feedback keyed by `ask_echo_log_id`. We also attach
+    `query_text` from the associated AskEchoLog for UI display.
     """
-    query = select(TicketFeedback)
+    query = select(AskEchoFeedback)
     if helped is not None:
-        query = query.where(TicketFeedback.helped == helped)
+        query = query.where(AskEchoFeedback.helped == helped)
 
-    query = query.order_by(TicketFeedback.created_at.desc()).limit(limit)  # type: ignore[attr-defined]
-    rows = session.exec(query).all()
-    items = [TicketFeedbackRead.model_validate(r).model_dump() for r in rows]
+    query = query.order_by(AskEchoFeedback.created_at.desc()).limit(limit)  # type: ignore[attr-defined]
+    rows = list(session.exec(query).all())
+
+    items: list[AskEchoFeedbackRow] = []
+    for r in rows:
+        log = session.get(AskEchoLog, r.ask_echo_log_id)
+        items.append(
+            AskEchoFeedbackRow(
+                id=r.id or 0,
+                ask_echo_log_id=r.ask_echo_log_id,
+                helped=r.helped,
+                notes=r.notes,
+                query_text=(log.query if log else None),
+                created_at=r.created_at.isoformat() if r.created_at else None,
+            )
+        )
+
     return AskEchoFeedbackResponse(items=items)

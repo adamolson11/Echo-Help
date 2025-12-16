@@ -1,15 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { getInsightsAskEchoFeedback } from "./api/endpoints";
-
-export interface AskEchoFeedbackRow {
-  id: number;
-  ticket_id: number;
-  rating: number;
-  helped: boolean | null;
-  resolution_notes?: string | null;
-  query_text?: string | null;
-  created_at: string;
-}
+import type { AskEchoFeedbackRow } from "./api/types";
 
 const LIMIT = 100;
 
@@ -93,7 +84,7 @@ export default function AskEchoFeedbackPanel() {
                 <th className="text-left py-1 pr-2">Query</th>
                 <th className="text-left py-1 pr-2">Helped</th>
                 <th className="text-left py-1 pr-2">What worked</th>
-                <th className="text-left py-1 pr-2">Ticket</th>
+                <th className="text-left py-1 pr-2">Log</th>
               </tr>
             </thead>
             <tbody>
@@ -103,31 +94,14 @@ export default function AskEchoFeedbackPanel() {
                 return (
                   <tr key={r.id} className="border-t border-slate-800/80">
                     <td className="py-1 pr-2 align-top text-slate-300">{time}</td>
-                    <td className="py-1 pr-2 align-top text-slate-100 truncate max-w-xs" title={r.query_text || ""}>{r.query_text}</td>
+                    <td className="py-1 pr-2 align-top text-slate-100 truncate max-w-xs" title={r.query_text || ""}>{r.query_text || "—"}</td>
                     <td className="py-1 pr-2 align-top">
                       {r.helped ? <span className="text-emerald-300">Yes</span> : <span className="text-rose-300">No</span>}
                     </td>
-                    <td className="py-1 pr-2 align-top text-slate-200">{r.resolution_notes ?? "—"}</td>
-                      <td className="py-1 pr-2 align-top text-slate-300">
-                        {r.ticket_id ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              try {
-                                const ev = new CustomEvent("echo-select-ticket", { detail: { ticketId: r.ticket_id, ticket_id: r.ticket_id } });
-                                window.dispatchEvent(ev);
-                              } catch (err) {
-                                // ignore
-                              }
-                            }}
-                            className="underline text-indigo-300 hover:text-indigo-200 text-xs"
-                          >
-                            {r.ticket_id}
-                          </button>
-                        ) : (
-                          <span className="text-slate-500">—</span>
-                        )}
-                      </td>
+                    <td className="py-1 pr-2 align-top text-slate-200">{r.notes ?? "—"}</td>
+                    <td className="py-1 pr-2 align-top text-slate-300">
+                      <span className="text-slate-300">{r.ask_echo_log_id}</span>
+                    </td>
                   </tr>
                 );
               })}
