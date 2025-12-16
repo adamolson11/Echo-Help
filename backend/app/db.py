@@ -92,15 +92,6 @@ def init_db():
     # swallow exceptions here so test failures surface immediately
     # when table creation cannot complete.
     SQLModel.metadata.create_all(engine)
-    # Debug: list tables present after create_all (helps diagnose test ordering issues)
-    try:
-        from sqlalchemy import inspect
-
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
-        print(f"init_db: engine DB path={_DB_PATH}, tables={tables}")
-    except Exception:
-        pass
 
     # Lightweight migration for added KB columns on `ticket` table.
     # If the database existed before we added `short_id`, `body_md`,
