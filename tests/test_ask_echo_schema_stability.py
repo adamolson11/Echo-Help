@@ -15,6 +15,8 @@ def test_ask_echo_response_schema_stability() -> None:
     assert isinstance(meta, dict)
     assert isinstance(meta.get("kind"), str)
     assert isinstance(meta.get("version"), str)
+    assert meta.get("kind") == "ask_echo"
+    assert meta.get("version") == "v2"
 
     # Core contract fields.
     assert data.get("answer_kind") in ("grounded", "ungrounded")
@@ -22,11 +24,11 @@ def test_ask_echo_response_schema_stability() -> None:
 
     # Arrays should always be present (possibly empty).
     assert isinstance(data.get("references"), list)
-    assert isinstance(data.get("results"), list)
-    assert isinstance(data.get("snippets"), list)
+    assert isinstance(data.get("suggested_tickets"), list)
+    assert isinstance(data.get("suggested_snippets"), list)
 
     # If we got any ticket summaries, they must have stable keys.
-    if len(data["results"]) > 0:
-        first = data["results"][0]
+    if len(data["suggested_tickets"]) > 0:
+        first = data["suggested_tickets"][0]
         assert isinstance(first, dict)
         assert isinstance(first.get("id"), int)

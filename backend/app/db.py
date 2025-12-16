@@ -125,6 +125,21 @@ def init_db():
             add_col("root_cause TEXT", "root_cause")
             add_col("environment TEXT", "environment")
             add_col("tags TEXT", "tags")
+
+            # Lightweight migration for Ask Echo reasoning/audit fields.
+            # Older DBs may have `askecholog` without these columns.
+            cur.execute("PRAGMA table_info(askecholog)")
+            ask_cols = [r[1] for r in cur.fetchall()]
+
+            def add_ask_col(col_def: str, col_name: str):
+                if col_name not in ask_cols:
+                    cur.execute(f"ALTER TABLE askecholog ADD COLUMN {col_def}")
+
+            add_ask_col("candidate_snippet_ids_json TEXT", "candidate_snippet_ids_json")
+            add_ask_col("chosen_snippet_ids_json TEXT", "chosen_snippet_ids_json")
+            add_ask_col("echo_score REAL", "echo_score")
+            add_ask_col("reasoning_notes TEXT", "reasoning_notes")
+
             conn.commit()
             conn.close()
     except Exception:

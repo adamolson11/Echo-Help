@@ -22,6 +22,7 @@ export default function AskEchoWidget() {
 
   // feedback UI state
   const [fbSubmitting, setFbSubmitting] = useState(false);
+  const [fbSaved, setFbSaved] = useState(false);
   const [fbError, setFbError] = useState<string | null>(null);
   const [fbNotesVisible, setFbNotesVisible] = useState(false);
   const [fbNotes, setFbNotes] = useState("");
@@ -31,6 +32,7 @@ export default function AskEchoWidget() {
     if (!q.trim()) return;
     setLoading(true);
     setResponse(null);
+    setFbSaved(false);
     try {
       const data = await postAskEcho({ q, limit: 5 });
       setResponse(data);
@@ -46,25 +48,44 @@ export default function AskEchoWidget() {
   useEffect(() => {
     if (!response || isAskEchoError(response)) {
       setSelectedFeedbackTicketId(null);
+      setFbSaved(false);
       return;
     }
+
+    setFbSaved(false);
 
     // Prefer references (returned as { ticket_id, confidence }), then results (full tickets), then snippet.ticket_id
     let pick: number | null = null;
     if (Array.isArray(response.references) && response.references.length > 0) {
       pick = response.references[0].ticket_id ?? null;
     }
-    if (!pick && Array.isArray(response.results) && response.results.length > 0) {
-      const r0 = response.results[0];
+    if (!pick && Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
+      const r0 = response.suggested_tickets[0];
       pick = r0?.id ?? null;
     }
-    if (!pick && Array.isArray(response.snippets) && response.snippets.length > 0) {
-      const s0 = response.snippets[0];
+    if (!pick && Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
+      const s0 = response.suggested_snippets[0];
       if (s0 && s0.ticket_id) pick = s0.ticket_id;
     }
 
     setSelectedFeedbackTicketId(pick);
   }, [response]);
+
+  function openInSearch(opts: { query?: string; ticketId?: number | null }) {
+    try {
+      const ev = new CustomEvent("echo-open-search", {
+        detail: {
+          query: opts.query ?? q,
+          ticketId: opts.ticketId ?? null,
+        },
+      });
+      window.dispatchEvent(ev);
+      const el = document.querySelector("#root");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+      // no-op
+    }
+  }
 
   async function submitFeedback(helped: boolean) {
     setFbError(null);
@@ -95,12 +116,12 @@ export default function AskEchoWidget() {
         if (Array.isArray(response.references) && response.references.length > 0) {
           ticketId = response.references[0].ticket_id;
         }
-        if ((!ticketId || ticketId === null) && Array.isArray(response.results) && response.results.length > 0) {
-          const r0 = response.results[0];
+        if ((!ticketId || ticketId === null) && Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
+          const r0 = response.suggested_tickets[0];
           ticketId = r0?.id ?? undefined;
         }
-        if ((!ticketId || ticketId === null) && Array.isArray(response.snippets) && response.snippets.length > 0) {
-          const s0 = response.snippets[0];
+        if ((!ticketId || ticketId === null) && Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
+          const s0 = response.suggested_snippets[0];
           if (s0 && s0.ticket_id) ticketId = s0.ticket_id;
         }
       }
@@ -113,7 +134,7 @@ export default function AskEchoWidget() {
       if (!ticketId && ticketId !== 0) {
         setFbNotes("");
         setFbNotesVisible(false);
-        if (q.trim()) await ask();
+        setFbSaved(true);
         return;
       }
 
@@ -147,8 +168,7 @@ export default function AskEchoWidget() {
       // on success: clear notes and hide
       setFbNotes("");
       setFbNotesVisible(false);
-      // Optionally refresh Ask Echo answer to reflect updated KB confidence
-      if (q.trim()) await ask();
+      setFbSaved(true);
     } catch (err: any) {
       setFbError(formatApiError(err));
     } finally {
@@ -208,7 +228,7 @@ export default function AskEchoWidget() {
                   <ul className="mt-1 space-y-1">
                     {response.references.map((ref, idx: number) => {
                       // try to find a matching ticket title in results
-                      const ticket = response.results.find((r) => String(r.id) === String(ref.ticket_id));
+                      const ticket = response.suggested_tickets.find((r) => String(r.id) === String(ref.ticket_id));
                       const title = ticket ? (ticket.summary || ticket.title || `Ticket ${ref.ticket_id}`) : `Ticket ${ref.ticket_id}`;
                       return (
                         <li key={idx} className="text-[11px]">
@@ -232,6 +252,13 @@ export default function AskEchoWidget() {
                               <span className="text-slate-500 ml-2">({Math.round(ref.confidence * 100)}%)</span>
                             )}
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => openInSearch({ query: q, ticketId: ref.ticket_id })}
+                            className="ml-2 underline text-slate-500 hover:text-slate-200"
+                          >
+                            Open in Search
+                          </button>
                         </li>
                       );
                     })}
@@ -239,11 +266,11 @@ export default function AskEchoWidget() {
                 </div>
               )}
 
-              {Array.isArray(response.results) && response.results.length > 0 && (
+              {Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0 && (
                 <div className="mt-3 text-xs text-slate-300">
                   <div className="font-semibold text-xs">Suggested tickets</div>
                   <ul className="mt-1 space-y-1">
-                    {response.results.slice(0, 5).map((t) => (
+                    {response.suggested_tickets.slice(0, 5).map((t) => (
                       <li key={String(t.id)} className="text-[11px]">
                         <button
                           onClick={() => {
@@ -260,17 +287,24 @@ export default function AskEchoWidget() {
                         >
                           • #{t.id} – {t.summary || t.title || `Ticket ${t.id}`}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => openInSearch({ query: q, ticketId: t.id })}
+                          className="ml-2 underline text-slate-500 hover:text-slate-200"
+                        >
+                          Open in Search
+                        </button>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {Array.isArray(response.snippets) && response.snippets.length > 0 && (
+              {Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0 && (
                 <div className="mt-3 text-xs text-slate-300">
                   <div className="font-semibold text-xs">Suggested snippets</div>
                   <ul className="mt-1 space-y-1">
-                    {response.snippets.slice(0, 5).map((s) => (
+                    {response.suggested_snippets.slice(0, 5).map((s) => (
                       <li key={String(s.id)} className="text-[11px]">
                         <span className="text-slate-200">• {s.title}</span>
                         {typeof s.echo_score === "number" && (
@@ -302,10 +336,13 @@ export default function AskEchoWidget() {
 
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-xs text-slate-300">Was this helpful?</span>
+                {fbSaved && (
+                  <span className="text-xs text-emerald-300">Saved</span>
+                )}
                 <button
                   type="button"
                   onClick={() => submitFeedback(true)}
-                  disabled={fbSubmitting}
+                  disabled={fbSubmitting || fbSaved}
                   className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs"
                 >
                   👍 Yes
@@ -313,7 +350,7 @@ export default function AskEchoWidget() {
                 <button
                   type="button"
                   onClick={() => setFbNotesVisible(true)}
-                  disabled={fbSubmitting}
+                  disabled={fbSubmitting || fbSaved}
                   className="px-2 py-1 bg-rose-600 hover:bg-rose-500 rounded text-xs"
                 >
                   👎 No
@@ -333,7 +370,7 @@ export default function AskEchoWidget() {
                     <button
                       type="button"
                       onClick={() => submitFeedback(false)}
-                      disabled={fbSubmitting}
+                      disabled={fbSubmitting || fbSaved}
                       className="px-3 py-1 bg-rose-600 hover:bg-rose-500 rounded text-xs"
                     >
                       Submit

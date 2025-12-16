@@ -47,8 +47,8 @@ It lets agents search historical tickets, record what actually fixed each issue,
 
 - **Developer experience**
   - Canonical SQLite DB in the repo root (`echohelp.db`) with helper scripts:
-    - `db_init.sh` – create tables and seed demo tickets
-    - `db_reset.sh` – drop & recreate DB + seed data + backfill embeddings
+    - `db_init.sh` – create tables (optionally seed demo data)
+    - `db_reset.sh` – drop & recreate DB (optionally seed demo data)
   - Semantic embeddings backfill script: `scripts/backfill_ticket_embeddings.py`.
   - GitHub Actions CI pipeline running `ruff`, `pyright`, and `pytest`.
   - Production build via Vite (`npm run build` in `frontend/`).
@@ -121,11 +121,14 @@ From the repo root:
 ```bash
 chmod +x scripts/db_init.sh scripts/db_reset.sh
 
-# Create tables + seed demo tickets + (optionally) seed embeddings via db_init
+# Create tables
 ./scripts/db_init.sh
 
 # Or, if you want a completely fresh DB:
 ./scripts/db_reset.sh
+
+# Optional: seed demo org data (explicit opt-in)
+ECHOHELP_SEED_DEMO=1 ./scripts/db_reset.sh
 ```
 
 If embeddings are not yet populated, run:
@@ -133,6 +136,10 @@ If embeddings are not yet populated, run:
 ```bash
 PYTHONPATH=. python3 scripts/backfill_ticket_embeddings.py
 ```
+
+Troubleshooting:
+
+- If you pull new code and see 500s that mention a missing SQLite column/table, your local `echohelp.db` is likely older than the current schema. The quickest fix is: `./scripts/db_reset.sh`.
 
 ### 3. Run the backend
 
@@ -264,6 +271,46 @@ Keyword search across tickets using SQL `ILIKE`.
   }
 ]
 ```
+
+---
+
+### `POST /api/ask-echo`
+
+Ask Echo answers a question and returns explicit suggestions for tickets/snippets.
+
+**Request body:**
+
+```json
+{
+  "q": "vpn auth_failed",
+  "limit": 5
+}
+```
+
+**Response (v2):**
+
+```json
+{
+  "meta": { "kind": "ask_echo", "version": "v2" },
+  "query": "vpn auth_failed",
+  "answer": "...",
+  "answer_kind": "grounded",
+  "ask_echo_log_id": 123,
+  "suggested_tickets": [{ "id": 42, "summary": "VPN auth_failed when connecting" }],
+  "suggested_snippets": [{ "id": 7, "title": "VPN auth fix", "echo_score": 0.9, "ticket_id": 42 }],
+  "kb_backed": true,
+  "kb_confidence": 0.9,
+  "mode": "kb_answer",
+  "references": [{ "ticket_id": 42, "confidence": 0.78 }],
+  "reasoning": {
+    "candidate_snippets": [{ "id": 7, "title": "VPN auth fix", "score": 0.9 }],
+    "chosen_snippet_ids": [7],
+    "echo_score": 0.9
+  }
+}
+```
+
+Note: older clients expecting `results`/`snippets` should be updated to use `suggested_tickets`/`suggested_snippets`.
 
 ---
 

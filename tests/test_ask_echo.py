@@ -19,4 +19,5 @@ def test_ask_echo_empty_results():
     assert data.get("answer_kind") in ("grounded", "ungrounded")
     assert data.get("query") == "some question"
     assert "answer" in data
-    assert isinstance(data.get("results"), list)
+    assert isinstance(data.get("suggested_tickets"), list)
+    assert isinstance(data.get("suggested_snippets"), list)

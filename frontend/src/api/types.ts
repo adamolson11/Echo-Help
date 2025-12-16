@@ -165,8 +165,8 @@ export type AskEchoResponse = {
   answer: string;
   answer_kind: "grounded" | "ungrounded";
   ask_echo_log_id: number;
-  results: AskEchoTicketSummary[];
-  snippets: SnippetSearchResult[];
+  suggested_tickets: AskEchoTicketSummary[];
+  suggested_snippets: SnippetSearchResult[];
   kb_backed: boolean;
   kb_confidence: number;
   mode?: string | null;

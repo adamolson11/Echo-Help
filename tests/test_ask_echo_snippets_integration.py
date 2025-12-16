@@ -27,8 +27,8 @@ def test_ask_echo_returns_snippets_field_and_ordering():
     resp = client.post("/api/ask-echo", json={"q": token, "limit": 5})
     assert resp.status_code == 200
     data = resp.json()
-    assert "snippets" in data
-    snippets = data["snippets"]
+    assert "suggested_snippets" in data
+    snippets = data["suggested_snippets"]
     assert isinstance(snippets, list)
     # Expect the highest scoring snippet (s3) to appear first among returned snippets
     ids = [s["id"] for s in snippets]
@@ -50,8 +50,8 @@ def test_ask_echo_handles_no_snippets_and_no_tickets():
     assert resp.status_code == 200
     data = resp.json()
     assert data.get("query") == "no-such-query"
-    assert "snippets" in data
-    assert data["snippets"] == []
+    assert "suggested_snippets" in data
+    assert data["suggested_snippets"] == []
     # verify metadata for no-kb case (may still surface tickets)
     assert data.get("kb_backed") is False
     assert data.get("kb_confidence") == 0.0

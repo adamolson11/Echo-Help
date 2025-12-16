@@ -35,13 +35,14 @@ class AskEchoRequest(BaseModel):
 
 
 class AskEchoResponse(BaseModel):
-    meta: Meta = Meta(kind="ask_echo", version="v1")
+    meta: Meta = Meta(kind="ask_echo", version="v2")
     answer_kind: Literal["grounded", "ungrounded"]
     ask_echo_log_id: int
     query: str
     answer: str
-    results: List[AskEchoTicketSummary]
-    snippets: List[SnippetSearchResult] = []
+    # Explicit suggestion fields (avoid generic names like `results`).
+    suggested_tickets: List[AskEchoTicketSummary]
+    suggested_snippets: List[SnippetSearchResult] = []
     kb_backed: bool = False
     kb_confidence: float = 0.0
     # mode: either 'kb_answer' (grounded in KB/tickets) or 'general_answer' (no matches)

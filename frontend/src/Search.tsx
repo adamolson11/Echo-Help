@@ -321,6 +321,45 @@ export default function Search() {
     return () => window.removeEventListener("echo-select-ticket", onSelect as EventListener);
   }, [results, filteredResults]);
 
+  // Listen for global "open search" events (dispatched by AskEchoWidget)
+  // so Ask Echo can route users into the Search console with the same query.
+  useEffect(() => {
+    function onOpenSearch(e: any) {
+      try {
+        const detail = e?.detail ?? {};
+        const q = String(detail?.query ?? "").trim();
+        const ticketId = detail?.ticketId ?? detail?.ticket_id ?? null;
+
+        setActiveTab("search");
+
+        if (q) {
+          setQuery(q);
+          if (ticketId) {
+            setPendingInsightsTicketId(Number(ticketId));
+            setIsPendingInsightsSelection(true);
+          }
+          runSearch(q);
+          return;
+        }
+
+        // If no query was provided, fall back to a broad search.
+        if (ticketId) {
+          setPendingInsightsTicketId(Number(ticketId));
+          setIsPendingInsightsSelection(true);
+          runSearch("");
+          return;
+        }
+
+        runSearch("");
+      } catch (err) {
+        // no-op
+      }
+    }
+
+    window.addEventListener("echo-open-search", onOpenSearch as EventListener);
+    return () => window.removeEventListener("echo-open-search", onOpenSearch as EventListener);
+  }, [runSearch]);
+
   // Clear temporary flash highlight after a short duration
   useEffect(() => {
     if (!flashTicketId) return;
