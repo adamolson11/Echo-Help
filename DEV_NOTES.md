@@ -33,6 +33,10 @@ If a response is intentionally a bare list for convenience, it should be treated
 
 ## Frontend notes
 
+Frontend refactor freeze (Phase 1):
+- No UX reworks, component reshuffles, or visual polish.
+- Only touch frontend when contracts/types break or to fix correctness/errors.
+
 - Defensive rendering is required: never call `.map`/`.filter` on values that may be `undefined`.
 - Prefer explicit normalization of backend responses at fetch boundaries.
 

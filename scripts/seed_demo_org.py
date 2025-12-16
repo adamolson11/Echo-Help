@@ -17,7 +17,11 @@ DEMO_REASONING_NOTES = '{"demo": true}'
 
 
 def _seed_base_time() -> datetime:
-    return datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    # Keep demo timestamps within the last ~week so 30d windows (Machine Status,
+    # Insights) look alive year-round, while still being stable within a run.
+    now = datetime.now(timezone.utc)
+    snapped = now.replace(hour=12, minute=0, second=0, microsecond=0)
+    return snapped - timedelta(days=3)
 
 
 def ensure_ticket(

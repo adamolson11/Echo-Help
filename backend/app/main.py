@@ -7,8 +7,8 @@ from sqlalchemy import text
 
 from .api import (feedback, feedback_suggestions, health, intake, search,
                   semantic_clusters, semantic_search, tickets)
-from .api.routes import (ask_echo, ingest, insights, patterns, snippets,
-                         ticket_feedback)
+from .api.routes import (ask_echo, ingest, insights, machine, patterns,
+                         snippets, ticket_feedback)
 # ...existing imports...
 from . import db
 
@@ -72,6 +72,7 @@ app.include_router(insights.router, prefix="/api")
 app.include_router(ingest.router, prefix="/api")
 app.include_router(ask_echo.router, prefix="/api")
 app.include_router(snippets.router, prefix="/api")
+app.include_router(machine.router, prefix="/api")
 app.include_router(feedback_suggestions.router, prefix="/api")
 app.include_router(semantic_search.router, prefix="/api")
 app.include_router(semantic_clusters.router, prefix="/api")
