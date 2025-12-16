@@ -6,20 +6,21 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import Ticket
+from ..schemas.common import MessageResponse
 
 router = APIRouter(tags=["tickets"])
 
 
-@router.get("/tickets")
-def list_tickets(session: Session = Depends(get_session)):
+@router.get("/tickets", response_model=list[Ticket])
+def list_tickets(session: Session = Depends(get_session),) -> list[Ticket]:
     statement = select(Ticket)
-    return session.exec(statement).all()
+    return list(session.exec(statement).all())
 
 
-@router.post("/tickets/seed-demo")
-def seed_demo(session: Session = Depends(get_session)):
+@router.post("/tickets/seed-demo", response_model=MessageResponse)
+def seed_demo(session: Session = Depends(get_session)) -> MessageResponse:
     if session.exec(select(Ticket)).all():
-        return {"message": "Tickets already exist"}
+        return MessageResponse(message="Tickets already exist")
 
     now = datetime.utcnow()
     demo = [
@@ -359,4 +360,4 @@ def seed_demo(session: Session = Depends(get_session)):
         session.add(t)
     session.commit()
 
-    return {"message": "Demo tickets added"}
+    return MessageResponse(message="Demo tickets added")

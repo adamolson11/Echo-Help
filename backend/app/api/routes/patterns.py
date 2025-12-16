@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from ...db import get_session
+from ...schemas.patterns import FeedbackPatternsSummary
 from ...services.patterns import get_feedback_patterns
 
 router = APIRouter()
 
 
-@router.get("/patterns/summary")
+@router.get("/patterns/summary", response_model=FeedbackPatternsSummary)
 def patterns_summary(
     days: int = Query(30, ge=1, le=365),
     session: Session = Depends(get_session),

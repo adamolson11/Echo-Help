@@ -4,10 +4,7 @@ from datetime import datetime
 
 from sqlmodel import SQLModel
 
-
-class Meta(SQLModel):
-    kind: str
-    version: str
+from .meta import Meta
 
 
 class UnhelpfulExample(SQLModel):
@@ -40,7 +37,15 @@ class FeedbackClustersResponse(SQLModel):
 
 class AskEchoLogsResponse(SQLModel):
     meta: Meta = Meta(kind="ask_echo_logs", version="v1")
-    items: list[dict]
+    items: list["AskEchoLogSummary"]
+
+
+class AskEchoLogSummary(SQLModel):
+    id: int
+    query_text: str
+    ticket_id: int | None = None
+    echo_score: float | None = None
+    created_at: str | None = None
 
 
 class AskEchoFeedbackResponse(SQLModel):
@@ -48,15 +53,40 @@ class AskEchoFeedbackResponse(SQLModel):
     items: list[dict]
 
 
+class ReasoningSnippetCandidate(SQLModel):
+    id: int
+    title: str | None = None
+    score: float | None = None
+
+
+class AskEchoLogReasoning(SQLModel):
+    candidate_snippets: list[ReasoningSnippetCandidate] = []
+    chosen_snippet_ids: list[int] = []
+
+
+class AskEchoLogDetail(SQLModel):
+    id: int
+    query_text: str
+    answer_text: str
+    ticket_id: int | None = None
+    echo_score: float | None = None
+    created_at: str | None = None
+    reasoning: AskEchoLogReasoning | None = None
+    reasoning_notes: str | None = None
+
+
+class AskEchoLogDetailResponse(SQLModel):
+    meta: Meta = Meta(kind="ask_echo_log_detail", version="v1")
+    item: AskEchoLogDetail
+
+
 # Pattern Radar schemas
 class SnippetPatternSummary(SQLModel):
-    id: int
+    snippet_id: int
     problem_summary: str
-    echo_score: float = 0.0
-    success_count: int = 0
-    failure_count: int = 0
-    failure_rate: float = 0.0
-    source_ticket_id: int | None = None
+    total_uses: int
+    successes: int
+    failures: int
 
 
 class PatternRadarStats(SQLModel):
@@ -66,6 +96,32 @@ class PatternRadarStats(SQLModel):
 
 
 class PatternRadarResponse(SQLModel):
+    meta: Meta = Meta(kind="snippet", version="v1")
     stats: PatternRadarStats
     top_frequent_snippets: list[SnippetPatternSummary]
     top_risky_snippets: list[SnippetPatternSummary]
+
+
+class PatternKeyword(SQLModel):
+    keyword: str
+    count: int
+
+
+class PatternTitle(SQLModel):
+    title: str
+    count: int
+
+
+class TicketPatternRadarStats(SQLModel):
+    total_tickets: int
+    window_days: int
+    first_ticket_at: str | None = None
+    last_ticket_at: str | None = None
+
+
+class TicketPatternRadarResponse(SQLModel):
+    meta: Meta = Meta(kind="ticket", version="v1")
+    top_keywords: list[PatternKeyword]
+    frequent_titles: list[PatternTitle]
+    semantic_clusters: list[dict]
+    stats: TicketPatternRadarStats

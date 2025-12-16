@@ -1,18 +1,8 @@
 import React, { type ReactNode } from "react";
-
-export type TicketResult = {
-  id: string | number;
-  title?: string;
-  summary?: string;
-  source?: string;
-  status?: string;
-  priority?: string;
-  created_at?: string;
-  [key: string]: unknown;
-};
+import type { SearchTicketResult } from "../api/types";
 
 export type TicketResultCardProps = {
-  ticket: TicketResult;
+  ticket: SearchTicketResult;
   isActive: boolean;
   isFlashing: boolean;
   onSelect: () => void;

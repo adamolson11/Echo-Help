@@ -8,6 +8,7 @@ from backend.app.models.snippets import SnippetFeedback
 from backend.app.schemas.snippets import (CreateSnippetRequest,
                                           CreateSnippetResponse,
                                           SnippetFeedbackRequest,
+                                          SnippetFeedbackResponse,
                                           SnippetSearchResult)
 from backend.app.services.confidence_calculator import calculate_echo_score
 from backend.app.services.snippet_processor import \
@@ -45,7 +46,7 @@ def create_snippet(
     )
 
 
-@router.post("/snippets/feedback")
+@router.post("/snippets/feedback", response_model=SnippetFeedbackResponse)
 def submit_snippet_feedback(
     payload: SnippetFeedbackRequest, session: Session = Depends(get_session)
 ):

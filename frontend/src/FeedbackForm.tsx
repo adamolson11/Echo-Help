@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { formatApiError } from "./api/client";
+import { createTicketFeedback } from "./api/endpoints";
 
 
 interface FeedbackFormProps {
@@ -19,22 +21,20 @@ export default function FeedbackForm({ ticketId, onSubmitted }: FeedbackFormProp
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch(`/ticket-feedback/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticket_id: ticketId,
-          helped,
-          resolution_notes: notes,
-        }),
+      if (helped === null) throw new Error("Please choose Yes or No.");
+      await createTicketFeedback({
+        ticket_id: Number(ticketId),
+        query_text: "",
+        rating: helped ? 5 : 1,
+        helped,
+        resolution_notes: notes,
       });
-      if (!res.ok) throw new Error(`Error: ${res.status}`);
       setSuccess(true);
       setNotes("");
       setHelped(null);
       if (onSubmitted) onSubmitted();
     } catch (err: any) {
-      setError(err?.message || "Failed to submit feedback");
+      setError(formatApiError(err));
     } finally {
       setLoading(false);
     }

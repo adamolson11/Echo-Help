@@ -3,20 +3,17 @@ import { useState, useEffect, useRef } from "react";
 import AskEchoWidget from "./AskEchoWidget";
 import SnippetCard from "./components/SnippetCard";
 import TicketResultCard from "./components/TicketResultCard";
-
-type TicketResult = {
-  id: string | number;
-  title?: string;
-  summary?: string;
-  source?: string;
-  status?: string;
-  priority?: string;
-  created_at?: string;
-  updated_at?: string;
-  description?: string;
-  resolution?: string;
-  [key: string]: unknown;
-};
+import { ApiError, formatApiError } from "./api/client";
+import {
+  createTicketFeedback,
+  getSearchPatternsSummary,
+  listTicketFeedback,
+  postSnippetFeedback,
+  searchSnippets,
+  searchTicketsSemantic,
+  searchTicketsText,
+} from "./api/endpoints";
+import type { SearchPatternsSummary, SearchTicketResult, SnippetSearchResult, TicketFeedbackRead } from "./api/types";
 
  
 function formatDate(value?: string) {
@@ -88,10 +85,10 @@ export default function Search() {
       // ignore storage errors
     }
   }, [useSemantic]);
-  const [results, setResults] = useState<TicketResult[]>([]);
+  const [results, setResults] = useState<SearchTicketResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTicket, setSelectedTicket] = useState<TicketResult | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<SearchTicketResult | null>(null);
   // Feedback UI state
   const [feedbackRating, setFeedbackRating] = useState<number>(5);
   const [feedbackNotes, setFeedbackNotes] = useState<string>("");
@@ -113,28 +110,15 @@ export default function Search() {
   const [pendingInsightsTicketId, setPendingInsightsTicketId] = useState<number | null>(null);
   const [flashTicketId, setFlashTicketId] = useState<string | null>(null);
 
-  interface TicketPattern {
-    ticket_id: number;
-    summary?: string;
-    total_feedback: number;
-    unresolved: number;
-  }
-
-  interface PatternsSummary {
-    total_feedback: number;
-    by_ticket: TicketPattern[];
-    top_unresolved: TicketPattern[];
-  }
-
-  const [patterns, setPatterns] = useState<PatternsSummary | null>(null);
+  const [patterns, setPatterns] = useState<SearchPatternsSummary | null>(null);
   const [patternsLoading, setPatternsLoading] = useState(false);
   const [patternsError, setPatternsError] = useState<string | null>(null);
-  const [ticketFeedbackHistory, setTicketFeedbackHistory] = useState<any[]>([]);
+  const [ticketFeedbackHistory, setTicketFeedbackHistory] = useState<TicketFeedbackRead[]>([]);
   const [ticketFeedbackLoading, setTicketFeedbackLoading] = useState(false);
   const [isPendingInsightsSelection, setIsPendingInsightsSelection] = useState(false);
   // KB library state
   const [kbQuery, setKbQuery] = useState("");
-  const [kbSnippets, setKbSnippets] = useState<any[]>([]);
+  const [kbSnippets, setKbSnippets] = useState<SnippetSearchResult[]>([]);
   const [kbLoading, setKbLoading] = useState(false);
   const [kbError, setKbError] = useState<string | null>(null);
 
@@ -256,43 +240,23 @@ export default function Search() {
     }, 10000);
 
     try {
-        const endpoint = useSemantic ? "/api/semantic-search" : "/api/search";
-        const bodyPayload: any = { q: localQuery, status: statusFilter, priority: priorityFilter };
-        if (useSemantic) bodyPayload.limit = 5;
+      // Use typed endpoints; text search only accepts {q}, semantic search supports filters.
+      let normalized: SearchTicketResult[] = [];
 
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bodyPayload),
-          signal: controller.signal,
-        });
+      if (useSemantic) {
+        const data = await searchTicketsSemantic({
+          q: localQuery,
+          status: statusFilter,
+          priority: priorityFilter,
+          limit: 5,
+        }, controller.signal);
+        clearTimeout(timeout);
 
-      clearTimeout(timeout);
-
-      if (res.status === 422) {
-        setError("Invalid search request (422). Please try again.");
-        setResults([]);
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(`Error: ${res.status}`);
-      }
-
-      const data = await res.json();
-
-      // Normalize semantic-search results into the shape the UI expects.
-      let normalized: TicketResult[] = [];
-      if (useSemantic && Array.isArray(data)) {
-        normalized = data.map((item: any) => ({
-          id: item.ticket_id ?? item.id ?? String(item.ticket_id),
-          summary: item.summary,
-          description: item.description,
-          ai_score: typeof item.score === "number" ? item.score : undefined,
-          ...item,
-        }));
+        normalized = data;
       } else {
-        normalized = Array.isArray(data) ? data : [];
+        const data = await searchTicketsText(localQuery, controller.signal);
+        clearTimeout(timeout);
+        normalized = data;
       }
 
       setResults(normalized);
@@ -320,10 +284,15 @@ export default function Search() {
       }
     } catch (err: any) {
       clearTimeout(timeout);
+      if (err instanceof ApiError && err.status === 422) {
+        setError("Invalid search request (422). Please try again.");
+        setResults([]);
+        return;
+      }
       if (err?.name === "AbortError") {
         setError("Search timed out. Please try again.");
       } else {
-        setError(err?.message || "Unknown error");
+        setError(formatApiError(err));
       }
       setResults([]);
     } finally {
@@ -369,17 +338,7 @@ export default function Search() {
       const payload: any = { ticket_id: ticketId, helped };
       if (notes && notes.trim().length) payload.notes = notes.trim();
 
-      const res = await fetch(`/api/snippets/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        const detail = body?.detail ?? `status ${res.status}`;
-        throw new Error(detail);
-      }
+      await postSnippetFeedback(payload);
 
       setFeedbackSuccess("Thank you — feedback submitted.");
 
@@ -387,23 +346,18 @@ export default function Search() {
       // can see the updated KB state in the inspector.
       if (!selectedTicket || String(selectedTicket.id) !== String(ticketId)) {
         const found = results.find((t) => String(t.id) === String(ticketId));
-        if (found) setSelectedTicket(found as TicketResult);
+        if (found) setSelectedTicket(found as SearchTicketResult);
       }
 
       // Refresh ticket feedback history for the selected ticket
       try {
-        const res2 = await fetch(`/api/ticket-feedback/?ticket_id=${ticketId}`);
-        if (res2.ok) {
-          const data = await res2.json();
-          setTicketFeedbackHistory(Array.isArray(data) ? data : []);
-        }
+        const history = await listTicketFeedback(Number(ticketId));
+        setTicketFeedbackHistory(Array.isArray(history) ? history : []);
       } catch (err) {
         // ignore history refresh errors
       }
     } catch (err: any) {
-      // eslint-disable-next-line no-console
-      console.error("Snippet feedback error", err);
-      setFeedbackError(err?.message || "Failed to submit feedback");
+      setFeedbackError(formatApiError(err));
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -424,10 +378,8 @@ export default function Search() {
       const loadHistory = async () => {
         try {
           setTicketFeedbackLoading(true);
-          const res = await fetch(`/api/ticket-feedback/?ticket_id=${selectedTicket.id}`);
-          if (!res.ok) throw new Error(`failed to fetch feedback: ${res.status}`);
-          const data = await res.json();
-          setTicketFeedbackHistory(Array.isArray(data) ? data : []);
+          const history = await listTicketFeedback(Number(selectedTicket.id));
+          setTicketFeedbackHistory(Array.isArray(history) ? history : []);
         } catch (err) {
           setTicketFeedbackHistory([]);
         } finally {
@@ -451,23 +403,10 @@ export default function Search() {
         setPatternsLoading(true);
         setPatternsError(null);
 
-        const res = await fetch("/api/patterns/summary");
-        if (!res.ok) throw new Error(`Patterns request failed: ${res.status}`);
-
-        const data = await res.json();
-        // Defensive: support both newer lightweight feedback summary
-        // (`{stats:{total_feedback,...}}`) and older patterns shapes.
-        const normalized: PatternsSummary = {
-          total_feedback:
-            (data?.total_feedback ?? data?.stats?.total_feedback ?? 0) as number,
-          by_ticket: Array.isArray(data?.by_ticket) ? data.by_ticket : [],
-          top_unresolved: Array.isArray(data?.top_unresolved) ? data.top_unresolved : [],
-        };
-        setPatterns(normalized);
+        const data = await getSearchPatternsSummary(30);
+        setPatterns(data);
       } catch (err: any) {
-        // eslint-disable-next-line no-console
-        console.error("Patterns fetch error:", err);
-        setPatternsError(err?.message ?? "Failed to load patterns.");
+        setPatternsError(formatApiError(err));
       } finally {
         setPatternsLoading(false);
       }
@@ -480,19 +419,9 @@ export default function Search() {
     try {
       setKbLoading(true);
       setKbError(null);
-      const params = new URLSearchParams();
-      if (query && query.trim().length > 0) params.set("q", query.trim());
-      const res = await fetch(`/api/snippets/search?${params.toString()}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        const detail = body?.detail ?? `HTTP ${res.status}`;
-        throw new Error(detail);
-      }
-      const data = await res.json();
+      const data = await searchSnippets(query, 10);
       setKbSnippets(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      // eslint-disable-next-line no-console
-      console.error("KB search error", err);
       setKbError(err?.message || "Knowledge Base search failed");
       setKbSnippets([]);
     } finally {
@@ -515,7 +444,7 @@ export default function Search() {
     setFeedbackSubmitting(true);
     try {
       const payload = {
-        ticket_id: selectedTicket.id,
+        ticket_id: Number(selectedTicket.id),
         rating: feedbackRating,
         resolution_notes: feedbackNotes.trim(),
         // ensure non-null value for query_text to match backend NOT NULL constraint
@@ -524,24 +453,17 @@ export default function Search() {
         helped: feedbackHelped !== null ? feedbackHelped : feedbackRating >= 4,
       } as any;
 
-      const resp = await fetch("/api/ticket-feedback/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!resp.ok) {
-        setFeedbackError(`Failed to save feedback (status ${resp.status}).`);
-        return;
-      }
+      await createTicketFeedback(payload);
 
       setFeedbackSuccess("Feedback saved — thanks!");
       setFeedbackNotes("");
       setFeedbackRating(5);
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("Error submitting feedback", err);
-      setFeedbackError("Network error while saving feedback.");
+      if (err instanceof ApiError) {
+        setFeedbackError(formatApiError(err));
+      } else {
+        setFeedbackError("Network error while saving feedback.");
+      }
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -1087,13 +1009,13 @@ export default function Search() {
                 </div>
               )}
 
-              {selectedTicket.resolution && (
+              {typeof (selectedTicket as any).resolution === "string" && (selectedTicket as any).resolution && (
                 <div className="mt-3">
                   <div className="text-xs font-semibold text-emerald-300 uppercase tracking-wide mb-1">
                     Resolution
                   </div>
                   <p className="text-sm text-slate-100 whitespace-pre-wrap">
-                    {selectedTicket.resolution}
+                    {(selectedTicket as any).resolution}
                   </p>
                 </div>
               )}

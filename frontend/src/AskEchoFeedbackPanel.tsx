@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { getInsightsAskEchoFeedback } from "./api/endpoints";
 
 export interface AskEchoFeedbackRow {
   id: number;
@@ -22,10 +23,7 @@ export default function AskEchoFeedbackPanel() {
     setLoading(true);
     setError(null);
     try {
-      const url = `/api/insights/ask-echo-feedback?limit=${LIMIT}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await getInsightsAskEchoFeedback(LIMIT);
       setRows(Array.isArray(data) ? data : data.items ?? []);
     } catch (err: any) {
       setError(err.message ?? "Failed to load feedback rows");

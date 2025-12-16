@@ -1,16 +1,7 @@
 import React from "react";
+import type { SnippetSearchResult } from "../api/types";
 
-export type SnippetCardProps = {
-  id: number;
-  title: string | null;
-  summary: string | null;
-  echo_score: number | null;
-  success_count: number;
-  failure_count: number;
-  ticket_id: string | null;
-};
-
-const SnippetCard: React.FC<SnippetCardProps> = ({
+const SnippetCard: React.FC<SnippetSearchResult> = ({
   id,
   title,
   summary,

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+import { getInsightsAskEchoLogDetail, getInsightsAskEchoLogs } from "./api/endpoints";
 
 type AskEchoLogSummary = {
   id: number;
   query_text: string;
-  ticket_id?: string | null;
+  ticket_id?: number | null;
   echo_score?: number | null;
   created_at?: string | null;
 };
@@ -18,13 +19,13 @@ type AskEchoLogDetail = {
   id: number;
   query_text: string;
   answer_text: string;
-  ticket_id?: string | null;
+  ticket_id?: number | null;
   echo_score?: number | null;
   created_at?: string | null;
   reasoning?: {
     candidate_snippets: ReasoningSnippetCandidate[];
     chosen_snippet_ids: number[];
-  };
+  } | null;
   reasoning_notes?: string | null;
 };
 
@@ -46,10 +47,9 @@ export default function AskEchoLogsPanel() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/ask-echo/logs?limit=${LIMIT}`);
-        if (!res.ok) throw new Error(`Failed to fetch logs: ${res.status}`);
-        const data: AskEchoLogSummary[] = await res.json();
-        if (!cancelled) setLogs(data);
+        const raw = await getInsightsAskEchoLogs(LIMIT);
+        const items: AskEchoLogSummary[] = raw.items ?? [];
+        if (!cancelled) setLogs(items);
       } catch (err: any) {
         if (!cancelled) setError(err.message ?? "Error loading Ask Echo logs");
       } finally {
@@ -68,10 +68,9 @@ export default function AskEchoLogsPanel() {
     setDetailError(null);
     setSelectedLog(null);
     try {
-      const res = await fetch(`/api/ask-echo/logs/${id}`);
-      if (!res.ok) throw new Error(`Failed to fetch log detail: ${res.status}`);
-      const data: AskEchoLogDetail = await res.json();
-      setSelectedLog(data);
+      const raw = await getInsightsAskEchoLogDetail(id);
+      const item: AskEchoLogDetail = raw.item;
+      setSelectedLog(item);
     } catch (err: any) {
       setDetailError(err.message ?? "Error loading log detail");
     } finally {

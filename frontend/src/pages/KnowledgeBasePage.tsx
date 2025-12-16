@@ -3,6 +3,7 @@ import Button from "../ui/Button";
 import Card from "../ui/Card";
 import Input from "../ui/Input";
 import SectionHeader from "../ui/SectionHeader";
+import { searchSnippets } from "../api/endpoints";
 
 function SnippetBadge(props: { children: React.ReactNode }) {
   return (
@@ -25,15 +26,8 @@ export default function KnowledgeBasePage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/snippets/search?q=${encodeURIComponent(query.trim())}&limit=30`);
-      if (!res.ok) throw new Error(`KB search error: ${res.status}`);
-      const data = await res.json();
-
-      const items = Array.isArray(data)
-        ? data
-        : (data?.items ?? data?.snippets ?? data?.results ?? []);
-
-      setSnippets(Array.isArray(items) ? items : []);
+      const data = await searchSnippets(query, 30);
+      setSnippets(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setError(e?.message ?? "KB search failed");
       setSnippets([]);

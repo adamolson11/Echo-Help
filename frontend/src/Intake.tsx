@@ -1,22 +1,7 @@
 import { useState } from "react";
-
-interface SuggestedTicket {
-  id: number;
-  external_key: string;
-  summary: string;
-  description: string;
-  status: string;
-  priority?: string;
-  created_at?: string;
-  similarity: number;
-}
-
-interface IntakeResponse {
-  query: string;
-  suggested_tickets: SuggestedTicket[];
-  predicted_category?: string | null;
-  predicted_subcategory?: string | null;
-}
+import { formatApiError } from "./api/client";
+import { postIntake, postLegacyFeedback } from "./api/endpoints";
+import type { IntakeResponse } from "./api/types";
 
 export default function Intake() {
   const [text, setText] = useState("");
@@ -30,12 +15,12 @@ export default function Intake() {
     setResults(null);
     setThanks({});
     try {
-      const res = await fetch("/api/intake", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      setResults(await res.json());
+      const data = await postIntake({ text });
+      setResults(data);
+    } catch (err) {
+      // Keep UX minimal (no new UI). Surface failures via console.
+      // eslint-disable-next-line no-console
+      console.error("Intake analyze failed", formatApiError(err));
     } finally {
       setLoading(false);
     }
@@ -43,11 +28,7 @@ export default function Intake() {
 
   const handleFeedback = async (ticketId: number, rating: number) => {
     setFeedback((f) => ({ ...f, [ticketId]: rating }));
-    await fetch("/api/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticket_id: ticketId, query_text: text, rating }),
-    });
+    await postLegacyFeedback({ ticket_id: ticketId, query_text: text, rating });
     setThanks((t) => ({ ...t, [ticketId]: true }));
   };
 

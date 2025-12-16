@@ -4,16 +4,24 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sklearn.cluster import KMeans
 from sqlmodel import Session, select
-from sqlalchemy import desc
+import json
+from fastapi import HTTPException
 
 from ...db import get_session
 from ...models.ask_echo_log import AskEchoLog
 from ...models.ticket_feedback import TicketFeedback
 from ...schemas.insights import (
     AskEchoFeedbackResponse,
+    AskEchoLogDetail,
+    AskEchoLogDetailResponse,
+    AskEchoLogReasoning,
     AskEchoLogsResponse,
+    AskEchoLogSummary,
     FeedbackCluster,
     FeedbackClustersResponse,
+    PatternRadarResponse,
+    ReasoningSnippetCandidate,
+    TicketPatternRadarResponse,
     TicketFeedbackInsights,
     UnhelpfulExample,
 )
@@ -134,7 +142,7 @@ def get_ticket_feedback_clusters(
     return FeedbackClustersResponse(clusters=results)
 
 
-@router.get("/pattern-radar")
+@router.get("/pattern-radar", response_model=PatternRadarResponse)
 def get_pattern_radar(
     session: Session = Depends(get_session),
 ) -> dict:
@@ -142,7 +150,7 @@ def get_pattern_radar(
     return get_snippet_pattern_radar(session)
 
 
-@router.get("/ticket-pattern-radar")
+@router.get("/ticket-pattern-radar", response_model=TicketPatternRadarResponse)
 def get_ticket_pattern_radar(
     days: int = 14,
     session: Session = Depends(get_session),
@@ -153,11 +161,91 @@ def get_ticket_pattern_radar(
 
 @router.get("/ask-echo-logs", response_model=AskEchoLogsResponse)
 def get_ask_echo_logs(limit: int = 50, session: Session = Depends(get_session)) -> AskEchoLogsResponse:
-    stmt = select(AskEchoLog).order_by(desc(AskEchoLog.created_at)).limit(limit)
+    stmt = select(AskEchoLog).order_by(AskEchoLog.created_at.desc()).limit(limit)  # type: ignore[attr-defined]
     rows = session.exec(stmt).all()
     # Keep response stable and JSON-friendly without leaking ORM internals.
-    items = [r.model_dump() for r in rows]
+    items = [
+        AskEchoLogSummary(
+            id=r.id or 0,
+            query_text=r.query,
+            ticket_id=None,
+            echo_score=r.echo_score,
+            created_at=r.created_at.isoformat() if r.created_at else None,
+        )
+        for r in rows
+        if r.id is not None
+    ]
     return AskEchoLogsResponse(items=items)
+
+
+@router.get("/ask-echo-logs/{log_id}", response_model=AskEchoLogDetailResponse)
+def get_ask_echo_log_detail(
+    log_id: int,
+    session: Session = Depends(get_session),
+) -> AskEchoLogDetailResponse:
+    """Return Ask Echo log detail (Insights contract).
+
+    This lives under /insights so the Insights UI can use a single, meta-enveloped
+    API surface for log list + detail.
+    """
+    log = session.get(AskEchoLog, log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="AskEchoLog not found")
+
+    try:
+        candidate_json = log.candidate_snippet_ids_json or "[]"
+        candidate_data = json.loads(candidate_json)
+    except json.JSONDecodeError:
+        candidate_data = []
+
+    try:
+        chosen_json = log.chosen_snippet_ids_json or "[]"
+        chosen_ids = json.loads(chosen_json)
+    except json.JSONDecodeError:
+        chosen_ids = []
+
+    norm_candidates = []
+    for item in candidate_data:
+        if not isinstance(item, dict):
+            continue
+        cid = item.get("id")
+        score = item.get("score")
+        title = item.get("title")
+        if cid is None:
+            continue
+        norm_candidates.append(
+            ReasoningSnippetCandidate(
+                id=int(cid),
+                title=str(title) if isinstance(title, str) else None,
+                score=float(score) if isinstance(score, (int, float)) else None,
+            )
+        )
+
+    chosen_ids_norm: list[int] = []
+    if isinstance(chosen_ids, list):
+        for v in chosen_ids:
+            if isinstance(v, int):
+                chosen_ids_norm.append(v)
+            elif isinstance(v, str) and v.isdigit():
+                chosen_ids_norm.append(int(v))
+
+    reasoning = AskEchoLogReasoning(
+        candidate_snippets=norm_candidates,
+        chosen_snippet_ids=chosen_ids_norm,
+    )
+
+    return AskEchoLogDetailResponse(
+        item=AskEchoLogDetail(
+            id=log.id or 0,
+            query_text=log.query,
+            answer_text="",
+            ticket_id=None,
+            echo_score=log.echo_score,
+            created_at=log.created_at.isoformat() if log.created_at else None,
+            reasoning=reasoning,
+            reasoning_notes=log.reasoning_notes,
+        )
+    )
 
 
 @router.get("/ask-echo-feedback", response_model=AskEchoFeedbackResponse)
@@ -174,7 +262,7 @@ def get_ask_echo_feedback(
     if helped is not None:
         query = query.where(TicketFeedback.helped == helped)
 
-    query = query.order_by(desc(TicketFeedback.created_at)).limit(limit)
+    query = query.order_by(TicketFeedback.created_at.desc()).limit(limit)  # type: ignore[attr-defined]
     rows = session.exec(query).all()
     items = [TicketFeedbackRead.model_validate(r).model_dump() for r in rows]
     return AskEchoFeedbackResponse(items=items)

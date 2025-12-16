@@ -13,6 +13,7 @@ def test_ask_echo_creates_log_entry():
     assert resp.status_code == 200
     data = resp.json()
     assert data.get("mode") in ("kb_answer", "general_answer")
+    assert isinstance(data.get("ask_echo_log_id"), int)
 
     expected_query = "vpn auth_failed test"
 

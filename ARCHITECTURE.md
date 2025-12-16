@@ -75,7 +75,32 @@ At a high level:
 
 **Backend**
 - Ticket feedback: `/api/ticket-feedback/`
-- Ask Echo / snippet feedback routes exist for capturing helpful/not helpful signals.
+- Ask Echo feedback: `/api/ask-echo/feedback`
+- Snippet feedback: `/api/snippets/feedback`
+
+#### Feedback types (taxonomy)
+
+EchoHelp intentionally captures multiple *complementary* feedback signals. These are not duplicates:
+
+- **Answer-level feedback** (`AskEchoFeedback`, keyed by `ask_echo_log_id`)
+  - Attaches to a specific Ask Echo answer/log.
+  - Works even when the answer is **ungrounded** (no related ticket).
+  - Primary use: evaluate answer quality and learn when/why grounding fails.
+
+- **Ticket-level feedback** (`TicketFeedback`, keyed by `ticket_id`)
+  - Captures whether a particular ticket/solution was useful and what actually resolved the issue.
+  - Primary use: improve “memory quality” signals (counts, sentiment, and clustering).
+
+- **Snippet-level feedback** (`SnippetFeedback`, keyed by `snippet_id` or `ticket_id`)
+  - Captures whether a generated/curated snippet helped.
+  - Primary use: tune KB snippet scoring (`echo_score`).
+
+Rule of thumb:
+- `ask_echo_log_id` answers “was this *answer* helpful?”
+- `ticket_id` answers “was this *ticket* helpful?”
+- `snippet_id` answers “was this *snippet* helpful?”
+
+Note: `/api/feedback` exists as a small legacy wrapper used by Intake; it maps to `TicketFeedback`.
 
 **Data**
 - `TicketFeedback` rows are the primary “did this help?” signal.

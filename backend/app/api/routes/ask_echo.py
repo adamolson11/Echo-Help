@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, timedelta
 from typing import List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,11 +9,18 @@ from sqlmodel import select
 
 from backend.app.db import get_session
 from backend.app.models.ask_echo_log import AskEchoLog
+from backend.app.models.ask_echo_feedback import AskEchoFeedback
 from backend.app.models.ticket import Ticket
+from backend.app.schemas.ask_echo_feedback import (
+    AskEchoFeedbackCreate,
+    AskEchoFeedbackRead,
+    AskEchoFeedbackSummaryResponse,
+)
 from backend.app.schemas.ask_echo import (AskEchoReasoning,
                                           AskEchoReasoningSnippet,
                                           AskEchoReference, AskEchoRequest,
-                                          AskEchoResponse)
+                                          AskEchoResponse, AskEchoTicketSummary)
+from backend.app.schemas.insights import AskEchoLogDetail, AskEchoLogSummary
 from backend.app.services.semantic_search import semantic_search_tickets
 from backend.app.services.snippet_repository import \
     search_snippets as repo_search_snippets
@@ -76,6 +84,59 @@ def build_general_answer(query: str) -> tuple[str, List[AskEchoReference]]:
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
 
 
+@router.post("/ask-echo/feedback", response_model=AskEchoFeedbackRead)
+def submit_ask_echo_feedback(
+    payload: AskEchoFeedbackCreate,
+    session: Session = Depends(get_session),
+) -> AskEchoFeedbackRead:
+    log = session.get(AskEchoLog, payload.ask_echo_log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="AskEchoLog not found")
+
+    row = AskEchoFeedback(
+        ask_echo_log_id=payload.ask_echo_log_id,
+        helped=payload.helped,
+        notes=(payload.notes.strip() if payload.notes else None),
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    if row.id is None:
+        raise HTTPException(status_code=500, detail="failed to persist ask-echo feedback")
+
+    return AskEchoFeedbackRead(
+        id=row.id,
+        ask_echo_log_id=row.ask_echo_log_id,
+        helped=row.helped,
+        notes=row.notes,
+        created_at=row.created_at,
+    )
+
+
+@router.get("/ask-echo/feedback/summary", response_model=AskEchoFeedbackSummaryResponse)
+def get_ask_echo_feedback_summary(
+    days: int = 30,
+    session: Session = Depends(get_session),
+) -> AskEchoFeedbackSummaryResponse:
+    if days <= 0:
+        raise HTTPException(status_code=400, detail="days must be positive")
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    stmt = select(AskEchoFeedback).where(AskEchoFeedback.created_at >= cutoff)  # type: ignore[attr-defined]
+    rows = list(session.exec(stmt).all())
+
+    total = len(rows)
+    helped_true = sum(1 for r in rows if r.helped is True)
+    helped_false = sum(1 for r in rows if r.helped is False)
+
+    return AskEchoFeedbackSummaryResponse(
+        window_days=days,
+        total_feedback=total,
+        helped_true=helped_true,
+        helped_false=helped_false,
+    )
+
+
 @router.post("/ask-echo", response_model=AskEchoResponse)
 def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
     if not req.q or not req.q.strip():
@@ -84,8 +145,17 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
     # Run semantic search to gather top related tickets (score, Ticket)
     scored = semantic_search_tickets(session=session, query=req.q, limit=req.limit)
 
-    # Extract tickets for compatibility
+    # Return lightweight ticket summaries for stable frontend typing.
     tickets = [t for _, t in scored]
+    ticket_summaries = [
+        AskEchoTicketSummary(
+            id=int(getattr(t, "id")),
+            summary=(getattr(t, "summary", None) or getattr(t, "title", None)),
+            title=getattr(t, "title", None),
+        )
+        for t in tickets
+        if getattr(t, "id", None) is not None
+    ]
 
     # Find matching snippets in the KB and sort by echo_score desc
     try:
@@ -137,6 +207,8 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
         kb_backed = False
         kb_confidence = 0.0
 
+    answer_kind: str = "grounded" if kb_backed else "ungrounded"
+
     # Append experimental note
     answer_text = (
         answer_text
@@ -170,47 +242,47 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
         echo_score=float(best_score) if best_score is not None else None,
     )
 
-    # Persist a small telemetry log for tuning KB threshold and behavior
+    # Persist telemetry log (required for feedback loop).
+    top_score_val = float(max_score) if "max_score" in locals() else 0.0
+    refs_count = len(references) if references is not None else 0
+    candidate_data = [
+        {"id": int(s.id), "score": float(score)}
+        for (s, score) in candidate_pairs
+        if getattr(s, "id", None) is not None
+    ]
+
+    chosen_ids = [
+        int(s.id) for s in chosen_snippets if getattr(s, "id", None) is not None
+    ]
+
+    log = AskEchoLog(
+        query=req.q,
+        top_score=top_score_val,
+        kb_confidence=float(kb_confidence or 0.0),
+        mode=mode,
+        references_count=refs_count,
+        candidate_snippet_ids_json=(json.dumps(candidate_data) if candidate_data else None),
+        chosen_snippet_ids_json=json.dumps(chosen_ids) if chosen_ids else None,
+        echo_score=float(best_score) if best_score is not None else None,
+        reasoning_notes=None,
+    )
     try:
-        top_score_val = float(max_score) if "max_score" in locals() else 0.0
-        refs_count = len(references) if references is not None else 0
-        candidate_data = [
-            {"id": int(s.id), "score": float(score)}
-            for (s, score) in candidate_pairs
-            if getattr(s, "id", None) is not None
-        ]
-
-        chosen_ids = [
-            int(s.id) for s in chosen_snippets if getattr(s, "id", None) is not None
-        ]
-
-        log = AskEchoLog(
-            query=req.q,
-            top_score=top_score_val,
-            kb_confidence=float(kb_confidence or 0.0),
-            mode=mode,
-            references_count=refs_count,
-            candidate_snippet_ids_json=(
-                json.dumps(candidate_data) if candidate_data else None
-            ),
-            chosen_snippet_ids_json=json.dumps(chosen_ids) if chosen_ids else None,
-            echo_score=float(best_score) if best_score is not None else None,
-            reasoning_notes=None,
-        )
-        try:
-            session.add(log)
-            session.commit()
-        except Exception:
-            # be defensive: if logging fails, don't break Ask Echo
-            logging.exception("failed to persist ask-echo log")
+        session.add(log)
+        session.commit()
+        session.refresh(log)
     except Exception:
-        # swallow any logging errors
-        logging.exception("ask-echo logging error")
+        logging.exception("failed to persist ask-echo log")
+        raise HTTPException(status_code=500, detail="failed to persist ask-echo log")
+
+    if log.id is None:
+        raise HTTPException(status_code=500, detail="ask-echo log id missing")
 
     return AskEchoResponse(
+        answer_kind=answer_kind,  # type: ignore[arg-type]
+        ask_echo_log_id=int(log.id),
         query=req.q,
         answer=answer_text,
-        results=[r.model_dump() for r in tickets],
+        results=ticket_summaries,
         snippets=snippet_summaries,
         kb_backed=kb_backed,
         kb_confidence=kb_confidence,
@@ -220,7 +292,7 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
     )
 
 
-@router.get("/ask-echo/logs")
+@router.get("/ask-echo/logs", response_model=list[AskEchoLogSummary])
 def list_ask_echo_logs(
     limit: int = 50,
     offset: int = 0,
@@ -246,7 +318,7 @@ def list_ask_echo_logs(
     ]
 
 
-@router.get("/ask-echo/logs/{log_id}")
+@router.get("/ask-echo/logs/{log_id}", response_model=AskEchoLogDetail)
 def get_ask_echo_log(
     log_id: int,
     session: Session = Depends(get_session),

@@ -1,3 +1,4 @@
+from .ask_echo_feedback import AskEchoFeedback
 from .embedding import Embedding
 from .ticket import Category, Subcategory, Ticket
 from .ticket_feedback import TicketFeedback
@@ -7,5 +8,6 @@ __all__ = [
     "Category",
     "Subcategory",
     "TicketFeedback",
+    "AskEchoFeedback",
     "Embedding",
 ]

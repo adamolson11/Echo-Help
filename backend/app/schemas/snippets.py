@@ -37,3 +37,8 @@ class SnippetSearchResult(BaseModel):
     success_count: Optional[int] = 0
     failure_count: Optional[int] = 0
     ticket_id: Optional[int] = None
+
+
+class SnippetFeedbackResponse(BaseModel):
+    snippet_id: int
+    echo_score: float

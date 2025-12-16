@@ -14,6 +14,9 @@ def test_ask_echo_empty_results():
     resp = client.post("/api/ask-echo", json={"q": "some question", "limit": 3})
     assert resp.status_code == 200
     data = resp.json()
+    assert data.get("meta") is not None
+    assert data.get("ask_echo_log_id") is not None
+    assert data.get("answer_kind") in ("grounded", "ungrounded")
     assert data.get("query") == "some question"
     assert "answer" in data
     assert isinstance(data.get("results"), list)

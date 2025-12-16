@@ -2,91 +2,33 @@
 import React, { useState, useEffect } from "react";
 import AskEchoLogsPanel from "./AskEchoLogsPanel";
 import AskEchoFeedbackPanel from "./AskEchoFeedbackPanel";
-
-type UnhelpfulExample = {
-  ticket_id: number;
-  resolution_notes: string | null;
-  created_at: string;
-};
-
-type FeedbackInsights = {
-  meta?: {
-    kind: string;
-    version: string;
-  };
-  total_feedback: number;
-  helped_true: number;
-  helped_false: number;
-  helped_null: number;
-  unhelpful_examples: UnhelpfulExample[];
-};
-
-type FeedbackCluster = {
-  cluster_index: number;
-  size: number;
-  example_ticket_ids: number[];
-  example_notes: string[];
-};
-
-type FeedbackClustersResponse = {
-  meta?: {
-    kind: string;
-    version: string;
-  };
-  clusters: FeedbackCluster[];
-};
-
-type FeedbackPatternsResponse = {
-  stats: {
-    total_feedback: number;
-    positive: number;
-    negative: number;
-    window_days: number;
-  };
-  top_comments: any[];
-  meta?: {
-    kind: "feedback";
-    version: string;
-  };
-};
-
-type PatternKeyword = { keyword: string; count: number };
-type PatternTitle = { title: string; count: number };
-
-type PatternRadarResponse = {
-  top_keywords: PatternKeyword[];
-  frequent_titles: PatternTitle[];
-  semantic_clusters: any[];
-  stats: {
-    total_tickets: number;
-    window_days: number;
-    first_ticket_at?: string | null;
-    last_ticket_at?: string | null;
-  };
-  meta?: {
-    kind: string;
-    version: string;
-  };
-};
+import {
+  getFeedbackPatternsSummary,
+  getTicketFeedbackClusters,
+  getTicketFeedbackInsights,
+  getTicketPatternRadar,
+} from "./api/endpoints";
+import type {
+  FeedbackCluster,
+  FeedbackPatternsSummary,
+  TicketFeedbackInsights,
+  TicketPatternRadarResponse,
+} from "./api/types";
 
 
 export default function InsightsPanel() {
-  const [insights, setInsights] = useState<FeedbackInsights | null>(null);
+  const [insights, setInsights] = useState<TicketFeedbackInsights | null>(null);
   const [clusters, setClusters] = useState<FeedbackCluster[]>([]);
-  const [feedbackPatterns, setFeedbackPatterns] = useState<FeedbackPatternsResponse | null>(null);
-  const [patternRadar, setPatternRadar] = useState<PatternRadarResponse | null>(null);
+  const [feedbackPatterns, setFeedbackPatterns] = useState<FeedbackPatternsSummary | null>(null);
+  const [patternRadar, setPatternRadar] = useState<TicketPatternRadarResponse | null>(null);
   const [patternRadarDays, setPatternRadarDays] = useState<number>(14);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function fetchPatternRadar(days: number) {
     setPatternRadar(null);
-      try {
-        const res = await fetch(`/api/insights/ticket-pattern-radar?days=${days}`);
-      if (!res.ok) {
-        throw new Error(`Pattern radar error: ${res.status}`);
-      }
-      const radarJson: PatternRadarResponse = await res.json();
+    try {
+      const radarJson = await getTicketPatternRadar(days);
       setPatternRadar(radarJson);
     } catch (err: any) {
       console.error("Pattern Radar error:", err);
@@ -100,29 +42,13 @@ export default function InsightsPanel() {
       setError(null);
 
       try {
-        const [insightsRes, clustersRes, feedbackPatternsRes] = await Promise.all([
-          fetch(`/api/insights/feedback`),
-          fetch(`/api/insights/feedback/clusters?n_clusters=5&max_examples_per_cluster=3`),
-          fetch(`/api/patterns/summary?days=30`),
+        const [insightsJson, clustersResp, feedbackPatternsJson] = await Promise.all([
+          getTicketFeedbackInsights(),
+          getTicketFeedbackClusters({ n_clusters: 5, max_examples_per_cluster: 3 }),
+          getFeedbackPatternsSummary(30),
         ]);
 
-        if (!insightsRes.ok) {
-          throw new Error(`Insights error: ${insightsRes.status}`);
-        }
-        if (!clustersRes.ok) {
-          throw new Error(`Clusters error: ${clustersRes.status}`);
-        }
-
-        if (!feedbackPatternsRes.ok) {
-          throw new Error(`Feedback patterns error: ${feedbackPatternsRes.status}`);
-        }
-
-        const insightsJson: FeedbackInsights = await insightsRes.json();
-        const clustersRaw = await clustersRes.json();
-        const clustersJson: FeedbackCluster[] = Array.isArray(clustersRaw)
-          ? clustersRaw
-          : (clustersRaw as FeedbackClustersResponse).clusters ?? [];
-        const feedbackPatternsJson: FeedbackPatternsResponse = await feedbackPatternsRes.json();
+        const clustersJson: FeedbackCluster[] = clustersResp.clusters ?? [];
 
         setInsights(insightsJson);
         setClusters(clustersJson);

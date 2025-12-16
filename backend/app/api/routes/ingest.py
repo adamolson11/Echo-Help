@@ -9,7 +9,7 @@ from backend.app.services.ingest import ingest_thread
 router = APIRouter(tags=["ingest"])
 
 
-@router.post("/ingest/thread")
+@router.post("/ingest/thread", response_model=Ticket)
 def ingest_thread_endpoint(
     payload: IngestThread, session: Session = Depends(get_session)
 ):
