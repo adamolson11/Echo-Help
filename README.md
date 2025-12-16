@@ -200,6 +200,12 @@ If you’ve collected some Ask Echo feedback (via the UI or `POST /api/ask-echo/
 bash scripts/dev_eval_ask_echo_baseline.sh --grid-search
 ```
 
+Optional (more realistic): reserve the newest 20% as a test set, optimize thresholds on train, and show a per-`mode` breakdown:
+
+```bash
+bash scripts/dev_eval_ask_echo_baseline.sh --grid-search --test-ratio 0.2 --by-mode
+```
+
 This script writes a JSON export to `/tmp/ask_echo_training_export.json` and prints metrics + a small calibration table.
 
 

@@ -1,4 +1,4 @@
-from scripts.eval_ask_echo_baseline import confusion_for, grid_search_threshold
+from scripts.eval_ask_echo_baseline import confusion_for, grid_search_threshold, split_train_test_time
 
 
 def test_confusion_for_simple_thresholds() -> None:
@@ -28,3 +28,16 @@ def test_grid_search_threshold_finds_reasonable_best() -> None:
     assert best.total == 4
     # Best possible F1 here is 0.8 because one negative has a high ticket score.
     assert best.f1() == 0.8
+
+
+def test_split_train_test_time_uses_created_at() -> None:
+    rows = [
+        {"created_at": "2025-01-01T00:00:00", "label_helped": True},
+        {"created_at": "2025-01-02T00:00:00", "label_helped": False},
+        {"created_at": "2025-01-03T00:00:00", "label_helped": True},
+        {"created_at": "2025-01-04T00:00:00", "label_helped": False},
+    ]
+
+    train, test = split_train_test_time(rows, test_ratio=0.5)
+    assert [r["created_at"] for r in train] == ["2025-01-01T00:00:00", "2025-01-02T00:00:00"]
+    assert [r["created_at"] for r in test] == ["2025-01-03T00:00:00", "2025-01-04T00:00:00"]

@@ -9,6 +9,8 @@ OUT="/tmp/ask_echo_training_export.json"
 GRID_SEARCH=0
 TICKET_THRESHOLD=0.6
 SNIPPET_THRESHOLD=0.0
+TEST_RATIO=0.0
+BY_MODE=0
 
 usage() {
   cat <<EOF
@@ -22,6 +24,8 @@ Options:
   --limit N                Max rows (default: $LIMIT)
   --out PATH               Write export JSON to PATH (default: $OUT)
   --grid-search            Search thresholds that maximize F1
+  --test-ratio X           Reserve this fraction as test set (default: $TEST_RATIO)
+  --by-mode                Print per-mode breakdown (default: off)
   --ticket-threshold X     Ticket score threshold (default: $TICKET_THRESHOLD)
   --snippet-threshold X    Snippet echo_score threshold (default: $SNIPPET_THRESHOLD)
 
@@ -41,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       OUT="$2"; shift 2;;
     --grid-search)
       GRID_SEARCH=1; shift 1;;
+    --test-ratio)
+      TEST_RATIO="$2"; shift 2;;
+    --by-mode)
+      BY_MODE=1; shift 1;;
     --ticket-threshold)
       TICKET_THRESHOLD="$2"; shift 2;;
     --snippet-threshold)
@@ -82,6 +90,14 @@ if [[ "$GRID_SEARCH" -eq 1 ]]; then
   eval_args+=(--grid-search)
 else
   eval_args+=(--ticket-threshold "$TICKET_THRESHOLD" --snippet-threshold "$SNIPPET_THRESHOLD")
+fi
+
+if [[ "$TEST_RATIO" != "0.0" ]]; then
+  eval_args+=(--test-ratio "$TEST_RATIO")
+fi
+
+if [[ "$BY_MODE" -eq 1 ]]; then
+  eval_args+=(--by-mode)
 fi
 
 echo "[INFO] Evaluating baseline..."
