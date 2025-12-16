@@ -36,3 +36,42 @@ def test_score_stable_for_low_data():
     assert 0 <= calculate_echo_score(a) <= 1
     assert 0 <= calculate_echo_score(b) <= 1
     assert calculate_echo_score(b) - calculate_echo_score(a) < 0.6
+
+
+def test_kb_confidence_policy_snippet_wins():
+    from backend.app.services.kb_confidence_policy import calculate_kb_confidence
+
+    c = calculate_kb_confidence(
+        kb_backed=True,
+        top_snippet_echo_score=0.9,
+        top_ticket_score=0.2,
+        has_snippets=True,
+        has_tickets=True,
+    )
+    assert c == 0.9
+
+
+def test_kb_confidence_policy_ticket_fallback():
+    from backend.app.services.kb_confidence_policy import calculate_kb_confidence
+
+    c = calculate_kb_confidence(
+        kb_backed=True,
+        top_snippet_echo_score=None,
+        top_ticket_score=0.7,
+        has_snippets=False,
+        has_tickets=True,
+    )
+    assert c == 0.7
+
+
+def test_kb_confidence_policy_ungrounded_zero():
+    from backend.app.services.kb_confidence_policy import calculate_kb_confidence
+
+    c = calculate_kb_confidence(
+        kb_backed=False,
+        top_snippet_echo_score=1.0,
+        top_ticket_score=1.0,
+        has_snippets=True,
+        has_tickets=True,
+    )
+    assert c == 0.0

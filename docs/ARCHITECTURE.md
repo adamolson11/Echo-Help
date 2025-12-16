@@ -70,6 +70,38 @@
 - Semantic search endpoints use these embeddings to find similar tickets.
 - Ask Echo uses semantic search to ground answers and drive the reasoning data it logs.
 
+## Ranking Policy (v1)
+
+EchoHelp uses a centralized ranking policy so that ordering is consistent and deterministic across:
+- ticket keyword search (`/api/search`)
+- Ask Echo ticket suggestions (semantic + keyword fallback)
+- snippet search results (`/api/snippets/search`)
+
+**Implementation**
+- `backend/app/services/ranking_policy.py`
+
+### Ticket ranking
+
+Signals (v1):
+- semantic similarity (when embeddings exist)
+- keyword match
+- recency (`Ticket.created_at`)
+- ticket feedback ratio + usage (`TicketFeedback` aggregates)
+
+Note: Ask Echo may preserve semantic similarity as the returned “score” for threshold/telemetry while still using the policy to decide ordering.
+
+### Snippet ranking
+
+Signals (v1):
+- `SolutionSnippet.echo_score` (primary)
+- keyword match
+- usage (`success_count + failure_count`)
+- recency (`updated_at` preferred)
+
+### Deterministic tie-break
+
+For equal scores, the policy uses `(score, timestamp, id)` so results do not depend on DB row order.
+
 ## Pattern & Insights Endpoints
 
 Echo exposes three orthogonal “pattern” surfaces. They answer different questions and are designed to evolve independently.

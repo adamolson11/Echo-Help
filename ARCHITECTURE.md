@@ -201,6 +201,49 @@ Rules:
 - Tests run with a per-test isolated SQLite DB (`tests/conftest.py`).
 - Avoid hidden reliance on shared DB state or implicit ordering.
 
+## Ranking Policy (v1)
+
+EchoHelp centralizes ordering of tickets/snippets in a single policy module so that:
+- ranking logic is consistent across endpoints
+- ordering is deterministic (no hidden DB ordering dependence)
+- changes can be regression-guarded with tests
+
+**Source of truth**
+- `backend/app/services/ranking_policy.py`
+
+### Ticket ranking signals (v1)
+
+The policy produces a single score per candidate ticket using a simple, explicit weighted mix:
+- **Semantic similarity** (when available)
+- **Keyword match** (query substring in key fields)
+- **Feedback ratio** (from `TicketFeedback.helped` aggregates)
+- **Usage** (volume of feedback)
+- **Recency** (based on `Ticket.created_at`)
+
+Weights are intentionally kept simple and easy to reason about.
+
+### Snippet ranking signals (v1)
+
+Snippet ordering is ranked using:
+- **`echo_score`** as the primary signal
+- **Keyword match**
+- **Usage** (`success_count + failure_count`)
+- **Recency** (`updated_at` preferred, else `created_at`)
+
+### Determinism guarantees
+
+The policy guarantees deterministic ordering for the same inputs by:
+- normalizing recency/usage in stable `id` order (not input list order)
+- using a deterministic tie-break: `(score, timestamp, id)`
+
+### Where it is applied
+
+- Keyword search results (`/api/search`) via `backend/app/services/ticket_search.py`
+- Ask Echo ordering:
+  - semantic ticket results are **re-ordered** via the ranking policy (while preserving the original semantic similarity score for existing thresholds/telemetry)
+  - snippet candidates are ranked via the snippet policy
+- Snippet search (`/api/snippets/search`) results are ranked via the snippet policy
+
 ## Further detail
 
 More detailed notes and endpoint-level discussion live in `docs/ARCHITECTURE.md`.

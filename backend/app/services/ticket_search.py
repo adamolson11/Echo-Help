@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from sqlmodel import Session, select
 
-from backend.app.models.ticket import Ticket
+from ..models.ticket import Ticket
+from .ranking_policy import rank_tickets
 
 
 def keyword_search_tickets(session: Session, *, query: str, limit: int = 20) -> list[Ticket]:
@@ -17,6 +18,7 @@ def keyword_search_tickets(session: Session, *, query: str, limit: int = 20) -> 
         return list(session.exec(stmt).all())
 
     pattern = f"%{q}%"
+    # Pull a slightly larger candidate set, then apply the central ranking policy.
     stmt = (
         select(Ticket)
         .where(
@@ -24,7 +26,10 @@ def keyword_search_tickets(session: Session, *, query: str, limit: int = 20) -> 
             | Ticket.description.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
             | Ticket.external_key.ilike(pattern)  # type: ignore[reportAttributeAccessIssue]
         )
-        .order_by(Ticket.id.desc())  # type: ignore[reportUnknownMemberType]
-        .limit(limit)
+        # Ensure the candidate *set* is deterministic before policy ranking.
+        .order_by(Ticket.updated_at.desc(), Ticket.id.desc())  # type: ignore[reportUnknownMemberType]
+        .limit(max(limit * 10, limit))
     )
-    return list(session.exec(stmt).all())
+    candidates = list(session.exec(stmt).all())
+    ranked = rank_tickets(session, candidates=candidates, query=q)
+    return [rt.ticket for rt in ranked[:limit]]

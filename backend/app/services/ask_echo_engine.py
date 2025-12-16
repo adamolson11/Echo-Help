@@ -2,20 +2,22 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from sqlmodel import Session
 
-from backend.app.schemas.ask_echo import (
+from ..schemas.ask_echo import (
     AskEchoReasoning,
     AskEchoReasoningSnippet,
     AskEchoReference,
     AskEchoTicketSummary,
 )
-from backend.app.services.ask_echo_templates import AskEchoTemplates
-from backend.app.services.semantic_search import semantic_search_tickets
-from backend.app.services.snippet_repository import search_snippets as repo_search_snippets
-from backend.app.services.ticket_search import keyword_search_tickets
+from .ask_echo_templates import AskEchoTemplates
+from .kb_confidence_policy import calculate_kb_confidence
+from .ranking_policy import rank_snippets, rank_tickets
+from .semantic_search import semantic_search_tickets
+from .snippet_repository import search_snippets as repo_search_snippets
+from .ticket_search import keyword_search_tickets
 
 
 @dataclass(frozen=True)
@@ -108,7 +110,7 @@ def _build_snippet_summaries(snippets: Iterable[object]) -> list[dict]:
     ]
 
 
-def build_ask_echo_features(*, scored_tickets: list[tuple[float, object]], snippets: list[object]) -> dict:
+def build_ask_echo_features(*, scored_tickets: Sequence[tuple[float, object]], snippets: Sequence[object]) -> dict:
     """Return a stable, JSON-serializable feature dict for offline ML/eval.
 
     Intentionally does NOT include raw ticket/snippet text.
@@ -170,7 +172,27 @@ class AskEchoEngine:
         # Prefer semantic search when embeddings are present.
         scored = semantic_search_tickets(session=session, query=query, limit=limit)
         if scored:
-            return scored
+            # Apply the central ranking policy for a consistent ordering,
+            # but keep the semantic similarity score as the returned score
+            # to preserve existing threshold/telemetry semantics.
+            tickets = [t for _, t in scored]
+            semantic_scores = {
+                int(getattr(t, "id")): float(score)
+                for (score, t) in scored
+                if getattr(t, "id", None) is not None
+            }
+            ranked = rank_tickets(
+                session,
+                candidates=tickets,
+                query=query,
+                semantic_scores=semantic_scores,
+            )
+            ordered = []
+            for rt in ranked[:limit]:
+                tid = getattr(rt.ticket, "id", None)
+                sem = float(semantic_scores.get(int(tid), 0.0)) if tid is not None else 0.0
+                ordered.append((sem, rt.ticket))
+            return ordered
 
         # Fallback: keyword search so Ask Echo still returns suggestions even
         # when embeddings are missing/unavailable.
@@ -201,7 +223,8 @@ class AskEchoEngine:
 
         try:
             snippets = self._retrieve_snippets(session=session, query=q, limit=req.limit)
-            snippets = sorted(snippets, key=lambda s: (getattr(s, "echo_score", 0.0) or 0.0), reverse=True)
+            ranked_snips = rank_snippets(candidates=list(snippets), query=q)
+            snippets = [rs.snippet for rs in ranked_snips]
         except Exception:
             logging.exception("snippet search failed")
             snippets = []
@@ -222,11 +245,23 @@ class AskEchoEngine:
             answer_text, references = _build_kb_answer(self.templates, q, [(float(s), t) for s, t in scored])
             mode = "kb_answer"
             top_snip_score = getattr(snippets[0], "echo_score", None) if snippets else None
-            kb_confidence = float(top_snip_score) if top_snip_score is not None else float(max_score or 0.0)
+            kb_confidence = calculate_kb_confidence(
+                kb_backed=True,
+                top_snippet_echo_score=float(top_snip_score) if top_snip_score is not None else None,
+                top_ticket_score=float(max_score or 0.0),
+                has_snippets=bool(snippets),
+                has_tickets=bool(scored),
+            )
         else:
             answer_text, references = _build_general_answer(self.templates, q)
             mode = "general_answer"
-            kb_confidence = 0.0
+            kb_confidence = calculate_kb_confidence(
+                kb_backed=False,
+                top_snippet_echo_score=None,
+                top_ticket_score=float(max_score or 0.0),
+                has_snippets=bool(snippets),
+                has_tickets=bool(scored),
+            )
 
         answer_kind = "grounded" if kb_backed else "ungrounded"
 

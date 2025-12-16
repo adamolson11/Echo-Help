@@ -2,7 +2,8 @@ from typing import List, Optional
 
 from sqlmodel import Session, select
 
-from backend.app.models.snippets import SnippetFeedback, SolutionSnippet
+from ..models.snippets import SnippetFeedback, SolutionSnippet
+from .ranking_policy import rank_snippets
 
 
 def get_snippet_by_id(session: Session, snippet_id: int) -> Optional[SolutionSnippet]:
@@ -16,11 +17,14 @@ def search_snippets(
     stmt = (
         select(SolutionSnippet)
         .where((SolutionSnippet.title.ilike(q)) | (SolutionSnippet.summary.ilike(q)))
+        # Keep paging deterministic; ranking happens within the returned page.
+        .order_by(SolutionSnippet.updated_at.desc(), SolutionSnippet.id.desc())  # type: ignore[reportUnknownMemberType]
         .offset(offset)
         .limit(limit)
     )
-    rows = session.exec(stmt).all()
-    return rows
+    rows = list(session.exec(stmt).all())
+    ranked = rank_snippets(candidates=rows, query=query)
+    return [rs.snippet for rs in ranked]
 
 
 def increment_feedback_and_recalculate_score(
