@@ -6,9 +6,11 @@ export default function AskEchoPage() {
     <div>
       <SectionHeader
         title="Ask Echo"
-        description="Ask questions grounded in your ticket history and KB."
+        description="EchoHelp remembers what worked before. Ask a question, inspect past tickets, and Echo gets better from feedback."
       />
-      <AskEchoWidget />
+      <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+        <AskEchoWidget />
+      </div>
     </div>
   );
 }

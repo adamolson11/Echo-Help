@@ -6,7 +6,6 @@ import {
   postAskEcho,
   postAskEchoFeedback,
   postSnippetFeedback,
-  searchTicketsText,
 } from "./api/endpoints";
 import type { AskEchoResponse } from "./api/types";
 
@@ -20,7 +19,6 @@ export default function AskEchoWidget() {
   const [q, setQ] = useState("");
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [demoPresent, setDemoPresent] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // feedback UI state
@@ -46,27 +44,6 @@ export default function AskEchoWidget() {
       setLoading(false);
     }
   }
-
-  // Detect demo presence without adding a new backend endpoint.
-  // We query the existing /api/search endpoint for a DEMO- marker.
-  useEffect(() => {
-    const ctrl = new AbortController();
-    (async () => {
-      try {
-        const rows = await searchTicketsText("DEMO-", ctrl.signal);
-        const found = Array.isArray(rows)
-          && rows.some((r: any) => {
-            const ek = String(r?.external_key ?? "");
-            const src = String(r?.source ?? "");
-            return ek.startsWith("DEMO-") || src === "demo";
-          });
-        setDemoPresent(Boolean(found));
-      } catch {
-        setDemoPresent(false);
-      }
-    })();
-    return () => ctrl.abort();
-  }, []);
 
   // when a new Ask Echo response arrives, auto-select a sensible ticket id for feedback
   useEffect(() => {
@@ -200,12 +177,18 @@ export default function AskEchoWidget() {
     }
   }
 
+  const tryExamples = [
+    "password reset doesn't work",
+    "vpn auth_failed",
+    "mfa codes invalid",
+  ];
+
   return (
-    <div className="mb-4 rounded-md bg-slate-800 p-4">
+    <div className="space-y-2">
       <div className="flex gap-2">
         <input
           ref={inputRef}
-          className="flex-1 rounded-md bg-slate-700 px-3 py-2 text-slate-100"
+          className="flex-1 rounded-md bg-slate-950/60 border border-slate-700 px-3 py-2 text-slate-100"
           placeholder="Ask Echo a question about tickets..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -221,35 +204,25 @@ export default function AskEchoWidget() {
         </button>
       </div>
 
-      <p className="text-xs text-slate-400 mt-1">
-        Ask a natural-language question and get an AI-generated answer based on your tickets and knowledge base.
-      </p>
-
-      {demoPresent && !q.trim() && !response && (
-        <div className="mt-1 text-xs text-slate-400">
-          <span className="mr-1">Try:</span>
-          {[
-            "password reset doesn't work",
-            "vpn auth_failed",
-            "mfa codes invalid",
-          ].map((example, idx) => (
-            <span key={example}>
-              <button
-                type="button"
-                className="underline hover:text-slate-200"
-                onClick={() => {
-                  setQ(example);
-                  try {
-                    inputRef.current?.focus();
-                  } catch {
-                    // no-op
-                  }
-                }}
-              >
-                {example}
-              </button>
-              {idx < 2 ? <span className="mx-1">·</span> : null}
-            </span>
+      {!q.trim() && !response && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <span className="mr-1">Try this:</span>
+          {tryExamples.map((example) => (
+            <button
+              key={example}
+              type="button"
+              className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
+              onClick={() => {
+                setQ(example);
+                try {
+                  inputRef.current?.focus();
+                } catch {
+                  // no-op
+                }
+              }}
+            >
+              {example}
+            </button>
           ))}
         </div>
       )}
@@ -285,21 +258,11 @@ export default function AskEchoWidget() {
                       const ticket = response.suggested_tickets.find((r) => String(r.id) === String(ref.ticket_id));
                       const title = ticket ? (ticket.summary || ticket.title || `Ticket ${ref.ticket_id}`) : `Ticket ${ref.ticket_id}`;
                       return (
-                        <li key={idx} className="text-[11px]">
+                        <li key={idx} className="text-[11px] flex items-center justify-between gap-2">
                           <button
-                            onClick={() => {
-                              try {
-                                // dispatch a global event that Search will listen to
-                                const ev = new CustomEvent("echo-select-ticket", { detail: { ticketId: ref.ticket_id } });
-                                window.dispatchEvent(ev);
-                                // also scroll to the Search area for visibility
-                                const el = document.querySelector("#root");
-                                if (el) el.scrollIntoView({ behavior: "smooth" });
-                              } catch (e) {
-                                // fallback: no-op
-                              }
-                            }}
-                            className="underline hover:text-slate-200"
+                            type="button"
+                            onClick={() => openInSearch({ query: q, ticketId: ref.ticket_id })}
+                            className="text-left underline hover:text-slate-200"
                           >
                             • #{ref.ticket_id} – {title}
                             {typeof ref.confidence === "number" && (
@@ -309,9 +272,10 @@ export default function AskEchoWidget() {
                           <button
                             type="button"
                             onClick={() => openInSearch({ query: q, ticketId: ref.ticket_id })}
-                            className="ml-2 underline text-slate-500 hover:text-slate-200"
+                            className="shrink-0 inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
+                            title="Open Search and highlight this ticket"
                           >
-                            Open in Search
+                            See evidence
                           </button>
                         </li>
                       );
@@ -325,28 +289,21 @@ export default function AskEchoWidget() {
                   <div className="font-semibold text-xs">Suggested tickets</div>
                   <ul className="mt-1 space-y-1">
                     {response.suggested_tickets.slice(0, 5).map((t) => (
-                      <li key={String(t.id)} className="text-[11px]">
+                      <li key={String(t.id)} className="text-[11px] flex items-center justify-between gap-2">
                         <button
-                          onClick={() => {
-                            try {
-                              const ev = new CustomEvent("echo-select-ticket", { detail: { ticketId: t.id } });
-                              window.dispatchEvent(ev);
-                              const el = document.querySelector("#root");
-                              if (el) el.scrollIntoView({ behavior: "smooth" });
-                            } catch (e) {
-                              // no-op
-                            }
-                          }}
-                          className="underline hover:text-slate-200"
+                          type="button"
+                          onClick={() => openInSearch({ query: q, ticketId: t.id })}
+                          className="text-left underline hover:text-slate-200"
                         >
                           • #{t.id} – {t.summary || t.title || `Ticket ${t.id}`}
                         </button>
                         <button
                           type="button"
                           onClick={() => openInSearch({ query: q, ticketId: t.id })}
-                          className="ml-2 underline text-slate-500 hover:text-slate-200"
+                          className="shrink-0 inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
+                          title="Open Search and highlight this ticket"
                         >
-                          Open in Search
+                          See evidence
                         </button>
                       </li>
                     ))}
@@ -367,19 +324,10 @@ export default function AskEchoWidget() {
                         {s.summary && <div className="text-slate-400">{s.summary}</div>}
                         {s.ticket_id && (
                           <button
-                            onClick={() => {
-                              try {
-                                const ev = new CustomEvent("echo-select-ticket", { detail: { ticketId: s.ticket_id } });
-                                window.dispatchEvent(ev);
-                                const el = document.querySelector("#root");
-                                if (el) el.scrollIntoView({ behavior: "smooth" });
-                              } catch (e) {
-                                // no-op
-                              }
-                            }}
-                            className="underline text-slate-400 hover:text-slate-200"
+                            onClick={() => openInSearch({ query: q, ticketId: s.ticket_id })}
+                            className="mt-1 inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
                           >
-                            View ticket #{s.ticket_id}
+                            See ticket #{s.ticket_id}
                           </button>
                         )}
                       </li>

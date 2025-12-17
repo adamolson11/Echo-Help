@@ -846,7 +846,7 @@ export default function Search() {
           <div>
             <h2 className="text-sm font-semibold text-slate-100">Ask Echo (AI assistant)</h2>
             <p className="mt-1 text-xs text-slate-400">
-              Ask a natural-language question about your issues. Echo will search past tickets and snippets, then explain why it chose its answer.
+              EchoHelp remembers what worked before. Ask a question, inspect past tickets, and Echo gets better from feedback.
             </p>
           </div>
         </div>
@@ -1030,6 +1030,23 @@ export default function Search() {
                   <span>Updated: {formatDate(selectedTicket.updated_at)}</span>
                 )}
               </div>
+
+              {(() => {
+                const latestNote = (ticketFeedbackHistory ?? []).find(
+                  (fb: any) => typeof fb?.resolution_notes === "string" && fb.resolution_notes.trim().length > 0,
+                )?.resolution_notes as string | undefined;
+
+                if (!latestNote) return null;
+
+                return (
+                  <div className="mb-3 rounded-md border border-slate-800 bg-slate-900/60 p-3">
+                    <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wide mb-1">
+                      Resolution notes
+                    </div>
+                    <div className="text-sm text-slate-200 whitespace-pre-wrap">{latestNote}</div>
+                  </div>
+                );
+              })()}
 
               {selectedTicket.summary && (
                 <p className="text-sm text-slate-200 mb-2">
