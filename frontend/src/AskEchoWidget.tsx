@@ -74,13 +74,34 @@ export default function AskEchoWidget() {
 
   function openInSearch(opts: { query?: string; ticketId?: number | null }) {
     try {
+      // Persist the intent so Search can pick it up even if it isn't mounted yet.
+      try {
+        const payload = {
+          query: opts.query ?? q,
+          ticketId: opts.ticketId ?? null,
+        };
+        window.sessionStorage.setItem("echo-open-search", JSON.stringify(payload));
+      } catch (e) {
+        // no-op
+      }
+
+      // Navigate to the Search route (ConsoleShell listens to hash changes).
+      try {
+        if (!String(window.location.hash || "").startsWith("#/search")) {
+          window.location.hash = "#/search";
+        }
+      } catch (e) {
+        // no-op
+      }
+
       const ev = new CustomEvent("echo-open-search", {
         detail: {
           query: opts.query ?? q,
           ticketId: opts.ticketId ?? null,
         },
       });
-      window.dispatchEvent(ev);
+      // Fire async so route changes (if any) can start first.
+      window.setTimeout(() => window.dispatchEvent(ev), 0);
       const el = document.querySelector("#root");
       if (el) el.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
@@ -181,10 +202,15 @@ export default function AskEchoWidget() {
     "password reset doesn't work",
     "vpn auth_failed",
     "mfa codes invalid",
+    "outlook keeps asking for password",
   ];
 
   return (
     <div className="space-y-2">
+      <div className="text-sm text-slate-300">
+        Ask Echo about a support issue to get a suggested fix and the most relevant past tickets.
+      </div>
+
       <div className="flex gap-2">
         <input
           ref={inputRef}
@@ -206,7 +232,7 @@ export default function AskEchoWidget() {
 
       {!q.trim() && !response && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span className="mr-1">Try this:</span>
+          <span className="mr-1">Try an example:</span>
           {tryExamples.map((example) => (
             <button
               key={example}
@@ -214,6 +240,7 @@ export default function AskEchoWidget() {
               className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
               onClick={() => {
                 setQ(example);
+                setResponse(null);
                 try {
                   inputRef.current?.focus();
                 } catch {
@@ -272,10 +299,10 @@ export default function AskEchoWidget() {
                           <button
                             type="button"
                             onClick={() => openInSearch({ query: q, ticketId: ref.ticket_id })}
-                            className="shrink-0 inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
+                            className="shrink-0 inline-flex items-center rounded border border-indigo-500/40 bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/30"
                             title="Open Search and highlight this ticket"
                           >
-                            See evidence
+                            View evidence
                           </button>
                         </li>
                       );
@@ -300,10 +327,10 @@ export default function AskEchoWidget() {
                         <button
                           type="button"
                           onClick={() => openInSearch({ query: q, ticketId: t.id })}
-                          className="shrink-0 inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
+                          className="shrink-0 inline-flex items-center rounded border border-indigo-500/40 bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/30"
                           title="Open Search and highlight this ticket"
                         >
-                          See evidence
+                          View evidence
                         </button>
                       </li>
                     ))}
@@ -323,12 +350,22 @@ export default function AskEchoWidget() {
                         )}
                         {s.summary && <div className="text-slate-400">{s.summary}</div>}
                         {s.ticket_id && (
-                          <button
-                            onClick={() => openInSearch({ query: q, ticketId: s.ticket_id })}
-                            className="mt-1 inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
-                          >
-                            See ticket #{s.ticket_id}
-                          </button>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <button
+                              onClick={() => openInSearch({ query: q, ticketId: s.ticket_id })}
+                              className="inline-flex items-center rounded border border-indigo-500/40 bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/30"
+                              title="Open Search and highlight the linked ticket"
+                            >
+                              View evidence
+                            </button>
+                            <button
+                              onClick={() => openInSearch({ query: q, ticketId: s.ticket_id })}
+                              className="inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
+                              title="Open the linked ticket"
+                            >
+                              Open ticket #{s.ticket_id}
+                            </button>
+                          </div>
                         )}
                       </li>
                     ))}

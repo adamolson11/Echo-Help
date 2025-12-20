@@ -324,9 +324,8 @@ export default function Search() {
   // Listen for global "open search" events (dispatched by AskEchoWidget)
   // so Ask Echo can route users into the Search console with the same query.
   useEffect(() => {
-    function onOpenSearch(e: any) {
+    function handleOpenSearchDetail(detail: any) {
       try {
-        const detail = e?.detail ?? {};
         const q = String(detail?.query ?? "").trim();
         const ticketId = detail?.ticketId ?? detail?.ticket_id ?? null;
 
@@ -356,14 +355,32 @@ export default function Search() {
       }
     }
 
+    function onOpenSearch(e: any) {
+      const detail = e?.detail ?? {};
+      handleOpenSearchDetail(detail);
+    }
+
     window.addEventListener("echo-open-search", onOpenSearch as EventListener);
+
+    // Also support a persisted open-search intent (e.g., when Ask Echo navigates routes).
+    try {
+      const raw = window.sessionStorage.getItem("echo-open-search");
+      if (raw) {
+        window.sessionStorage.removeItem("echo-open-search");
+        const parsed = JSON.parse(raw);
+        handleOpenSearchDetail(parsed);
+      }
+    } catch (err) {
+      // no-op
+    }
+
     return () => window.removeEventListener("echo-open-search", onOpenSearch as EventListener);
   }, [runSearch]);
 
   // Clear temporary flash highlight after a short duration
   useEffect(() => {
     if (!flashTicketId) return;
-    const t = window.setTimeout(() => setFlashTicketId(null), 1500);
+    const t = window.setTimeout(() => setFlashTicketId(null), 2000);
     return () => window.clearTimeout(t);
   }, [flashTicketId]);
 
