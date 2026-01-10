@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import json
+
 # ruff: noqa: B008
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sklearn.cluster import KMeans
 from sqlmodel import Session, select
-import json
-from fastapi import HTTPException
 
 from ...db import get_session
-from ...models.ask_echo_log import AskEchoLog
 from ...models.ask_echo_feedback import AskEchoFeedback
+from ...models.ask_echo_log import AskEchoLog
 from ...models.ticket_feedback import TicketFeedback
 from ...schemas.insights import (
     AskEchoFeedbackResponse,
@@ -23,11 +23,10 @@ from ...schemas.insights import (
     FeedbackClustersResponse,
     PatternRadarResponse,
     ReasoningSnippetCandidate,
-    TicketPatternRadarResponse,
     TicketFeedbackInsights,
+    TicketPatternRadarResponse,
     UnhelpfulExample,
 )
-from ...schemas.ticket_feedback import TicketFeedbackRead
 from ...services.embeddings import embed_text
 from ...services.pattern_radar import extract_ticket_patterns, get_snippet_pattern_radar
 
@@ -274,7 +273,7 @@ def get_ask_echo_feedback(
     if log_ids:
         stmt = select(AskEchoLog).where(AskEchoLog.id.in_(log_ids))  # type: ignore[attr-defined]
         logs = list(session.exec(stmt).all())
-        logs_by_id = {int(l.id): l for l in logs if l.id is not None}
+        logs_by_id = {int(log.id): log for log in logs if log.id is not None}
 
     items: list[AskEchoFeedbackRow] = []
     for r in rows:

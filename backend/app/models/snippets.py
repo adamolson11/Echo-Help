@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import JSON, Column, Text
 from sqlmodel import Field, SQLModel
@@ -50,4 +49,4 @@ class KnowledgeLink(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     from_snippet_id: int = Field(foreign_key="solutionsnippet.id")
     to_snippet_id: int = Field(foreign_key="solutionsnippet.id")
-    note: Optional[str] = None
+    note: str | None = None

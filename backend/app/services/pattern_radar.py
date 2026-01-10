@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from typing import Any
 
 from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from ..models.snippets import SolutionSnippet, SnippetFeedback
+from ..models.snippets import SnippetFeedback, SolutionSnippet
 from ..models.ticket import Ticket
 
 
-def extract_ticket_patterns(session: Session, days: int = 14) -> Dict[str, Any]:
+def extract_ticket_patterns(session: Session, days: int = 14) -> dict[str, Any]:
     """Compute simple ticket patterns over the last ``days`` days.
 
     Returns a JSON-serializable dict with:
@@ -24,7 +24,7 @@ def extract_ticket_patterns(session: Session, days: int = 14) -> Dict[str, Any]:
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     stmt = select(Ticket).where(Ticket.created_at >= cutoff)  # type: ignore[attr-defined]
-    tickets: List[Ticket] = list(session.exec(stmt).all())
+    tickets: list[Ticket] = list(session.exec(stmt).all())
 
     total = len(tickets)
 
@@ -45,7 +45,7 @@ def extract_ticket_patterns(session: Session, days: int = 14) -> Dict[str, Any]:
         if title:
             title_counter[title] += 1
 
-        parts: List[str] = []
+        parts: list[str] = []
         for attr in ("title", "summary", "description", "body"):
             value = getattr(t, attr, None)
             if isinstance(value, str):
@@ -58,7 +58,7 @@ def extract_ticket_patterns(session: Session, days: int = 14) -> Dict[str, Any]:
     top_keywords = [{"keyword": w, "count": c} for w, c in word_counter.most_common(25)]
     frequent_titles = [{"title": title, "count": c} for title, c in title_counter.most_common(25)]
 
-    semantic_clusters: List[Dict[str, Any]] = []
+    semantic_clusters: list[dict[str, Any]] = []
 
     return {
         "top_keywords": top_keywords,
@@ -77,7 +77,7 @@ def extract_ticket_patterns(session: Session, days: int = 14) -> Dict[str, Any]:
     }
 
 
-def _tokenize_words(text: str) -> List[str]:
+def _tokenize_words(text: str) -> list[str]:
     import re
 
     # Basic tokenization with a small, pragmatic stopword list so
@@ -101,7 +101,7 @@ def _tokenize_words(text: str) -> List[str]:
         "help",
     }
 
-    words: List[str] = []
+    words: list[str] = []
     for word in re.findall(r"[a-z0-9_]+", text):
         if len(word) <= 2:
             continue
@@ -111,7 +111,7 @@ def _tokenize_words(text: str) -> List[str]:
     return words
 
 
-def get_snippet_pattern_radar(session: Session) -> Dict[str, Any]:
+def get_snippet_pattern_radar(session: Session) -> dict[str, Any]:
     """Compute snippet-based pattern radar stats used by existing tests.
 
     Returns a JSON-serializable dict with:
@@ -120,7 +120,7 @@ def get_snippet_pattern_radar(session: Session) -> Dict[str, Any]:
     - top_risky_snippets: list[dict]
     """
 
-    total_snippets = session.exec(select(func.count(SolutionSnippet.id))).one()
+    total_snippets = session.exec(select(func.count(col(SolutionSnippet.id)))).one()
 
     feedback_rows: list[SnippetFeedback] = list(session.exec(select(SnippetFeedback)).all())
     counts: dict[int, dict[str, int]] = {}
@@ -140,8 +140,8 @@ def get_snippet_pattern_radar(session: Session) -> Dict[str, Any]:
     frequent = []
     risky = []
 
-    snippet_by_id: Dict[int, SolutionSnippet] = {
-        s.id: s for s in session.exec(select(SolutionSnippet)).all()
+    snippet_by_id: dict[int, SolutionSnippet] = {
+        int(s.id): s for s in session.exec(select(SolutionSnippet)).all() if s.id is not None
     }
 
     for snippet_id, agg in counts.items():

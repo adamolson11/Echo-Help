@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, Sequence
 
 from sqlmodel import Session
 
+from ..models.snippets import SolutionSnippet
+from ..models.ticket import Ticket
 from ..schemas.ask_echo import (
     AskEchoReasoning,
     AskEchoReasoningSnippet,
@@ -50,7 +52,7 @@ def _first_line(text: str | None, max_len: int = 200) -> str:
 def _build_kb_answer(
     templates: AskEchoTemplates,
     query: str,
-    scored_tickets: list[tuple[float, object]],
+    scored_tickets: list[tuple[float, Ticket]],
 ) -> tuple[str, list[AskEchoReference]]:
     bullets: list[str] = []
     refs: list[AskEchoReference] = []
@@ -82,20 +84,23 @@ def _build_general_answer(templates: AskEchoTemplates, query: str) -> tuple[str,
     return templates.ungrounded_answer, []
 
 
-def _build_ticket_summaries(scored: list[tuple[float, object]]) -> list[AskEchoTicketSummary]:
+def _build_ticket_summaries(scored: list[tuple[float, Ticket]]) -> list[AskEchoTicketSummary]:
     tickets = [t for _, t in scored]
-    return [
-        AskEchoTicketSummary(
-            id=int(getattr(t, "id")),
-            summary=(getattr(t, "summary", None) or getattr(t, "title", None)),
-            title=getattr(t, "title", None),
+    out: list[AskEchoTicketSummary] = []
+    for t in tickets:
+        if t.id is None:
+            continue
+        out.append(
+            AskEchoTicketSummary(
+                id=int(t.id),
+                summary=t.summary,
+                title=None,
+            )
         )
-        for t in tickets
-        if getattr(t, "id", None) is not None
-    ]
+    return out
 
 
-def _build_snippet_summaries(snippets: Iterable[object]) -> list[dict]:
+def _build_snippet_summaries(snippets: Iterable[SolutionSnippet]) -> list[dict]:
     return [
         {
             "id": getattr(s, "id", None),
@@ -110,7 +115,7 @@ def _build_snippet_summaries(snippets: Iterable[object]) -> list[dict]:
     ]
 
 
-def build_ask_echo_features(*, scored_tickets: Sequence[tuple[float, object]], snippets: Sequence[object]) -> dict:
+def build_ask_echo_features(*, scored_tickets: Sequence[tuple[float, Ticket]], snippets: Sequence[SolutionSnippet]) -> dict:
     """Return a stable, JSON-serializable feature dict for offline ML/eval.
 
     Intentionally does NOT include raw ticket/snippet text.
@@ -177,9 +182,9 @@ class AskEchoEngine:
             # to preserve existing threshold/telemetry semantics.
             tickets = [t for _, t in scored]
             semantic_scores = {
-                int(getattr(t, "id")): float(score)
+                int(t.id): float(score)
                 for (score, t) in scored
-                if getattr(t, "id", None) is not None
+                if t.id is not None
             }
             ranked = rank_tickets(
                 session,
@@ -266,7 +271,7 @@ class AskEchoEngine:
         answer_kind = "grounded" if kb_backed else "ungrounded"
 
         # reasoning (snippet candidates)
-        candidate_pairs: list[tuple[object, float]] = []
+        candidate_pairs: list[tuple[SolutionSnippet, float]] = []
         for s in snippets:
             score_val = getattr(s, "echo_score", None)
             candidate_pairs.append((s, float(score_val) if score_val is not None else 0.0))
@@ -277,15 +282,15 @@ class AskEchoEngine:
         reasoning = AskEchoReasoning(
             candidate_snippets=[
                 AskEchoReasoningSnippet(
-                    id=int(getattr(s, "id")),
+                    id=int(s.id),
                     title=getattr(s, "title", None),
                     score=float(score),
                 )
                 for (s, score) in candidate_pairs
-                if getattr(s, "id", None) is not None
+                if s.id is not None
             ],
             chosen_snippet_ids=[
-                int(getattr(s, "id")) for s in chosen_snippets if getattr(s, "id", None) is not None
+                int(s.id) for s in chosen_snippets if s.id is not None
             ],
             echo_score=float(best_score) if best_score is not None else None,
         )

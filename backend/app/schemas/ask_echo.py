@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Literal
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -8,25 +8,25 @@ from backend.app.schemas.snippets import SnippetSearchResult
 
 class AskEchoTicketSummary(BaseModel):
     id: int
-    summary: Optional[str] = None
-    title: Optional[str] = None
+    summary: str | None = None
+    title: str | None = None
 
 
 class AskEchoReference(BaseModel):
     ticket_id: int
-    confidence: Optional[float] = None
+    confidence: float | None = None
 
 
 class AskEchoReasoningSnippet(BaseModel):
     id: int
-    title: Optional[str] = None
-    score: Optional[float] = None
+    title: str | None = None
+    score: float | None = None
 
 
 class AskEchoReasoning(BaseModel):
-    candidate_snippets: List[AskEchoReasoningSnippet] = []
-    chosen_snippet_ids: List[int] = []
-    echo_score: Optional[float] = None
+    candidate_snippets: list[AskEchoReasoningSnippet] = []
+    chosen_snippet_ids: list[int] = []
+    echo_score: float | None = None
 
 
 class AskEchoRequest(BaseModel):
@@ -41,11 +41,11 @@ class AskEchoResponse(BaseModel):
     query: str
     answer: str
     # Explicit suggestion fields (avoid generic names like `results`).
-    suggested_tickets: List[AskEchoTicketSummary]
-    suggested_snippets: List[SnippetSearchResult] = []
+    suggested_tickets: list[AskEchoTicketSummary]
+    suggested_snippets: list[SnippetSearchResult] = []
     kb_backed: bool = False
     kb_confidence: float = 0.0
     # mode: either 'kb_answer' (grounded in KB/tickets) or 'general_answer' (no matches)
     mode: str | None = None
-    references: List[AskEchoReference] = []
-    reasoning: Optional[AskEchoReasoning] = None
+    references: list[AskEchoReference] = []
+    reasoning: AskEchoReasoning | None = None

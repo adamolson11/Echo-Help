@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from sqlmodel import Session, select
 
@@ -12,9 +12,9 @@ def generate_snippet_from_feedback(
     title: str,
     content_md: str,
     session: Session,
-    ticket_id: Optional[int] = None,
+    ticket_id: int | None = None,
     source: str = "user",
-    tags: Optional[Sequence[str]] = None,
+    tags: Sequence[str] | None = None,
 ) -> SolutionSnippet:
     """Create and persist a SolutionSnippet record.
 
@@ -43,7 +43,7 @@ def create_snippet_from_feedback_payload(
     feedback_notes: str,
     helped: bool,
     session: Session,
-    ticket_id: Optional[int] = None,
+    ticket_id: int | None = None,
 ) -> SolutionSnippet:
     """Convenience wrapper used when feedback arrives from the UI/API.
 
@@ -53,7 +53,6 @@ def create_snippet_from_feedback_payload(
     """
     # Produce a lightweight title and content
     title = None
-    summary = None
     if ticket_id:
         t = session.exec(select(Ticket).where(Ticket.id == ticket_id)).one_or_none()
         if t:
@@ -71,6 +70,7 @@ def create_snippet_from_feedback_payload(
     )
 
     # Store the feedback row
+    assert snippet.id is not None
     fb = SnippetFeedback(
         snippet_id=snippet.id, helped=bool(helped), notes=feedback_notes
     )
@@ -115,7 +115,7 @@ def ensure_snippet_for_feedback(
     t = session.exec(select(Ticket).where(Ticket.id == ticket_id)).one_or_none()
     title = None
     if t:
-        title = f"Solution for {t.summary or t.title or ('ticket-'+str(ticket_id))}"
+        title = f"Solution for {t.summary or ('ticket-'+str(ticket_id))}"
 
     if not title:
         title = f"Snippet from feedback for ticket {ticket_id}"

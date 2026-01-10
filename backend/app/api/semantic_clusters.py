@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# ruff: noqa: B008
 import numpy as np
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
@@ -7,9 +8,11 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..models.embedding import Embedding
 from ..models.ticket import Ticket
-from ..schemas.semantic_clusters import (SemanticCluster,
-                                         SemanticClustersRequest,
-                                         SemanticClusterTicket)
+from ..schemas.semantic_clusters import (
+    SemanticCluster,
+    SemanticClustersRequest,
+    SemanticClusterTicket,
+)
 
 router = APIRouter(
     prefix="/insights",
@@ -107,6 +110,8 @@ def semantic_clusters(
             emb = items[int(global_i)]
             ticket = session.get(Ticket, emb.ticket_id)
             if ticket is None:
+                continue
+            if ticket.id is None:
                 continue
             dist_val = float(dists[pos_idx]) if pos_idx < len(dists) else None
             tickets.append(

@@ -1,10 +1,9 @@
 import os
 from pathlib import Path
 
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session, SQLModel, create_engine
-
-from backend.app import models
 
 # Allow configuring the DB path via env var to support Docker volumes.
 # Default to repo-root `echohelp.db` for local dev.
@@ -12,9 +11,9 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 # Track current DB path so we can refresh the engine if tests change
 # `ECHOHELP_DB_PATH` between imports.
-_DB_PATH = None
-DATABASE_URL = None
-engine = None
+_DB_PATH: str | None = None
+DATABASE_URL: str | None = None
+engine: Engine | None = None
 
 
 def _lazy_session_local(*args, **kwargs):
@@ -25,6 +24,7 @@ def _lazy_session_local(*args, **kwargs):
     the canonical sessionmaker.
     """
     ensure_engine()
+    assert engine is not None
     global SessionLocal
     # If a proper sessionmaker has already been assigned, call it.
     if SessionLocal is not None and hasattr(SessionLocal, "class_"):
@@ -87,6 +87,7 @@ def ensure_engine():
 
 def init_db():
     ensure_engine()
+    assert engine is not None
     # Ensure all SQLModel classes are registered on metadata and
     # create tables unconditionally for the current engine. Do not
     # swallow exceptions here so test failures surface immediately
@@ -101,8 +102,8 @@ def init_db():
 
         # Only apply for SQLite file DBs
         if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
-            db_path = _DB_PATH
-            conn = sqlite3.connect(db_path)
+            assert _DB_PATH is not None
+            conn = sqlite3.connect(_DB_PATH)
             cur = conn.cursor()
 
             def _get_cols(table: str) -> list[str]:

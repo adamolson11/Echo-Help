@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Sequence
-
 
 def clamp01(x: float) -> float:
     return float(max(0.0, min(1.0, x)))

@@ -1,4 +1,3 @@
-from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -6,7 +5,7 @@ from pydantic import BaseModel
 class IngestMessage(BaseModel):
     author: str
     text: str
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 class IngestThread(BaseModel):
@@ -14,5 +13,5 @@ class IngestThread(BaseModel):
     external_id: str
     title: str
     resolved: bool
-    resolution_notes: Optional[str] = None
-    messages: List[IngestMessage]
+    resolution_notes: str | None = None
+    messages: list[IngestMessage]

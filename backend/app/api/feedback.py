@@ -39,6 +39,8 @@ def submit_feedback(
     # a numeric `rating` to the boolean `helped` field (>=4 => helped).
     fb = TicketFeedback(
         ticket_id=payload.ticket_id,
+        query_text=payload.query_text.strip(),
+        rating=payload.rating,
         resolution_notes=payload.query_text.strip(),
         helped=(payload.rating >= 4),
     )

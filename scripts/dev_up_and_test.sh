@@ -5,10 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Start backend server in background
-cd backend
-uvicorn app.main:app --host 0.0.0.0 --port 8001 &
+PYTHONPATH="$PWD" uvicorn backend.app.main:app --host 0.0.0.0 --port 8001 &
 SERVER_PID=$!
-cd ..
 
 # Wait for server to be up
 for i in {1..10}; do

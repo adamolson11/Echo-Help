@@ -17,6 +17,8 @@ def get_next_short_id(session: Session) -> str:
         if isinstance(s, (list, tuple)):
             # some adapters may return Row objects; handle defensively
             s = s[0] if s else None
+        if not isinstance(s, str):
+            continue
         try:
             if s.startswith("E-TKT-"):
                 n = int(s.split("-")[-1])

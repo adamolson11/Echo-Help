@@ -1,22 +1,20 @@
-from typing import List, Optional
-
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..models.snippets import SnippetFeedback, SolutionSnippet
 from .ranking_policy import rank_snippets
 
 
-def get_snippet_by_id(session: Session, snippet_id: int) -> Optional[SolutionSnippet]:
+def get_snippet_by_id(session: Session, snippet_id: int) -> SolutionSnippet | None:
     return session.get(SolutionSnippet, snippet_id)
 
 
 def search_snippets(
     session: Session, query: str, limit: int = 10, offset: int = 0
-) -> List[SolutionSnippet]:
+) -> list[SolutionSnippet]:
     q = f"%{query}%"
     stmt = (
         select(SolutionSnippet)
-        .where((SolutionSnippet.title.ilike(q)) | (SolutionSnippet.summary.ilike(q)))
+        .where((col(SolutionSnippet.title).ilike(q)) | (col(SolutionSnippet.summary).ilike(q)))
         # Keep paging deterministic; ranking happens within the returned page.
         .order_by(SolutionSnippet.updated_at.desc(), SolutionSnippet.id.desc())  # type: ignore[reportUnknownMemberType]
         .offset(offset)

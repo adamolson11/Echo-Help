@@ -1,6 +1,7 @@
 from sqlmodel import Session, select
 
 import backend.app.db as db
+
 from .models.ticket import Ticket
 
 SEED_TICKETS = [
@@ -37,7 +38,15 @@ def seed_tickets() -> None:
             return
 
         for t in SEED_TICKETS:
-            ticket = Ticket(**t)
+            ticket = Ticket(
+                external_key=t["external_key"],
+                source=t["source"],
+                project_key=t["project_key"],
+                summary=t["summary"],
+                description=t["description"],
+                status=t["status"],
+                priority=t.get("priority"),
+            )
             session.add(ticket)
         session.commit()
 

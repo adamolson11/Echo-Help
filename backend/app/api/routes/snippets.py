@@ -1,22 +1,21 @@
-from typing import List
+# ruff: noqa: B008
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from backend.app.db import get_session
-from backend.app.models.snippets import SnippetFeedback
-from backend.app.schemas.snippets import (CreateSnippetRequest,
-                                          CreateSnippetResponse,
-                                          SnippetFeedbackRequest,
-                                          SnippetFeedbackResponse,
-                                          SnippetSearchResult)
-from backend.app.services.confidence_calculator import calculate_echo_score
-from backend.app.services.snippet_processor import \
-    generate_snippet_from_feedback
+from backend.app.schemas.snippets import (
+    CreateSnippetRequest,
+    CreateSnippetResponse,
+    SnippetFeedbackRequest,
+    SnippetFeedbackResponse,
+    SnippetSearchResult,
+)
+from backend.app.services.snippet_processor import generate_snippet_from_feedback
 from backend.app.services.snippet_repository import (
-    get_snippet_by_id, increment_feedback_and_recalculate_score)
-from backend.app.services.snippet_repository import \
-    search_snippets as repo_search_snippets
+    increment_feedback_and_recalculate_score,
+)
+from backend.app.services.snippet_repository import search_snippets as repo_search_snippets
 
 router = APIRouter(tags=["snippets"])
 
@@ -37,6 +36,8 @@ def create_snippet(
         source=payload.source or "user",
         tags=payload.tags,
     )
+
+    assert snippet.id is not None
     return CreateSnippetResponse(
         id=snippet.id,
         title=snippet.title,
@@ -59,8 +60,7 @@ def submit_snippet_feedback(
     if not snippet_id and payload.ticket_id:
         # try to ensure a snippet exists for that ticket
         try:
-            from backend.app.services.snippet_processor import \
-                ensure_snippet_for_feedback
+            from backend.app.services.snippet_processor import ensure_snippet_for_feedback
 
             snippet = ensure_snippet_for_feedback(
                 session=session,
@@ -68,10 +68,13 @@ def submit_snippet_feedback(
                 feedback_notes=payload.notes or "",
             )
             snippet_id = snippet.id
-        except Exception:
+        except Exception as e:
             raise HTTPException(
                 status_code=500, detail="failed to ensure snippet for ticket"
-            )
+            ) from e
+
+    if snippet_id is None:
+        raise HTTPException(status_code=500, detail="missing snippet_id")
 
     # Increment counters and recalc atomically
     try:
@@ -81,13 +84,14 @@ def submit_snippet_feedback(
     except ValueError as e:
         # bubble up not found as 404
         if str(e).lower().startswith("snippet not found"):
-            raise HTTPException(status_code=404, detail="Snippet not found")
-        raise HTTPException(status_code=500, detail="feedback update failed")
+            raise HTTPException(status_code=404, detail="Snippet not found") from e
+        raise HTTPException(status_code=500, detail="feedback update failed") from e
 
+    assert updated.id is not None
     return {"snippet_id": updated.id, "echo_score": updated.echo_score}
 
 
-@router.get("/snippets/search", response_model=List[SnippetSearchResult])
+@router.get("/snippets/search", response_model=list[SnippetSearchResult])
 def search_snippets(
     q: str = Query("", description="Search query"),
     limit: int = Query(10, ge=1, le=100),
@@ -99,16 +103,19 @@ def search_snippets(
         return []
 
     rows = repo_search_snippets(session, qv, limit=limit, offset=offset)
-    results = [
-        SnippetSearchResult(
-            id=r.id,
-            title=r.title,
-            summary=r.summary,
-            echo_score=r.echo_score,
-            success_count=getattr(r, "success_count", 0),
-            failure_count=getattr(r, "failure_count", 0),
-            ticket_id=getattr(r, "ticket_id", None),
+    results = []
+    for r in rows:
+        if r.id is None:
+            continue
+        results.append(
+            SnippetSearchResult(
+                id=r.id,
+                title=r.title,
+                summary=r.summary,
+                echo_score=r.echo_score,
+                success_count=getattr(r, "success_count", 0),
+                failure_count=getattr(r, "failure_count", 0),
+                ticket_id=getattr(r, "ticket_id", None),
+            )
         )
-        for r in rows
-    ]
     return results

@@ -1,28 +1,28 @@
+# ruff: noqa: B008
+
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlmodel import select
+from sqlalchemy import desc
+from sqlmodel import Session, col, select
 
 from backend.app.db import get_session
-from backend.app.models.ask_echo_log import AskEchoLog
 from backend.app.models.ask_echo_feedback import AskEchoFeedback
-from backend.app.models.ticket import Ticket
+from backend.app.models.ask_echo_log import AskEchoLog
+from backend.app.schemas.ask_echo import (
+    AskEchoRequest,
+    AskEchoResponse,
+)
 from backend.app.schemas.ask_echo_feedback import (
     AskEchoFeedbackCreate,
     AskEchoFeedbackRead,
     AskEchoFeedbackSummaryResponse,
 )
-from backend.app.schemas.ask_echo import (AskEchoReasoning,
-                                          AskEchoReasoningSnippet,
-                                          AskEchoReference, AskEchoRequest,
-                                          AskEchoResponse, AskEchoTicketSummary)
 from backend.app.schemas.insights import AskEchoLogDetail, AskEchoLogSummary
+from backend.app.schemas.snippets import SnippetSearchResult
 from backend.app.services.ask_echo_engine import AskEchoEngine, AskEchoEngineRequest
-
 
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
 
@@ -89,7 +89,7 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
     try:
         result = engine.run(session=session, req=AskEchoEngineRequest(query=req.q, limit=req.limit))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # Persist telemetry log (required for feedback loop).
     # For logging: capture snippet candidate ids/scores.
@@ -115,12 +115,26 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
         session.add(log)
         session.commit()
         session.refresh(log)
-    except Exception:
+    except Exception as e:
         logging.exception("failed to persist ask-echo log")
-        raise HTTPException(status_code=500, detail="failed to persist ask-echo log")
+        raise HTTPException(status_code=500, detail="failed to persist ask-echo log") from e
 
     if log.id is None:
         raise HTTPException(status_code=500, detail="ask-echo log id missing")
+
+    # Normalize snippet summaries to the public schema type.
+    # (The engine may return dict-shaped summaries for convenience.)
+    snippet_summaries: list[SnippetSearchResult] = []
+    for item in result.snippet_summaries or []:
+        if isinstance(item, SnippetSearchResult):
+            snippet_summaries.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        try:
+            snippet_summaries.append(SnippetSearchResult(**item))
+        except Exception:
+            continue
 
     return AskEchoResponse(
         answer_kind=result.answer_kind,  # type: ignore[arg-type]
@@ -128,7 +142,7 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
         query=req.q,
         answer=result.answer_text,
         suggested_tickets=result.ticket_summaries,
-        suggested_snippets=result.snippet_summaries,
+        suggested_snippets=snippet_summaries,
         kb_backed=result.kb_backed,
         kb_confidence=result.kb_confidence,
         mode=result.mode,
@@ -145,7 +159,7 @@ def list_ask_echo_logs(
 ):
     stmt = (
         select(AskEchoLog)
-        .order_by(AskEchoLog.created_at.desc())
+        .order_by(desc(col(AskEchoLog.created_at)))
         .offset(offset)
         .limit(limit)
     )

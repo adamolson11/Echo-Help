@@ -1,5 +1,4 @@
-from sqlmodel import Session
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from backend.app.models.embedding import Embedding
 from backend.app.models.ticket import Ticket
@@ -48,6 +47,9 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
         session.commit()
         session.refresh(ticket)
 
+    assert ticket.id is not None
+    ticket_id = ticket.id
+
     # Assign a human-friendly short_id for KB use (E-TKT-0001)
     try:
         ticket = assign_short_id(ticket, session)
@@ -66,13 +68,13 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
     # Idempotency: only create if one doesn't already exist.
     try:
         existing_embedding = session.exec(
-            select(Embedding).where(Embedding.ticket_id == ticket.id)
+            select(Embedding).where(Embedding.ticket_id == ticket_id)
         ).first()
         if existing_embedding is None:
             text_for_embedding = f"{ticket.summary}\n\n{ticket.description or ''}"
             vector = embed_text(text_for_embedding)
             embedding = Embedding(
-                ticket_id=ticket.id,
+                ticket_id=ticket_id,
                 text=text_for_embedding,
                 vector=vector,
                 model_name=MODEL_NAME,
@@ -89,7 +91,7 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
         # Idempotency: don't create duplicate ingest feedback for the same ticket.
         existing_feedback = session.exec(
             select(TicketFeedback).where(
-                TicketFeedback.ticket_id == ticket.id,
+                TicketFeedback.ticket_id == ticket_id,
                 TicketFeedback.query_text == thread.title,
                 TicketFeedback.helped == True,  # noqa: E712
             )
@@ -97,7 +99,7 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
 
         if existing_feedback is None:
             feedback = TicketFeedback(
-                ticket_id=ticket.id,
+                ticket_id=ticket_id,
                 helped=True,
                 rating=4,
                 query_text=thread.title,

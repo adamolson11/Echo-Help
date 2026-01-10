@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
@@ -9,7 +8,7 @@ from backend.app.core.time import utcnow
 
 
 class AskEchoLog(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     query: str = Field(index=True)
     top_score: float = 0.0
     kb_confidence: float = 0.0
@@ -18,11 +17,11 @@ class AskEchoLog(SQLModel, table=True):
 
     # Reasoning / audit fields (Week 3A)
     # JSON string of list of {"id": int, "score": float}
-    candidate_snippet_ids_json: Optional[str] = None
+    candidate_snippet_ids_json: str | None = None
     # JSON string of list of snippet ids actually used
-    chosen_snippet_ids_json: Optional[str] = None
+    chosen_snippet_ids_json: str | None = None
     # Overall EchoScore for this answer
-    echo_score: Optional[float] = None
+    echo_score: float | None = None
     # Optional free-text reasoning summary
-    reasoning_notes: Optional[str] = None
+    reasoning_notes: str | None = None
     created_at: datetime = Field(default_factory=utcnow, index=True)

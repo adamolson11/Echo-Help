@@ -27,8 +27,6 @@ fi
 
 echo "[OK] Port 8000 is free."
 
-# 3. Start backend server in backend/ (no reload for max compatibility)
-cd backend
-
+# 3. Start backend server (no reload for max compatibility)
 echo "[INFO] Launching FastAPI server on port 8000..."
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+PYTHONPATH="$PWD" uvicorn backend.app.main:app --host 0.0.0.0 --port 8000

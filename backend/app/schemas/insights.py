@@ -37,7 +37,7 @@ class FeedbackClustersResponse(SQLModel):
 
 class AskEchoLogsResponse(SQLModel):
     meta: Meta = Meta(kind="ask_echo_logs", version="v1")
-    items: list["AskEchoLogSummary"]
+    items: list[AskEchoLogSummary]
 
 
 class AskEchoLogSummary(SQLModel):

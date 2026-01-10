@@ -1,4 +1,3 @@
-from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -6,16 +5,16 @@ from pydantic import BaseModel
 class CreateSnippetRequest(BaseModel):
     title: str
     content_md: str
-    ticket_id: Optional[int] = None
-    source: Optional[str] = "user"
-    tags: Optional[List[str]] = None
+    ticket_id: int | None = None
+    source: str | None = "user"
+    tags: list[str] | None = None
 
 
 class CreateSnippetResponse(BaseModel):
     id: int
     title: str
-    summary: Optional[str]
-    content_md: Optional[str]
+    summary: str | None
+    content_md: str | None
     echo_score: float
 
 
@@ -23,20 +22,20 @@ class SnippetFeedbackRequest(BaseModel):
     # Accept either a `snippet_id` (preferred) or a `ticket_id` to allow
     # creating/reusing a snippet based on the ticket context. At least one
     # of these should be provided; router will validate presence.
-    snippet_id: Optional[int] = None
-    ticket_id: Optional[int] = None
+    snippet_id: int | None = None
+    ticket_id: int | None = None
     helped: bool
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class SnippetSearchResult(BaseModel):
     id: int
     title: str
-    summary: Optional[str]
+    summary: str | None
     echo_score: float
-    success_count: Optional[int] = 0
-    failure_count: Optional[int] = 0
-    ticket_id: Optional[int] = None
+    success_count: int | None = 0
+    failure_count: int | None = 0
+    ticket_id: int | None = None
 
 
 class SnippetFeedbackResponse(BaseModel):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 # ruff: noqa: B008
-
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
@@ -15,7 +14,6 @@ from ...models.snippets import SnippetFeedback, SolutionSnippet
 from ...models.ticket import Ticket
 from ...models.ticket_feedback import TicketFeedback
 from ...schemas.machine import MachineStatusResponse
-
 
 router = APIRouter(tags=["machine"])
 
