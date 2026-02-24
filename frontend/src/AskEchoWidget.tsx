@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import AskEchoReasoningDetails from "./components/AskEchoReasoning";
-import EvidenceDrawer from "./components/EvidenceDrawer";
-import TicketTable from "./components/TicketTable";
 import { formatApiError } from "./api/client";
 import {
   createTicketFeedback,
@@ -22,13 +20,6 @@ export default function AskEchoWidget() {
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [evidence, setEvidence] = useState<{
-    ticketId: number;
-    title: string;
-    summary?: string | null;
-    confidence?: number | null;
-  } | null>(null);
-
   // feedback UI state
   const [fbSubmitting, setFbSubmitting] = useState(false);
   const [fbSaved, setFbSaved] = useState(false);
@@ -79,43 +70,6 @@ export default function AskEchoWidget() {
 
     setSelectedFeedbackTicketId(pick);
   }, [response]);
-
-  function openInSearch(opts: { query?: string; ticketId?: number | null }) {
-    try {
-      // Persist the intent so Search can pick it up even if it isn't mounted yet.
-      try {
-        const payload = {
-          query: opts.query ?? q,
-          ticketId: opts.ticketId ?? null,
-        };
-        window.sessionStorage.setItem("echo-open-search", JSON.stringify(payload));
-      } catch (e) {
-        // no-op
-      }
-
-      // Navigate to the Search route (ConsoleShell listens to hash changes).
-      try {
-        if (!String(window.location.hash || "").startsWith("#/search")) {
-          window.location.hash = "#/search";
-        }
-      } catch (e) {
-        // no-op
-      }
-
-      const ev = new CustomEvent("echo-open-search", {
-        detail: {
-          query: opts.query ?? q,
-          ticketId: opts.ticketId ?? null,
-        },
-      });
-      // Fire async so route changes (if any) can start first.
-      window.setTimeout(() => window.dispatchEvent(ev), 0);
-      const el = document.querySelector("#root");
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    } catch (e) {
-      // no-op
-    }
-  }
 
   async function submitFeedback(helped: boolean) {
     setFbError(null);
@@ -212,54 +166,6 @@ export default function AskEchoWidget() {
     "mfa codes invalid",
     "outlook keeps asking for password",
   ];
-
-  const suggestedTickets = !response || isAskEchoError(response)
-    ? []
-    : Array.isArray(response.suggested_tickets)
-    ? response.suggested_tickets
-    : [];
-
-  const references = !response || isAskEchoError(response)
-    ? []
-    : Array.isArray(response.references)
-    ? response.references
-    : [];
-
-  function findTicketTitle(ticketId: number) {
-    const match = suggestedTickets.find((t) => t.id === ticketId);
-    return match?.summary || match?.title || `Ticket ${ticketId}`;
-  }
-
-  function findTicketSummary(ticketId: number) {
-    const match = suggestedTickets.find((t) => t.id === ticketId);
-    return match?.summary || match?.title || null;
-  }
-
-  const relatedRows = references.map((ref) => ({
-    id: ref.ticket_id,
-    title: findTicketTitle(ref.ticket_id),
-    confidence: typeof ref.confidence === "number" ? ref.confidence : null,
-    onEvidence: () =>
-      setEvidence({
-        ticketId: ref.ticket_id,
-        title: findTicketTitle(ref.ticket_id),
-        summary: findTicketSummary(ref.ticket_id),
-        confidence: typeof ref.confidence === "number" ? ref.confidence : null,
-      }),
-  }));
-
-  const suggestedRows = suggestedTickets.map((ticket) => ({
-    id: ticket.id,
-    title: ticket.summary || ticket.title || `Ticket ${ticket.id}`,
-    confidence: null,
-    onEvidence: () =>
-      setEvidence({
-        ticketId: ticket.id,
-        title: ticket.summary || ticket.title || `Ticket ${ticket.id}`,
-        summary: ticket.summary || ticket.title || null,
-        confidence: null,
-      }),
-  }));
 
   return (
     <div className="ask-echo">
@@ -414,22 +320,9 @@ export default function AskEchoWidget() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: "16px" }}>
-            <TicketTable title="Related tickets" rows={relatedRows} />
-            <TicketTable title="Suggested tickets" rows={suggestedRows} />
-          </div>
+          <div style={{ display: "grid", gap: "16px" }} />
         </div>
       )}
-
-      <EvidenceDrawer
-        open={Boolean(evidence)}
-        evidence={evidence}
-        onClose={() => setEvidence(null)}
-        onOpenSearch={(ticketId) => {
-          openInSearch({ query: q, ticketId });
-          setEvidence(null);
-        }}
-      />
     </div>
   );
 }
