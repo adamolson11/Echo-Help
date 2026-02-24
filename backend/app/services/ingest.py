@@ -4,7 +4,12 @@ from backend.app.models.embedding import Embedding
 from backend.app.models.ticket import Ticket
 from backend.app.models.ticket_feedback import TicketFeedback
 from backend.app.schemas.ingest import IngestThread
-from backend.app.services.embeddings import MODEL_NAME, embed_text
+from backend.app.services.embeddings import (
+    MODEL_NAME,
+    embed_text,
+    embeddings_enabled,
+    log_embeddings_disabled_once,
+)
 from backend.app.services.tickets import assign_short_id
 
 
@@ -71,17 +76,20 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
             select(Embedding).where(Embedding.ticket_id == ticket_id)
         ).first()
         if existing_embedding is None:
-            text_for_embedding = f"{ticket.summary}\n\n{ticket.description or ''}"
-            vector = embed_text(text_for_embedding)
-            embedding = Embedding(
-                ticket_id=ticket_id,
-                text=text_for_embedding,
-                vector=vector,
-                model_name=MODEL_NAME,
-            )
-            session.add(embedding)
-            session.commit()
-            session.refresh(embedding)
+            if not embeddings_enabled():
+                log_embeddings_disabled_once()
+            else:
+                text_for_embedding = f"{ticket.summary}\n\n{ticket.description or ''}"
+                vector = embed_text(text_for_embedding)
+                embedding = Embedding(
+                    ticket_id=ticket_id,
+                    text=text_for_embedding,
+                    vector=vector,
+                    model_name=MODEL_NAME,
+                )
+                session.add(embedding)
+                session.commit()
+                session.refresh(embedding)
     except Exception:
         # Don't let embedding failures block ingest; log or handle later.
         # For now, silently continue.

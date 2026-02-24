@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 
 # ruff: noqa: B008
 from fastapi import APIRouter, Depends, HTTPException
-from sklearn.cluster import KMeans
+try:
+    from sklearn.cluster import KMeans
+except ModuleNotFoundError:
+    KMeans = None
 from sqlmodel import Session, select
 
 from ...db import get_session
@@ -27,7 +31,7 @@ from ...schemas.insights import (
     TicketPatternRadarResponse,
     UnhelpfulExample,
 )
-from ...services.embeddings import embed_text
+from ...services.embeddings import embed_text, embeddings_enabled, log_embeddings_disabled_once
 from ...services.pattern_radar import extract_ticket_patterns, get_snippet_pattern_radar
 
 router = APIRouter(
@@ -79,6 +83,12 @@ def get_ticket_feedback_clusters(
     max_examples_per_cluster: int = 3,
     session: Session = Depends(get_session),
 ) -> FeedbackClustersResponse:
+    if not embeddings_enabled():
+        log_embeddings_disabled_once()
+        return FeedbackClustersResponse(clusters=[])
+    if KMeans is None:
+        logging.getLogger(__name__).warning("Clustering disabled: scikit-learn not installed")
+        return FeedbackClustersResponse(clusters=[])
     # 1. Load feedback with non-empty resolution_notes
     query = select(TicketFeedback).where(
         TicketFeedback.resolution_notes.is_not(None)  # type: ignore[reportAttributeAccessIssue]
