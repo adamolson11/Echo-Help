@@ -1,5 +1,7 @@
 from collections.abc import Sequence
+import hashlib
 import logging
+import math
 import os
 
 
@@ -90,12 +92,33 @@ if embeddings_enabled():
 
 else:
 
+    def _fallback_vector(text: str, dim: int = 8) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8", "ignore")).digest()
+        values = [b / 255.0 for b in digest[:dim]]
+        return values
+
     def cosine_similarity(a, b):
         _log_disabled_once()
-        return 0.0
+        if not a or not b:
+            return 0.0
+        length = min(len(a), len(b))
+        if length == 0:
+            return 0.0
+        dot = 0.0
+        norm_a = 0.0
+        norm_b = 0.0
+        for i in range(length):
+            va = float(a[i])
+            vb = float(b[i])
+            dot += va * vb
+            norm_a += va * va
+            norm_b += vb * vb
+        if norm_a == 0.0 or norm_b == 0.0:
+            return 0.0
+        return dot / (math.sqrt(norm_a) * math.sqrt(norm_b))
 
     def embed_text(text: str | Sequence[str]):
         _log_disabled_once()
         if isinstance(text, str):
-            return []
-        return [[] for _ in text]
+            return _fallback_vector(text)
+        return [_fallback_vector(item) for item in text]
