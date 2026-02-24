@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import AskEchoReasoningDetails from "./components/AskEchoReasoning";
+import EvidenceDrawer from "./components/EvidenceDrawer";
+import TicketTable from "./components/TicketTable";
 import { formatApiError } from "./api/client";
 import {
   createTicketFeedback,
@@ -20,6 +22,12 @@ export default function AskEchoWidget() {
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [evidence, setEvidence] = useState<{
+    ticketId: number;
+    title: string;
+    summary?: string | null;
+    confidence?: number | null;
+  } | null>(null);
 
   // feedback UI state
   const [fbSubmitting, setFbSubmitting] = useState(false);
@@ -205,16 +213,64 @@ export default function AskEchoWidget() {
     "outlook keeps asking for password",
   ];
 
+  const suggestedTickets = !response || isAskEchoError(response)
+    ? []
+    : Array.isArray(response.suggested_tickets)
+    ? response.suggested_tickets
+    : [];
+
+  const references = !response || isAskEchoError(response)
+    ? []
+    : Array.isArray(response.references)
+    ? response.references
+    : [];
+
+  function findTicketTitle(ticketId: number) {
+    const match = suggestedTickets.find((t) => t.id === ticketId);
+    return match?.summary || match?.title || `Ticket ${ticketId}`;
+  }
+
+  function findTicketSummary(ticketId: number) {
+    const match = suggestedTickets.find((t) => t.id === ticketId);
+    return match?.summary || match?.title || null;
+  }
+
+  const relatedRows = references.map((ref) => ({
+    id: ref.ticket_id,
+    title: findTicketTitle(ref.ticket_id),
+    confidence: typeof ref.confidence === "number" ? ref.confidence : null,
+    onEvidence: () =>
+      setEvidence({
+        ticketId: ref.ticket_id,
+        title: findTicketTitle(ref.ticket_id),
+        summary: findTicketSummary(ref.ticket_id),
+        confidence: typeof ref.confidence === "number" ? ref.confidence : null,
+      }),
+  }));
+
+  const suggestedRows = suggestedTickets.map((ticket) => ({
+    id: ticket.id,
+    title: ticket.summary || ticket.title || `Ticket ${ticket.id}`,
+    confidence: null,
+    onEvidence: () =>
+      setEvidence({
+        ticketId: ticket.id,
+        title: ticket.summary || ticket.title || `Ticket ${ticket.id}`,
+        summary: ticket.summary || ticket.title || null,
+        confidence: null,
+      }),
+  }));
+
   return (
-    <div className="space-y-2">
-      <div className="text-sm text-slate-300">
+    <div className="ask-echo">
+      <div className="ask-echo__intro">
         Ask Echo about a support issue to get a suggested fix and the most relevant past tickets.
       </div>
 
-      <div className="flex gap-2">
+      <div className="ask-echo__input-row">
         <input
           ref={inputRef}
-          className="flex-1 rounded-md bg-slate-950/60 border border-slate-700 px-3 py-2 text-slate-100"
+          className="op-input"
           placeholder="Ask Echo a question about tickets..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -222,7 +278,7 @@ export default function AskEchoWidget() {
         />
         <button
           type="button"
-          className="rounded-md bg-emerald-500 px-3 py-2 font-medium text-slate-900"
+          className="op-button op-button--primary"
           onClick={ask}
           disabled={loading}
         >
@@ -231,13 +287,13 @@ export default function AskEchoWidget() {
       </div>
 
       {!q.trim() && !response && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span className="mr-1">Try an example:</span>
+        <div className="ask-echo__examples">
+          <span>Try an example:</span>
           {tryExamples.map((example) => (
             <button
               key={example}
               type="button"
-              className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
+              className="operator-pill"
               onClick={() => {
                 setQ(example);
                 setResponse(null);
@@ -254,135 +310,62 @@ export default function AskEchoWidget() {
         </div>
       )}
 
-      {response && (
-        <div className="mt-3">
-          {isAskEchoError(response) ? (
-            <div className="text-sm text-rose-400">{response.error}</div>
-          ) : (
-            <>
-              <div className="whitespace-pre-wrap text-sm text-slate-200">{response.answer}</div>
+      {loading && <div className="state-panel">Thinking through your history...</div>}
 
-              <div className="mt-2 text-xs text-slate-400">
+      {response && isAskEchoError(response) && (
+        <div className="state-panel">{response.error}</div>
+      )}
+
+      {response && !isAskEchoError(response) && (
+        <div className="ask-echo__grid">
+          <div style={{ display: "grid", gap: "16px" }}>
+            <div className="ask-echo__card">
+              <div className="ask-echo__card-title">Answer</div>
+              <div className="ask-echo__answer">{response.answer}</div>
+              <div className="ask-echo__meta">
                 {response.answer_kind === "grounded" || response.mode === "kb_answer" ? (
-                  <span className="text-emerald-300">Based on your past tickets</span>
+                  <span className="ask-echo__badge">Based on your past tickets</span>
                 ) : response.answer_kind === "ungrounded" || response.mode === "general_answer" ? (
-                  <span className="text-amber-300">General guidance (not found in your history)</span>
+                  <span className="ask-echo__badge badge--warning">General guidance</span>
                 ) : (
-                  <span>Mode: {response.mode ?? "unknown"}</span>
+                  <span className="ask-echo__badge">Mode: {response.mode ?? "unknown"}</span>
                 )}
               </div>
+            </div>
 
-              {response.reasoning && (
-                <AskEchoReasoningDetails reasoning={response.reasoning} />
-              )}
+            {response.reasoning && <AskEchoReasoningDetails reasoning={response.reasoning} />}
 
-              {Array.isArray(response.references) && response.references.length > 0 && (
-                <div className="mt-2 text-xs text-slate-300">
-                  <div className="font-semibold text-xs">Related tickets</div>
-                  <ul className="mt-1 space-y-1">
-                    {response.references.map((ref, idx: number) => {
-                      // try to find a matching ticket title in results
-                      const ticket = response.suggested_tickets.find((r) => String(r.id) === String(ref.ticket_id));
-                      const title = ticket ? (ticket.summary || ticket.title || `Ticket ${ref.ticket_id}`) : `Ticket ${ref.ticket_id}`;
-                      return (
-                        <li key={idx} className="text-[11px] flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openInSearch({ query: q, ticketId: ref.ticket_id })}
-                            className="text-left underline hover:text-slate-200"
-                          >
-                            • #{ref.ticket_id} – {title}
-                            {typeof ref.confidence === "number" && (
-                              <span className="text-slate-500 ml-2">({Math.round(ref.confidence * 100)}%)</span>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openInSearch({ query: q, ticketId: ref.ticket_id })}
-                            className="shrink-0 inline-flex items-center rounded border border-indigo-500/40 bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/30"
-                            title="Open Search and highlight this ticket"
-                          >
-                            View evidence
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-
-              {Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0 && (
-                <div className="mt-3 text-xs text-slate-300">
-                  <div className="font-semibold text-xs">Suggested tickets</div>
-                  <ul className="mt-1 space-y-1">
-                    {response.suggested_tickets.slice(0, 5).map((t) => (
-                      <li key={String(t.id)} className="text-[11px] flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openInSearch({ query: q, ticketId: t.id })}
-                          className="text-left underline hover:text-slate-200"
-                        >
-                          • #{t.id} – {t.summary || t.title || `Ticket ${t.id}`}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openInSearch({ query: q, ticketId: t.id })}
-                          className="shrink-0 inline-flex items-center rounded border border-indigo-500/40 bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/30"
-                          title="Open Search and highlight this ticket"
-                        >
-                          View evidence
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0 && (
-                <div className="mt-3 text-xs text-slate-300">
-                  <div className="font-semibold text-xs">Suggested snippets</div>
-                  <ul className="mt-1 space-y-1">
-                    {response.suggested_snippets.slice(0, 5).map((s) => (
-                      <li key={String(s.id)} className="text-[11px]">
-                        <span className="text-slate-200">• {s.title}</span>
+            <div className="ask-echo__card">
+              <div className="ask-echo__card-title">Suggested snippets</div>
+              {Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0 ? (
+                <div className="snippet-list">
+                  {response.suggested_snippets.slice(0, 5).map((s) => (
+                    <div key={String(s.id)} className="snippet-item">
+                      <div className="snippet-item__title">
+                        <span>{s.title}</span>
                         {typeof s.echo_score === "number" && (
-                          <span className="text-slate-500 ml-2">(score {s.echo_score.toFixed(2)})</span>
+                          <span className="ask-echo__badge">{s.echo_score.toFixed(2)}</span>
                         )}
-                        {s.summary && <div className="text-slate-400">{s.summary}</div>}
-                        {s.ticket_id && (
-                          <div className="mt-1 flex flex-wrap gap-2">
-                            <button
-                              onClick={() => openInSearch({ query: q, ticketId: s.ticket_id })}
-                              className="inline-flex items-center rounded border border-indigo-500/40 bg-indigo-500/20 px-2 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/30"
-                              title="Open Search and highlight the linked ticket"
-                            >
-                              View evidence
-                            </button>
-                            <button
-                              onClick={() => openInSearch({ query: q, ticketId: s.ticket_id })}
-                              className="inline-flex items-center rounded border border-slate-700 bg-slate-900/30 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900/60"
-                              title="Open the linked ticket"
-                            >
-                              Open ticket #{s.ticket_id}
-                            </button>
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                      </div>
+                      {s.summary && <div className="snippet-item__meta">{s.summary}</div>}
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <div className="state-panel">No snippets returned yet.</div>
               )}
+            </div>
 
-              <div className="mt-3 flex items-center gap-2">
-                <span className="text-xs text-slate-300">Was this helpful?</span>
-                {fbSaved && (
-                  <span className="text-xs text-emerald-300">Saved</span>
-                )}
+            <div className="ask-echo__card">
+              <div className="ask-echo__card-title">Feedback</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <span>Was this helpful?</span>
+                {fbSaved && <span className="ask-echo__badge">Saved</span>}
                 <button
                   type="button"
                   onClick={() => submitFeedback(true)}
                   disabled={fbSubmitting || fbSaved}
-                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-xs"
+                  className="op-button op-button--primary"
                 >
                   👍 Yes
                 </button>
@@ -390,48 +373,63 @@ export default function AskEchoWidget() {
                   type="button"
                   onClick={() => setFbNotesVisible(true)}
                   disabled={fbSubmitting || fbSaved}
-                  className="px-2 py-1 bg-rose-600 hover:bg-rose-500 rounded text-xs"
+                  className="op-button op-button--danger"
                 >
                   👎 No
                 </button>
               </div>
 
               {fbNotesVisible && (
-                <div className="mt-2">
+                <div className="ask-echo__meta">
                   <textarea
+                    rows={3}
+                    className="op-input"
+                    placeholder="What went wrong or what did you do to resolve it?"
                     value={fbNotes}
                     onChange={(e) => setFbNotes(e.target.value)}
-                    className="w-full rounded bg-slate-700 px-2 py-1 text-sm text-slate-100"
-                    rows={3}
-                    placeholder="What actually fixed it or why this didn't help?"
                   />
-                  <div className="mt-2 flex gap-2">
+                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
                     <button
                       type="button"
+                      className="op-button op-button--ghost"
                       onClick={() => submitFeedback(false)}
-                      disabled={fbSubmitting || fbSaved}
-                      className="px-3 py-1 bg-rose-600 hover:bg-rose-500 rounded text-xs"
+                      disabled={fbSubmitting}
                     >
                       Submit
                     </button>
                     <button
+                      type="button"
+                      className="op-button op-button--ghost"
                       onClick={() => {
                         setFbNotesVisible(false);
                         setFbNotes("");
                       }}
-                      disabled={fbSubmitting}
-                      className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs"
                     >
                       Cancel
                     </button>
                   </div>
-                  {fbError && <div className="mt-2 text-xs text-rose-400">{fbError}</div>}
+                  {fbError && <div className="ask-echo__meta">{fbError}</div>}
                 </div>
               )}
-            </>
-          )}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: "16px" }}>
+            <TicketTable title="Related tickets" rows={relatedRows} />
+            <TicketTable title="Suggested tickets" rows={suggestedRows} />
+          </div>
         </div>
       )}
+
+      <EvidenceDrawer
+        open={Boolean(evidence)}
+        evidence={evidence}
+        onClose={() => setEvidence(null)}
+        onOpenSearch={(ticketId) => {
+          openInSearch({ query: q, ticketId });
+          setEvidence(null);
+        }}
+      />
     </div>
   );
 }

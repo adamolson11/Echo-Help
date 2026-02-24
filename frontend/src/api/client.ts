@@ -12,10 +12,15 @@ export class ApiError extends Error {
   }
 }
 
+let didLogAskEchoUrl = false;
+
 function joinUrl(base: string, path: string) {
   if (!base) return path;
   if (!path) return base;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (base.endsWith("/api") && path.startsWith("/api/")) {
+    return `${base}${path.slice(4)}`;
+  }
   if (!path.startsWith("/")) return `${base}/${path}`;
   return `${base}${path}`;
 }
@@ -25,6 +30,11 @@ export async function apiFetch<T>(
   init?: RequestInit
 ): Promise<T> {
   const url = joinUrl(API_BASE, path);
+  if (import.meta.env.DEV && !didLogAskEchoUrl && path === "/api/ask-echo") {
+    didLogAskEchoUrl = true;
+    // eslint-disable-next-line no-console
+    console.debug("Ask Echo request URL:", url);
+  }
   const res = await fetch(url, init);
 
   // best-effort parse; some endpoints could return empty body
