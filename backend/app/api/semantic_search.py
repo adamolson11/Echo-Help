@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 # ruff: noqa: B008
-import numpy as np
 from fastapi import APIRouter, Depends
 from sqlalchemy import or_
 from sqlmodel import Session, col, select
@@ -10,7 +9,7 @@ from ..db import get_session
 from ..models.embedding import Embedding
 from ..models.ticket import Ticket
 from ..schemas.semantic_search import SemanticSearchRequest, SemanticSearchResult
-from ..services.embeddings import embed_text
+from ..services.embeddings import embed_text, embeddings_enabled, log_embeddings_disabled_once
 
 router = APIRouter(tags=["semantic-search"])
 
@@ -22,6 +21,12 @@ def semantic_search(
     q = (body.q or "").strip()
     if not q:
         return []
+
+    if not embeddings_enabled():
+        log_embeddings_disabled_once()
+        return []
+
+    import numpy as np
 
     query_vec = embed_text(q)
     query_arr = np.asarray(query_vec, dtype=float)

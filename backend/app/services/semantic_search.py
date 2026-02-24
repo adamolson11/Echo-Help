@@ -3,7 +3,13 @@ import logging
 from sqlmodel import Session, select
 
 from ..models import Embedding, Ticket
-from .embeddings import MODEL_NAME, cosine_similarity, embed_text
+from .embeddings import (
+    MODEL_NAME,
+    cosine_similarity,
+    embed_text,
+    embeddings_enabled,
+    log_embeddings_disabled_once,
+)
 
 
 def semantic_search_tickets(
@@ -11,6 +17,10 @@ def semantic_search_tickets(
 ) -> list[tuple[float, Ticket]]:
     q = (query or "").strip()
     if not q:
+        return []
+
+    if not embeddings_enabled():
+        log_embeddings_disabled_once()
         return []
 
     query_vec = embed_text(q)
