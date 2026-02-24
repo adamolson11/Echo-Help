@@ -1,5 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* App-wide base styles (replace Vite starter CSS).
-   Keep this minimal; most styling is done via Tailwind-like classes.
+  Keep this minimal; most styling is done via Tailwind-like classes.
 */
 
 :root {
