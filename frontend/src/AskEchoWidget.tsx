@@ -168,63 +168,89 @@ export default function AskEchoWidget() {
   ];
 
   return (
-    <div className="ask-echo">
-      <div className="ask-echo__intro">
-        Ask Echo about a support issue to get a suggested fix and the most relevant past tickets.
-      </div>
+    <div className="ask-echo-shell">
+      <div className="ask-echo">
+        <div className="ask-echo__hero">
+          <header className="ask-echo__header">
+            <div>
+              <h1 className="ask-echo__title">Ask Echo</h1>
+              <p className="ask-echo__subtitle">
+                Ask a question to search resolved tickets and get a confident, grounded answer.
+              </p>
+              <p className="ask-echo__lede">
+                Echo remembers what worked before and turns support history into next-step guidance.
+              </p>
+            </div>
+          </header>
 
-      <div className="ask-echo__input-row">
-        <input
-          ref={inputRef}
-          className="op-input"
-          placeholder="Ask Echo a question about tickets..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && ask()}
-        />
-        <button
-          type="button"
-          className="op-button op-button--primary"
-          onClick={ask}
-          disabled={loading}
-        >
-          {loading ? "Thinking..." : "Ask Echo"}
-        </button>
-      </div>
-
-      {!q.trim() && !response && (
-        <div className="ask-echo__examples">
-          <span>Try an example:</span>
-          {tryExamples.map((example) => (
-            <button
-              key={example}
-              type="button"
-              className="operator-pill"
-              onClick={() => {
-                setQ(example);
-                setResponse(null);
-                try {
-                  inputRef.current?.focus();
-                } catch {
-                  // no-op
-                }
-              }}
-            >
-              {example}
+          <div className="ask-echo__command">
+          <input
+            ref={inputRef}
+            className="op-input ask-echo__input"
+            placeholder="Ask Echo a question about tickets..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && ask()}
+          />
+          <button
+            type="button"
+            className="op-button op-button--primary ask-echo__submit"
+            onClick={ask}
+            disabled={loading}
+          >
+            {loading ? "Thinking..." : "Ask Echo"}
             </button>
-          ))}
+          </div>
         </div>
-      )}
 
-      {loading && <div className="state-panel">Thinking through your history...</div>}
+        {!q.trim() && !response && (
+          <div className="ask-echo__empty">
+            <div className="ask-echo__card ask-echo__empty-card">
+              Ask a question to search resolved tickets.
+            </div>
+            <div className="ask-echo__examples">
+              <span>Try an example:</span>
+              {tryExamples.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  className="operator-pill"
+                  onClick={() => {
+                    setQ(example);
+                    setResponse(null);
+                    try {
+                      inputRef.current?.focus();
+                    } catch {
+                      // no-op
+                    }
+                  }}
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {response && isAskEchoError(response) && (
-        <div className="state-panel">{response.error}</div>
-      )}
+        {loading && (
+          <div className="ask-echo__loading-card">
+            <div className="ask-echo__spinner" />
+            <div>
+              <div className="ask-echo__loading-title">Thinking…</div>
+              <div className="ask-echo__loading-sub">Searching tickets and snippets.</div>
+            </div>
+          </div>
+        )}
 
-      {response && !isAskEchoError(response) && (
-        <div className="ask-echo__grid">
-          <div style={{ display: "grid", gap: "16px" }}>
+        {response && isAskEchoError(response) && (
+          <div className="ask-echo__error">
+            <strong>Something went wrong.</strong> {response.error}
+          </div>
+        )}
+
+        {response && !isAskEchoError(response) && (
+          <div className="ask-echo__grid">
+            <div className="ask-echo__stack">
             <div className="ask-echo__card">
               <div className="ask-echo__card-title">Answer</div>
               <div className="ask-echo__answer">{response.answer}</div>
@@ -264,9 +290,9 @@ export default function AskEchoWidget() {
 
             <div className="ask-echo__card">
               <div className="ask-echo__card-title">Feedback</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div className="ask-echo__feedback-row">
                 <span>Was this helpful?</span>
-                {fbSaved && <span className="ask-echo__badge">Saved</span>}
+                {fbSaved && <span className="ask-echo__badge ask-echo__badge--success">Saved</span>}
                 <button
                   type="button"
                   onClick={() => submitFeedback(true)}
@@ -318,11 +344,10 @@ export default function AskEchoWidget() {
                 </div>
               )}
             </div>
+            </div>
           </div>
-
-          <div style={{ display: "grid", gap: "16px" }} />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

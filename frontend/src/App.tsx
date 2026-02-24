@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./App.css";
 import ConsoleShell, { getInitialConsoleRoute, type ConsoleRoute } from "./ConsoleShell";
 import AskEchoPage from "./pages/AskEchoPage";
 import SearchPage from "./pages/SearchPage";
