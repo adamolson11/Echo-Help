@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import AskEchoReasoningDetails from "./components/AskEchoReasoning";
-import EvidenceDrawer from "./components/EvidenceDrawer";
-import TicketTable from "./components/TicketTable";
 import { formatApiError } from "./api/client";
 import {
   createTicketFeedback,
@@ -22,12 +20,6 @@ export default function AskEchoWidget() {
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [evidence, setEvidence] = useState<{
-    ticketId: number;
-    title: string;
-    summary?: string | null;
-    confidence?: number | null;
-  } | null>(null);
 
   // feedback UI state
   const [fbSubmitting, setFbSubmitting] = useState(false);
@@ -230,35 +222,18 @@ export default function AskEchoWidget() {
     return match?.summary || match?.title || `Ticket ${ticketId}`;
   }
 
-  function findTicketSummary(ticketId: number) {
-    const match = suggestedTickets.find((t) => t.id === ticketId);
-    return match?.summary || match?.title || null;
-  }
-
   const relatedRows = references.map((ref) => ({
     id: ref.ticket_id,
     title: findTicketTitle(ref.ticket_id),
     confidence: typeof ref.confidence === "number" ? ref.confidence : null,
-    onEvidence: () =>
-      setEvidence({
-        ticketId: ref.ticket_id,
-        title: findTicketTitle(ref.ticket_id),
-        summary: findTicketSummary(ref.ticket_id),
-        confidence: typeof ref.confidence === "number" ? ref.confidence : null,
-      }),
+    onEvidence: () => openInSearch({ query: q, ticketId: ref.ticket_id }),
   }));
 
   const suggestedRows = suggestedTickets.map((ticket) => ({
     id: ticket.id,
     title: ticket.summary || ticket.title || `Ticket ${ticket.id}`,
     confidence: null,
-    onEvidence: () =>
-      setEvidence({
-        ticketId: ticket.id,
-        title: ticket.summary || ticket.title || `Ticket ${ticket.id}`,
-        summary: ticket.summary || ticket.title || null,
-        confidence: null,
-      }),
+    onEvidence: () => openInSearch({ query: q, ticketId: ticket.id }),
   }));
 
   return (
@@ -415,21 +390,54 @@ export default function AskEchoWidget() {
           </div>
 
           <div style={{ display: "grid", gap: "16px" }}>
-            <TicketTable title="Related tickets" rows={relatedRows} />
-            <TicketTable title="Suggested tickets" rows={suggestedRows} />
+            <div className="ask-echo__card">
+              <div className="ask-echo__card-title">Related tickets</div>
+              {relatedRows.length === 0 ? (
+                <div className="state-panel">No related tickets yet.</div>
+              ) : (
+                <ul className="snippet-list">
+                  {relatedRows.map((row) => (
+                    <li key={row.id} className="snippet-item">
+                      <div className="snippet-item__title">
+                        <span>#{row.id} — {row.title}</span>
+                        {typeof row.confidence === "number" && (
+                          <span className="ask-echo__badge">
+                            {Math.round(row.confidence * 100)}%
+                          </span>
+                        )}
+                      </div>
+                      <button type="button" className="op-button op-button--ghost" onClick={row.onEvidence}>
+                        View
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="ask-echo__card">
+              <div className="ask-echo__card-title">Suggested tickets</div>
+              {suggestedRows.length === 0 ? (
+                <div className="state-panel">No suggested tickets yet.</div>
+              ) : (
+                <ul className="snippet-list">
+                  {suggestedRows.map((row) => (
+                    <li key={row.id} className="snippet-item">
+                      <div className="snippet-item__title">
+                        <span>#{row.id} — {row.title}</span>
+                      </div>
+                      <button type="button" className="op-button op-button--ghost" onClick={row.onEvidence}>
+                        View
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      <EvidenceDrawer
-        open={Boolean(evidence)}
-        evidence={evidence}
-        onClose={() => setEvidence(null)}
-        onOpenSearch={(ticketId) => {
-          openInSearch({ query: q, ticketId });
-          setEvidence(null);
-        }}
-      />
     </div>
   );
 }

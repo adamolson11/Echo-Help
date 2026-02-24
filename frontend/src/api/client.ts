@@ -18,9 +18,6 @@ function joinUrl(base: string, path: string) {
   if (!base) return path;
   if (!path) return base;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  if (base.endsWith("/api") && path.startsWith("/api/")) {
-    return `${base}${path.slice(4)}`;
-  }
   if (!path.startsWith("/")) return `${base}/${path}`;
   return `${base}${path}`;
 }
