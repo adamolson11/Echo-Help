@@ -1,3 +1,230 @@
-/* Intentionally empty: Vite starter styles removed.
-   Keep App-level styling colocated with components.
-*/
+/* App shell polish for ConsoleShell utility classes. */
+
+.min-h-screen {
+   min-height: 100vh;
+   background: #eef2f7;
+   color: #0f172a;
+}
+
+.bg-gradient-to-br {
+   background: radial-gradient(circle at top, rgba(15, 23, 42, 0.08), transparent 55%),
+      radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.12), transparent 45%),
+      #eef2f7;
+}
+
+.text-slate-100 {
+   color: #0f172a;
+}
+
+.text-slate-300 {
+   color: #64748b;
+}
+
+.text-slate-400 {
+   color: #64748b;
+}
+
+.mx-auto {
+   margin-left: auto;
+   margin-right: auto;
+}
+
+.w-full {
+   width: 100%;
+}
+
+.max-w-7xl {
+   max-width: 1200px;
+}
+
+.px-4 {
+   padding-left: 24px;
+   padding-right: 24px;
+}
+
+.py-6 {
+   padding-top: 28px;
+   padding-bottom: 28px;
+}
+
+.mb-4 {
+   margin-bottom: 18px;
+}
+
+.flex {
+   display: flex;
+}
+
+.items-start {
+   align-items: flex-start;
+}
+
+.items-center {
+   align-items: center;
+}
+
+.justify-between {
+   justify-content: space-between;
+}
+
+.gap-4 {
+   gap: 16px;
+}
+
+.gap-2 {
+   gap: 8px;
+}
+
+.grid {
+   display: grid;
+   gap: 16px;
+}
+
+.rounded-2xl {
+   border-radius: 18px;
+}
+
+.rounded-full {
+   border-radius: 999px;
+}
+
+.border {
+   border: 1px solid #e2e8f0;
+}
+
+.border-transparent {
+   border-color: transparent;
+}
+
+.border-slate-800 {
+   border-color: #e2e8f0;
+}
+
+.bg-slate-900\/60 {
+   background: rgba(255, 255, 255, 0.8);
+}
+
+.backdrop-blur {
+   backdrop-filter: blur(18px);
+}
+
+.p-3 {
+   padding: 12px;
+}
+
+.p-4 {
+   padding: 20px;
+}
+
+.sm\:p-6 {
+   padding: 24px;
+}
+
+.text-2xl {
+   font-size: 26px;
+}
+
+.text-sm {
+   font-size: 14px;
+}
+
+.text-xs {
+   font-size: 12px;
+}
+
+.font-bold {
+   font-weight: 700;
+}
+
+.font-medium {
+   font-weight: 600;
+}
+
+.font-semibold {
+   font-weight: 600;
+}
+
+.uppercase {
+   text-transform: uppercase;
+}
+
+.tracking-tight {
+   letter-spacing: -0.01em;
+}
+
+.tracking-wide {
+   letter-spacing: 0.12em;
+}
+
+.transition {
+   transition: all 0.2s ease;
+}
+
+.text-left {
+   text-align: left;
+}
+
+.min-h-screen header {
+   background: #ffffff;
+   border: 1px solid #e2e8f0;
+   padding: 16px 18px;
+   border-radius: 16px;
+   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.min-h-screen header > div:first-child {
+   display: flex;
+   flex-direction: column;
+   gap: 2px;
+}
+
+.min-h-screen nav {
+   background: #ffffff;
+   border: 1px solid #e2e8f0;
+   padding: 12px;
+   box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
+}
+
+.min-h-screen nav button {
+   border-radius: 12px;
+   padding: 10px 12px;
+   border: 1px solid transparent;
+   background: #f8fafc;
+   color: #0f172a;
+}
+
+.min-h-screen nav button:hover {
+   border-color: #cbd5f5;
+   background: #eef2ff;
+}
+
+.min-h-screen nav button[class*="bg-indigo-500"] {
+   background: #1f4bff;
+   color: #ffffff;
+   border-color: #1f4bff;
+}
+
+.min-h-screen nav .border-t {
+   display: none;
+}
+
+.min-h-screen main {
+   background: #f8fafc;
+   border: 1px solid #e2e8f0;
+   border-radius: 18px;
+   box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+}
+
+@media (min-width: 900px) {
+   .md\:grid-cols-\[240px\,1fr\] {
+      grid-template-columns: 240px 1fr;
+   }
+}
+
+@media (max-width: 900px) {
+   .min-h-screen header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+   }
+}
