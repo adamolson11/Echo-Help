@@ -47,6 +47,14 @@ Frontend refactor freeze (Phase 1):
 - Embeddings are created once per ticket.
 - Resolved threads create at most one “resolved via ingest” feedback row.
 
+## Embeddings disabled mode
+
+- Embeddings may be disabled if `sentence_transformers` is missing or `ECHO_EMBEDDINGS=off`.
+- When disabled, deterministic fallback embeddings are stored (dim=8).
+- If ML embeddings are later enabled (e.g., 384-d), prior fallback vectors will not match dims
+	and will be skipped in semantic search.
+- Mitigation: re-embed or re-ingest tickets once ML deps are installed.
+
 ## Deprecation warnings
 
 You may see warnings about `datetime.utcnow()` deprecation. We’ll migrate to timezone-aware timestamps (`datetime.now(datetime.UTC)`) in a targeted pass once Phase 1 stability gates are fully satisfied.
