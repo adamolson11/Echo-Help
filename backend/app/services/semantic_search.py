@@ -13,7 +13,11 @@ def semantic_search_tickets(
     if not q:
         return []
 
-    query_vec = embed_text(q)
+    try:
+        query_vec = embed_text(q)
+    except RuntimeError as exc:
+        logging.getLogger(__name__).warning("Embeddings disabled; skipping semantic search: %s", exc)
+        return []
 
     # Select embeddings that are associated with tickets and match the model
     embeddings = session.exec(
