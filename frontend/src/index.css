@@ -229,6 +229,46 @@ button {
   background: #ffe9e9;
   color: #7a1d1d;
   border: 1px solid #f2b2b2;
+  display: grid;
+  gap: 10px;
+}
+
+.ask-echo__error-title {
+  font-weight: 700;
+}
+
+.ask-echo__error-message {
+  color: #6b1d1d;
+}
+
+.ask-echo__error-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ask-echo__link-button {
+  border: none;
+  background: transparent;
+  color: #6b1d1d;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ask-echo__error-details {
+  display: grid;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #4b1d1d;
+}
+
+.ask-echo__error-label {
+  font-weight: 600;
 }
 
 .ask-echo__grid {

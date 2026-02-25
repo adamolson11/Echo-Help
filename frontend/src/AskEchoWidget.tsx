@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import AskEchoReasoningDetails from "./components/AskEchoReasoning";
-import { formatApiError } from "./api/client";
+import { ApiError, formatApiError } from "./api/client";
 import {
   createTicketFeedback,
   postAskEcho,
@@ -11,6 +11,13 @@ import type { AskEchoResponse } from "./api/types";
 
 type AskEchoWidgetResponse = AskEchoResponse | { error: string };
 
+type AskEchoErrorInfo = {
+  headline: string;
+  guidance: string;
+  detail: string;
+  status?: number;
+};
+
 function isAskEchoError(r: AskEchoWidgetResponse): r is { error: string } {
   return typeof (r as any)?.error === "string";
 }
@@ -19,6 +26,9 @@ export default function AskEchoWidget() {
   const [q, setQ] = useState("");
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorInfo, setErrorInfo] = useState<AskEchoErrorInfo | null>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [lastQuery, setLastQuery] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   // feedback UI state
   const [fbSubmitting, setFbSubmitting] = useState(false);
@@ -28,20 +38,55 @@ export default function AskEchoWidget() {
   const [fbNotes, setFbNotes] = useState("");
   const [selectedFeedbackTicketId, setSelectedFeedbackTicketId] = useState<number | null>(null);
 
-  async function ask() {
-    if (!q.trim()) return;
+  function classifyAskEchoError(err: unknown): AskEchoErrorInfo {
+    const detail = formatApiError(err);
+
+    if (err instanceof ApiError) {
+      if (err.status >= 500) {
+        return {
+          headline: "Echo hit an error",
+          guidance: "Please try again in a moment.",
+          detail,
+          status: err.status,
+        };
+      }
+      return {
+        headline: "Request failed",
+        guidance: "Please check your input and try again.",
+        detail,
+        status: err.status,
+      };
+    }
+
+    return {
+      headline: "Backend not running",
+      guidance: "Start backend on :8001, then try again.",
+      detail,
+    };
+  }
+
+  async function askWithQuery(query: string) {
+    if (!query.trim()) return;
     setLoading(true);
     setResponse(null);
+    setErrorInfo(null);
+    setShowErrorDetails(false);
     setFbSaved(false);
+    setLastQuery(query);
     try {
-      const data = await postAskEcho({ q, limit: 5 });
+      const data = await postAskEcho({ q: query, limit: 5 });
       setResponse(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Preserve prior rendering behavior: store an error string on response.
       setResponse({ error: formatApiError(err) });
+      setErrorInfo(classifyAskEchoError(err));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function ask() {
+    await askWithQuery(q);
   }
 
   // when a new Ask Echo response arrives, auto-select a sensible ticket id for feedback
@@ -184,21 +229,21 @@ export default function AskEchoWidget() {
           </header>
 
           <div className="ask-echo__command">
-          <input
-            ref={inputRef}
-            className="op-input ask-echo__input"
-            placeholder="Ask Echo a question about tickets..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && ask()}
-          />
-          <button
-            type="button"
-            className="op-button op-button--primary ask-echo__submit"
-            onClick={ask}
-            disabled={loading}
-          >
-            {loading ? "Thinking..." : "Ask Echo"}
+            <input
+              ref={inputRef}
+              className="op-input ask-echo__input"
+              placeholder="Ask Echo a question about tickets..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && ask()}
+            />
+            <button
+              type="button"
+              className="op-button op-button--primary ask-echo__submit"
+              onClick={ask}
+              disabled={loading}
+            >
+              {loading ? "Thinking..." : "Ask Echo"}
             </button>
           </div>
         </div>
@@ -242,9 +287,39 @@ export default function AskEchoWidget() {
           </div>
         )}
 
-        {response && isAskEchoError(response) && (
+        {response && isAskEchoError(response) && errorInfo && (
           <div className="ask-echo__error">
-            <strong>Something went wrong.</strong> {response.error}
+            <div className="ask-echo__error-title">{errorInfo.headline}</div>
+            <div className="ask-echo__error-message">{errorInfo.guidance}</div>
+            <div className="ask-echo__error-actions">
+              <button
+                type="button"
+                className="op-button op-button--primary"
+                onClick={() => askWithQuery(lastQuery || q)}
+                disabled={loading || !(lastQuery || q).trim()}
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                className="ask-echo__link-button"
+                onClick={() => setShowErrorDetails((prev) => !prev)}
+              >
+                {showErrorDetails ? "Hide details" : "Details"}
+              </button>
+            </div>
+            {showErrorDetails && (
+              <div className="ask-echo__error-details">
+                {typeof errorInfo.status === "number" && (
+                  <div>
+                    <span className="ask-echo__error-label">HTTP status:</span> {errorInfo.status}
+                  </div>
+                )}
+                <div>
+                  <span className="ask-echo__error-label">Error:</span> {errorInfo.detail}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
