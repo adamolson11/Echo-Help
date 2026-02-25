@@ -3,8 +3,9 @@
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import desc
 from sqlmodel import Session, col, select
 
@@ -23,8 +24,10 @@ from backend.app.schemas.ask_echo_feedback import (
 from backend.app.schemas.insights import AskEchoLogDetail, AskEchoLogSummary
 from backend.app.schemas.snippets import SnippetSearchResult
 from backend.app.services.ask_echo_engine import AskEchoEngine, AskEchoEngineRequest
+from backend.app.services.embeddings import embeddings_enabled, log_embeddings_disabled_once
 
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
+logger = logging.getLogger("uvicorn.error")
 
 
 @router.post("/ask-echo/feedback", response_model=AskEchoFeedbackRead)
@@ -81,9 +84,26 @@ def get_ask_echo_feedback_summary(
 
 
 @router.post("/ask-echo", response_model=AskEchoResponse)
-def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
+def ask_echo(
+    req: AskEchoRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+):
     if not req.q or not req.q.strip():
         raise HTTPException(status_code=400, detail="query required")
+
+    request_id = str(uuid4())
+    source_channel = request.headers.get("x-source-channel") or request.headers.get("x-echo-source")
+    embeddings_on = embeddings_enabled()
+    if not embeddings_on:
+        log_embeddings_disabled_once()
+    logger.warning(
+        "ask_echo.request id=%s source_channel=%s embeddings_enabled=%s query_len=%s",
+        request_id,
+        source_channel or "unknown",
+        embeddings_on,
+        len(req.q.strip()),
+    )
 
     engine = AskEchoEngine()
     try:
@@ -121,6 +141,14 @@ def ask_echo(req: AskEchoRequest, session: Session = Depends(get_session)):
 
     if log.id is None:
         raise HTTPException(status_code=500, detail="ask-echo log id missing")
+
+    logger.warning(
+        "ask_echo.response id=%s ask_echo_log_id=%s mode=%s answer_kind=%s",
+        request_id,
+        log.id,
+        result.mode,
+        result.answer_kind,
+    )
 
     # Normalize snippet summaries to the public schema type.
     # (The engine may return dict-shaped summaries for convenience.)

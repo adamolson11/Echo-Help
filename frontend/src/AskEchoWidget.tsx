@@ -38,6 +38,18 @@ export default function AskEchoWidget() {
   const [fbNotes, setFbNotes] = useState("");
   const [selectedFeedbackTicketId, setSelectedFeedbackTicketId] = useState<number | null>(null);
 
+  function logDevDebug(event: string, payload: Record<string, unknown>) {
+    if (!import.meta.env.DEV) return;
+    // eslint-disable-next-line no-console
+    console.debug("[ask-echo]", { event, ...payload });
+  }
+
+  function logDevError(event: string, payload: Record<string, unknown>) {
+    if (!import.meta.env.DEV) return;
+    // eslint-disable-next-line no-console
+    console.error("[ask-echo]", { event, ...payload });
+  }
+
   function classifyAskEchoError(err: unknown): AskEchoErrorInfo {
     const detail = formatApiError(err);
 
@@ -73,20 +85,52 @@ export default function AskEchoWidget() {
     setShowErrorDetails(false);
     setFbSaved(false);
     setLastQuery(query);
+    logDevDebug("submit", {
+      source: "ask_echo",
+      query,
+      limit: 5,
+    });
     try {
       const data = await postAskEcho({ q: query, limit: 5 });
+      if (!data) {
+        setResponse({ error: "No response received" });
+        setErrorInfo({
+          headline: "Request failed",
+          guidance: "No response was returned. Please try again.",
+          detail: "No response payload",
+        });
+        return;
+      }
       setResponse(data);
     } catch (err: unknown) {
       // Preserve prior rendering behavior: store an error string on response.
       setResponse({ error: formatApiError(err) });
-      setErrorInfo(classifyAskEchoError(err));
+      const classified = classifyAskEchoError(err);
+      setErrorInfo(classified);
+      logDevError("request_failed", {
+        source: "ask_echo",
+        query,
+        headline: classified.headline,
+        status: classified.status ?? null,
+        detail: classified.detail,
+      });
     } finally {
       setLoading(false);
     }
   }
 
-  async function ask() {
-    await askWithQuery(q);
+  function ask() {
+    void askWithQuery(q).catch((err: unknown) => {
+      const fallback = classifyAskEchoError(err);
+      setResponse({ error: fallback.detail });
+      setErrorInfo(fallback);
+      setLoading(false);
+      logDevError("unexpected_rejection", {
+        source: "ask_echo",
+        query: q,
+        detail: fallback.detail,
+      });
+    });
   }
 
   // when a new Ask Echo response arrives, auto-select a sensible ticket id for feedback
@@ -328,7 +372,7 @@ export default function AskEchoWidget() {
             <div className="ask-echo__stack">
             <div className="ask-echo__card">
               <div className="ask-echo__card-title">Answer</div>
-              <div className="ask-echo__answer">{response.answer}</div>
+              <div className="ask-echo__answer">{response.answer || "No answer returned yet."}</div>
               <div className="ask-echo__meta">
                 {response.answer_kind === "grounded" || response.mode === "kb_answer" ? (
                   <span className="ask-echo__badge">Based on your past tickets</span>
@@ -337,6 +381,9 @@ export default function AskEchoWidget() {
                 ) : (
                   <span className="ask-echo__badge">Mode: {response.mode ?? "unknown"}</span>
                 )}
+                <span className="ask-echo__badge" style={{ marginLeft: "8px" }}>
+                  source: ask_echo
+                </span>
               </div>
             </div>
 
@@ -419,6 +466,25 @@ export default function AskEchoWidget() {
                 </div>
               )}
             </div>
+            </div>
+          </div>
+        )}
+
+        {!loading && !response && !!lastQuery.trim() && (
+          <div className="ask-echo__error">
+            <div className="ask-echo__error-title">Request failed</div>
+            <div className="ask-echo__error-message">
+              No response was returned. Please try again.
+            </div>
+            <div className="ask-echo__error-actions">
+              <button
+                type="button"
+                className="op-button op-button--primary"
+                onClick={() => askWithQuery(lastQuery || q)}
+                disabled={loading || !(lastQuery || q).trim()}
+              >
+                Try again
+              </button>
             </div>
           </div>
         )}

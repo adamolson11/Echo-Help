@@ -68,3 +68,16 @@ We are intentionally not building (for now):
 - Predictive ML beyond basic aggregation
 
 If a feature request drifts into these areas, pause and reassess against the product north star.
+
+## 2026-02-25 post-merge stabilization
+
+- Merge commit on `main`: `52d11a3` (merged `fix/ask-echo-error-handling`).
+- Ask Echo frontend error handling improvements:
+	- Classified error UX for offline/network, HTTP 5xx, and HTTP 4xx.
+	- Retry action and optional details panel in response area.
+	- Defensive fallback when no response payload is returned.
+- Current ML fallback state:
+	- `sentence_transformers` is not installed in this environment.
+	- Embeddings run in fallback mode (deterministic, low-dim vectors) with semantic search degradation expected.
+- Known limitations:
+	- Browser console errors were not fully programmatically harvested in this pass; runtime API and UI route smoke checks were used for validation.
