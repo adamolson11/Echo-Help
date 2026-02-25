@@ -7,6 +7,9 @@ def test_ask_echo_requires_query():
     client = TestClient(app)
     resp = client.post("/api/ask-echo", json={"q": ""})
     assert resp.status_code == 400
+    data = resp.json()
+    assert isinstance(data, dict)
+    assert isinstance(data.get("detail"), str)
 
 
 def test_ask_echo_empty_results():
