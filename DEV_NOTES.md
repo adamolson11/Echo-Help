@@ -81,3 +81,22 @@ If a feature request drifts into these areas, pause and reassess against the pro
 	- Embeddings run in fallback mode (deterministic, low-dim vectors) with semantic search degradation expected.
 - Known limitations:
 	- Browser console errors were not fully programmatically harvested in this pass; runtime API and UI route smoke checks were used for validation.
+
+## Ask Echo Demo Stability - Definition of Done
+
+DONE means all criteria are true:
+1. If backend returns non-200 or network fails, UI shows a friendly error and does not crash.
+2. If backend returns empty/invalid payload, UI shows fallback message and does not crash.
+3. While request is in-flight, submit is disabled and a loading state is visible.
+4. Frontend build passes with `npm run build`.
+
+### Anti-theater check (2026-02-25)
+
+- Acceptance status:
+	1. PASS
+	2. PASS
+	3. PASS
+	4. PASS
+- Automated artifact added: backend failure-schema coverage for `POST /api/ask-echo` invalid query.
+- Test command: `pytest -q tests/test_ask_echo.py`
+- Build command (frontend criterion): `cd frontend && npm run build`
