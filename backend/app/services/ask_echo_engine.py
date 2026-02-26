@@ -10,6 +10,7 @@ from ..models.snippets import SolutionSnippet
 from ..models.ticket import Ticket
 from ..schemas.ask_echo import (
     AskEchoEvidence,
+    AskEchoKBEvidence,
     AskEchoReasoning,
     AskEchoReasoningSnippet,
     AskEchoReference,
@@ -17,6 +18,7 @@ from ..schemas.ask_echo import (
 )
 from .ask_echo_templates import AskEchoTemplates
 from .kb_confidence_policy import calculate_kb_confidence
+from .kb_adapter import search_kb_entries
 from .ranking_policy import rank_snippets, rank_tickets
 from .semantic_search import semantic_search_tickets
 from .snippet_repository import search_snippets as repo_search_snippets
@@ -43,6 +45,7 @@ class AskEchoEngineResult:
     snippet_summaries: list[dict]
     features: dict
     evidence: list[AskEchoEvidence]
+    kb_evidence: list[AskEchoKBEvidence]
 
 
 def _first_line(text: str | None, max_len: int = 200) -> str:
@@ -55,9 +58,13 @@ def _build_kb_answer(
     templates: AskEchoTemplates,
     query: str,
     scored_tickets: list[tuple[float, Ticket]],
+    kb_evidence: list[AskEchoKBEvidence] | None = None,
 ) -> tuple[str, list[AskEchoReference]]:
     bullets: list[str] = []
     refs: list[AskEchoReference] = []
+
+    for kb in (kb_evidence or [])[:2]:
+        bullets.append(f"- {kb.title} (KB {kb.entry_id})")
 
     for score, t in (scored_tickets[:3] if scored_tickets else []):
         ticket_id = getattr(t, "id", None)
@@ -232,6 +239,17 @@ class AskEchoEngine:
             raise ValueError("query required")
 
         scored = self._retrieve_tickets(session=session, query=q, limit=req.limit)
+        kb_results = search_kb_entries(session=session, query=q, limit=max(1, min(3, req.limit)))
+        kb_evidence = [
+            AskEchoKBEvidence(
+                entry_id=item.entry.entry_id,
+                title=item.entry.title,
+                source_system=item.entry.source_system,
+                source_url=item.entry.source_url,
+                score=float(item.score),
+            )
+            for item in kb_results
+        ]
         ticket_summaries = _build_ticket_summaries([(score, t) for score, t in scored])
 
         try:
@@ -247,11 +265,11 @@ class AskEchoEngine:
         scores = [float(score) for score, _ in scored if score is not None]
         max_score = max(scores) if scores else 0.0
 
-        semantic_scores = {
-            int(t.id): float(score)
-            for score, t in scored
-            if getattr(t, "id", None) is not None
-        }
+        semantic_scores: dict[int, float] = {}
+        for score, t in scored:
+            tid = getattr(t, "id", None)
+            if isinstance(tid, int):
+                semantic_scores[tid] = float(score)
         ranked_for_evidence = rank_tickets(
             session,
             candidates=[t for _, t in scored],
@@ -301,7 +319,12 @@ class AskEchoEngine:
         )
 
         if kb_backed and (snippets or scored):
-            answer_text, references = _build_kb_answer(self.templates, q, [(float(s), t) for s, t in scored])
+            answer_text, references = _build_kb_answer(
+                self.templates,
+                q,
+                [(float(s), t) for s, t in scored],
+                kb_evidence=kb_evidence,
+            )
             mode = "kb_answer"
             top_snip_score = getattr(snippets[0], "echo_score", None) if snippets else None
             kb_confidence = calculate_kb_confidence(
@@ -364,4 +387,5 @@ class AskEchoEngine:
             snippet_summaries=snippet_summaries,
             features=features,
             evidence=evidence_rows,
+            kb_evidence=kb_evidence,
         )

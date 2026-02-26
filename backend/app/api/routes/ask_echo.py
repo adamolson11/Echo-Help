@@ -177,6 +177,7 @@ def ask_echo(
         references=result.references,
         reasoning=result.reasoning,
         evidence=result.evidence,
+        kb_evidence=result.kb_evidence,
     )
 
 

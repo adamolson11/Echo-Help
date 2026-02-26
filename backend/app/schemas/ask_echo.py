@@ -37,6 +37,14 @@ class AskEchoEvidence(BaseModel):
     final_score: float | None = None
 
 
+class AskEchoKBEvidence(BaseModel):
+    entry_id: str
+    title: str
+    source_system: str = "seed_kb"
+    source_url: str | None = None
+    score: float | None = None
+
+
 class AskEchoRequest(BaseModel):
     q: str
     limit: int = 5
@@ -58,3 +66,4 @@ class AskEchoResponse(BaseModel):
     references: list[AskEchoReference] = []
     reasoning: AskEchoReasoning | None = None
     evidence: list[AskEchoEvidence] = []
+    kb_evidence: list[AskEchoKBEvidence] = []
