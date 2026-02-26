@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import re
 
 from sqlalchemy import case, func
 from sqlmodel import Session, select
@@ -15,6 +16,7 @@ from ..models.ticket_feedback import TicketFeedback
 class RankedTicket:
     score: float
     ticket: Ticket
+    signals: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,100 @@ def _normalize(values: list[float]) -> list[float]:
     if hi <= lo:
         return [0.0 for _ in values]
     return [(v - lo) / (hi - lo) for v in values]
+
+
+def _parse_tags(value: object) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    out: set[str] = set()
+    for item in value:
+        if isinstance(item, str):
+            out.add(item.strip().lower())
+    return out
+
+
+def _query_env_hint(query: str) -> str | None:
+    q = (query or "").strip().lower()
+    if not q:
+        return None
+    if any(tok in q for tok in ("prod", "production", "live")):
+        return "prod"
+    if any(tok in q for tok in ("stage", "staging", "preprod")):
+        return "stage"
+    if any(tok in q for tok in ("local", "dev", "developer")):
+        return "local"
+    return None
+
+
+def _query_severity_hint(query: str) -> str | None:
+    q = (query or "").strip().lower()
+    if not q:
+        return None
+    if "sev1" in q or "critical" in q:
+        return "sev1"
+    if "sev2" in q or "high" in q:
+        return "sev2"
+    if "sev3" in q or "medium" in q:
+        return "sev3"
+    if "sev4" in q or "low" in q:
+        return "sev4"
+    p = re.search(r"\bp([1-4])\b", q)
+    if p:
+        return f"sev{p.group(1)}"
+    return None
+
+
+def _ticket_fix_confirmed(ticket: Ticket) -> float:
+    if getattr(ticket, "fix_confirmed_good", None) is True:
+        return 1.0
+    if getattr(ticket, "fix_confirmed_good", None) is False:
+        return 0.0
+    tags = _parse_tags(getattr(ticket, "tags", None))
+    if "fix_confirmed:true" in tags:
+        return 1.0
+    status = str(getattr(ticket, "status", "") or "").strip().lower()
+    if status in {"closed", "resolved", "done"} and getattr(ticket, "resolved_at", None) is not None:
+        return 1.0
+    return 0.0
+
+
+def _ticket_env_match(*, ticket: Ticket, query: str) -> float:
+    hint = _query_env_hint(query)
+    if hint is None:
+        return 0.0
+    env = str(getattr(ticket, "environment", "") or "").strip().lower()
+    return 1.0 if env == hint else 0.0
+
+
+def _ticket_severity_match(*, ticket: Ticket, query: str) -> float:
+    hint = _query_severity_hint(query)
+    if hint is None:
+        return 0.0
+
+    tags = _parse_tags(getattr(ticket, "tags", None))
+    for tag in tags:
+        if tag.startswith("severity:"):
+            return 1.0 if tag.split(":", 1)[1] == hint else 0.0
+
+    priority = str(getattr(ticket, "priority", "") or "").strip().lower()
+    if priority in {"p1", "p2", "p3", "p4"}:
+        return 1.0 if priority.replace("p", "sev") == hint else 0.0
+    return 0.0
+
+
+def _ticket_answer_quality_label(ticket: Ticket) -> str:
+    label = str(getattr(ticket, "answer_quality_label", "") or "").strip().lower()
+    if label in {"good", "bad", "mixed"}:
+        return label
+
+    tags = _parse_tags(getattr(ticket, "tags", None))
+    if "answer_quality:good" in tags:
+        return "good"
+    if "answer_quality:bad" in tags:
+        return "bad"
+    if "answer_quality:mixed" in tags:
+        return "mixed"
+    return "mixed"
 
 
 def _ticket_feedback_maps(session: Session, *, ticket_ids: list[int]) -> tuple[dict[int, float], dict[int, float]]:
@@ -98,6 +194,7 @@ def rank_tickets(
     candidates: list[Ticket],
     query: str,
     semantic_scores: dict[int, float] | None = None,
+    use_learning_lite: bool = True,
 ) -> list[RankedTicket]:
     """Rank ticket candidates deterministically.
 
@@ -133,17 +230,65 @@ def rank_tickets(
         feedback = float(feedback_ratio_map.get(tid, 0.5))
         usage = float(usage_map.get(tid, 0.0))
         recency = float(recency_norm_by_tid.get(tid, 0.0)) if tid != -1 else 0.0
+        fix_confirmed = _ticket_fix_confirmed(t)
+        env_match = _ticket_env_match(ticket=t, query=query)
+        severity_match = _ticket_severity_match(ticket=t, query=query)
+        quality_label = _ticket_answer_quality_label(t)
+        bad_quality_penalty = 1.0 if quality_label == "bad" else 0.4 if quality_label == "mixed" else 0.0
+
+        boosts_applied: list[str] = []
+        if fix_confirmed > 0.0:
+            boosts_applied.append("fix_confirmed")
+        if env_match > 0.0:
+            boosts_applied.append("env_match")
+        if severity_match > 0.0:
+            boosts_applied.append("severity_match")
+        if bad_quality_penalty > 0.0:
+            boosts_applied.append("bad_quality_penalty")
 
         # Weights are intentionally simple and explicit (no hidden heuristics).
-        score = (
-            0.55 * semantic
-            + 0.25 * keyword
-            + 0.10 * feedback
-            + 0.05 * usage
-            + 0.05 * recency
-        )
+        # Weighted retrieval (learning-lite): semantic + recency + success + env + severity.
+        if use_learning_lite:
+            score = (
+                0.48 * semantic
+                + 0.18 * keyword
+                + 0.10 * feedback
+                + 0.05 * usage
+                + 0.05 * recency
+                + 0.08 * fix_confirmed
+                + 0.04 * env_match
+                + 0.02 * severity_match
+                - 0.12 * bad_quality_penalty
+            )
+        else:
+            score = (
+                0.55 * semantic
+                + 0.25 * keyword
+                + 0.10 * feedback
+                + 0.05 * usage
+                + 0.05 * recency
+            )
 
-        ranked.append(RankedTicket(float(score), t))  # type: ignore[reportCallIssue]
+        ranked.append(
+            RankedTicket(
+                float(score),
+                t,
+                signals={
+                    "semantic": float(semantic),
+                    "keyword": float(keyword),
+                    "feedback": float(feedback),
+                    "usage": float(usage),
+                    "recency": float(recency),
+                    "fix_confirmed": float(fix_confirmed),
+                    "env_match": float(env_match),
+                    "severity_match": float(severity_match),
+                    "bad_quality_penalty": float(bad_quality_penalty),
+                    "answer_quality_label": quality_label,
+                    "boosts_applied": boosts_applied,
+                    "final_score": float(score),
+                },
+            )
+        )
 
     def _sort_key(r: RankedTicket):
         t = r.ticket

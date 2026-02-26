@@ -176,6 +176,7 @@ def ask_echo(
         mode=result.mode,
         references=result.references,
         reasoning=result.reasoning,
+        evidence=result.evidence,
     )
 
 

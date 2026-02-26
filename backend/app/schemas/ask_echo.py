@@ -29,6 +29,14 @@ class AskEchoReasoning(BaseModel):
     echo_score: float | None = None
 
 
+class AskEchoEvidence(BaseModel):
+    ticket_id: int
+    external_key: str | None = None
+    answer_quality_label: Literal["good", "bad", "mixed"] | None = None
+    boosts_applied: list[str] = []
+    final_score: float | None = None
+
+
 class AskEchoRequest(BaseModel):
     q: str
     limit: int = 5
@@ -49,3 +57,4 @@ class AskEchoResponse(BaseModel):
     mode: str | None = None
     references: list[AskEchoReference] = []
     reasoning: AskEchoReasoning | None = None
+    evidence: list[AskEchoEvidence] = []

@@ -100,3 +100,22 @@ DONE means all criteria are true:
 - Automated artifact added: backend failure-schema coverage for `POST /api/ask-echo` invalid query.
 - Test command: `pytest -q tests/test_ask_echo.py`
 - Build command (frontend criterion): `cd frontend && npm run build`
+
+## 2026-02-26 big seed corpus + bad-aware retrieval
+
+Generate dataset (JSONL):
+- `python -m backend.scripts.generate_seed_tickets --count 600 --out backend/app/seed_data/tickets_big_seed.jsonl`
+
+Seed dataset:
+- Dry run + histogram only: `python -m backend.scripts.seed_tickets --path backend/app/seed_data/tickets_big_seed.jsonl --dry-run`
+- Idempotent reset + insert: `python -m backend.scripts.seed_tickets --path backend/app/seed_data/tickets_big_seed.jsonl --reset`
+
+Bad-aware retrieval (deterministic):
+- Ask Echo ranking applies a penalty when `answer_quality_label == "bad"` and applies a boost when `fix_confirmed_good == true`.
+- Signal fields are surfaced as evidence metadata (`answer_quality_label`, `boosts_applied`, and `final_score`) so ranking behavior is explainable and testable.
+
+Targeted tests:
+- `pytest -q tests/test_seed_tickets.py tests/test_ranking_policy_learning_lite.py`
+
+Deferred diagnostics (non-blocking):
+- Editor import-resolution warnings for `sqlmodel`/`backend.*` in new script files are environment analysis warnings (not runtime failures); seeding commands and targeted pytest pass in the project runtime environment.
