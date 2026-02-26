@@ -9,6 +9,7 @@ from sqlmodel import Session
 from ..models.snippets import SolutionSnippet
 from ..models.ticket import Ticket
 from ..schemas.ask_echo import (
+    AskEchoEvidence,
     AskEchoReasoning,
     AskEchoReasoningSnippet,
     AskEchoReference,
@@ -41,6 +42,7 @@ class AskEchoEngineResult:
     ticket_summaries: list[AskEchoTicketSummary]
     snippet_summaries: list[dict]
     features: dict
+    evidence: list[AskEchoEvidence]
 
 
 def _first_line(text: str | None, max_len: int = 200) -> str:
@@ -115,7 +117,12 @@ def _build_snippet_summaries(snippets: Iterable[SolutionSnippet]) -> list[dict]:
     ]
 
 
-def build_ask_echo_features(*, scored_tickets: Sequence[tuple[float, Ticket]], snippets: Sequence[SolutionSnippet]) -> dict:
+def build_ask_echo_features(
+    *,
+    scored_tickets: Sequence[tuple[float, Ticket]],
+    snippets: Sequence[SolutionSnippet],
+    ticket_signal_evidence: list[dict] | None = None,
+) -> dict:
     """Return a stable, JSON-serializable feature dict for offline ML/eval.
 
     Intentionally does NOT include raw ticket/snippet text.
@@ -134,6 +141,7 @@ def build_ask_echo_features(*, scored_tickets: Sequence[tuple[float, Ticket]], s
         "ticket": {
             "count": int(len(scored_tickets)),
             "top_score": top_ticket_score,
+            "signal_evidence": ticket_signal_evidence or [],
         },
         "snippet": {
             "count": int(len(snippets)),
@@ -238,7 +246,53 @@ class AskEchoEngine:
 
         scores = [float(score) for score, _ in scored if score is not None]
         max_score = max(scores) if scores else 0.0
-        features = build_ask_echo_features(scored_tickets=scored, snippets=snippets)
+
+        semantic_scores = {
+            int(t.id): float(score)
+            for score, t in scored
+            if getattr(t, "id", None) is not None
+        }
+        ranked_for_evidence = rank_tickets(
+            session,
+            candidates=[t for _, t in scored],
+            query=q,
+            semantic_scores=semantic_scores,
+        )
+        ticket_signal_evidence: list[dict] = []
+        evidence_rows: list[AskEchoEvidence] = []
+        for row in ranked_for_evidence[:3]:
+            tid = getattr(row.ticket, "id", None)
+            if tid is None:
+                continue
+            signals = row.signals or {}
+            boosts_applied = signals.get("boosts_applied") if isinstance(signals, dict) else []
+            quality_label = signals.get("answer_quality_label") if isinstance(signals, dict) else None
+            final_score = signals.get("final_score") if isinstance(signals, dict) else None
+
+            evidence_rows.append(
+                AskEchoEvidence(
+                    ticket_id=int(tid),
+                    external_key=getattr(row.ticket, "external_key", None),
+                    answer_quality_label=str(quality_label) if quality_label in {"good", "bad", "mixed"} else None,
+                    boosts_applied=[str(x) for x in boosts_applied] if isinstance(boosts_applied, list) else [],
+                    final_score=float(final_score) if isinstance(final_score, (int, float)) else None,
+                )
+            )
+            ticket_signal_evidence.append(
+                {
+                    "ticket_id": int(tid),
+                    "external_key": getattr(row.ticket, "external_key", None),
+                    "answer_quality_label": quality_label,
+                    "boosts_applied": boosts_applied,
+                    "signals": row.signals or {},
+                }
+            )
+
+        features = build_ask_echo_features(
+            scored_tickets=scored,
+            snippets=snippets,
+            ticket_signal_evidence=ticket_signal_evidence,
+        )
 
         kb_backed = self._decide_grounding(
             features=features,
@@ -309,4 +363,5 @@ class AskEchoEngine:
             ticket_summaries=ticket_summaries,
             snippet_summaries=snippet_summaries,
             features=features,
+            evidence=evidence_rows,
         )

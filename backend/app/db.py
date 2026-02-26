@@ -123,10 +123,26 @@ def init_db():
                     cur.execute(f"ALTER TABLE ticket ADD COLUMN {col_def}")
 
             add_col("short_id TEXT", "short_id")
+            add_col("key TEXT", "key")
             add_col("body_md TEXT", "body_md")
             add_col("root_cause TEXT", "root_cause")
+            add_col("root_cause_good TEXT", "root_cause_good")
+            add_col("root_cause_bad TEXT", "root_cause_bad")
+            add_col("bad_reason TEXT", "bad_reason")
             add_col("environment TEXT", "environment")
+            add_col("product_area TEXT", "product_area")
+            add_col("severity TEXT", "severity")
+            add_col("source_system TEXT", "source_system")
+            add_col("source_id TEXT", "source_id")
+            add_col("source_url TEXT", "source_url")
             add_col("tags TEXT", "tags")
+            add_col("repro_steps TEXT", "repro_steps")
+            add_col("expected_result TEXT", "expected_result")
+            add_col("actual_result TEXT", "actual_result")
+            add_col("resolution_good TEXT", "resolution_good")
+            add_col("fix_confirmed_good BOOLEAN", "fix_confirmed_good")
+            add_col("resolution_bad TEXT", "resolution_bad")
+            add_col("answer_quality_label TEXT", "answer_quality_label")
 
             # Lightweight migration for Ask Echo reasoning/audit fields.
             # Older DBs may have `askecholog` without these columns.
