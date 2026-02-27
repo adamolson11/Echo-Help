@@ -159,6 +159,14 @@ export type AskEchoReasoning = {
   echo_score?: number | null;
 };
 
+export type AskEchoKBEvidence = {
+  entry_id: string;
+  title: string;
+  source_system: string;
+  source_url?: string | null;
+  score?: number | null;
+};
+
 export type AskEchoResponse = {
   meta: ApiMeta;
   query: string;
@@ -172,6 +180,7 @@ export type AskEchoResponse = {
   mode?: string | null;
   references: AskEchoReference[];
   reasoning?: AskEchoReasoning | null;
+  kb_evidence?: AskEchoKBEvidence[];
 };
 
 export type AskEchoFeedbackCreate = {

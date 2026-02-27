@@ -269,6 +269,11 @@ export default function AskEchoWidget() {
               <p className="ask-echo__lede">
                 Echo remembers what worked before and turns support history into next-step guidance.
               </p>
+              <div className="ask-echo__hero-chips" aria-label="Ask Echo capabilities">
+                <span className="ask-echo__hero-chip">Ticket intelligence</span>
+                <span className="ask-echo__hero-chip">KB support</span>
+                <span className="ask-echo__hero-chip">Feedback loop</span>
+              </div>
             </div>
           </header>
 
@@ -388,6 +393,36 @@ export default function AskEchoWidget() {
             </div>
 
             {response.reasoning && <AskEchoReasoningDetails reasoning={response.reasoning} />}
+
+            <div className="ask-echo__card">
+              <div className="ask-echo__card-title">Knowledge Base</div>
+              {Array.isArray(response.kb_evidence) && response.kb_evidence.length > 0 ? (
+                <div className="snippet-list">
+                  {response.kb_evidence.slice(0, 5).map((entry) => (
+                    <div key={String(entry.entry_id)} className="snippet-item">
+                      <div className="snippet-item__title">
+                        <span>{entry.title}</span>
+                        {typeof entry.score === "number" && (
+                          <span className="ask-echo__badge">{entry.score.toFixed(2)}</span>
+                        )}
+                      </div>
+                      <div className="snippet-item__meta">
+                        <span className="ask-echo__badge ask-echo__badge--kb">{entry.source_system || "seed_kb"}</span>
+                        {entry.source_url ? (
+                          <a className="ask-echo__kb-link" href={entry.source_url} target="_blank" rel="noreferrer">
+                            Open source
+                          </a>
+                        ) : (
+                          <span className="ask-echo__kb-link ask-echo__kb-link--muted">No link</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="state-panel">No knowledge base matches for this query yet.</div>
+              )}
+            </div>
 
             <div className="ask-echo__card">
               <div className="ask-echo__card-title">Suggested snippets</div>

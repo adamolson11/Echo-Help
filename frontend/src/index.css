@@ -100,6 +100,25 @@ button {
   max-width: 620px;
 }
 
+.ask-echo__hero-chips {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ask-echo__hero-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(31, 75, 255, 0.2);
+  background: rgba(31, 75, 255, 0.08);
+  color: #1d2a6b;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .ask-echo__command {
   display: flex;
   gap: 12px;
@@ -316,6 +335,11 @@ button {
   color: #1f5e37;
 }
 
+.ask-echo__badge--kb {
+  background: #e9f8ff;
+  color: #125d78;
+}
+
 .ask-echo .snippet-list {
   display: grid;
   gap: 12px;
@@ -340,6 +364,24 @@ button {
   margin-top: 6px;
   color: var(--echo-muted);
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ask-echo__kb-link {
+  color: #1f4bff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.ask-echo__kb-link:hover {
+  text-decoration: underline;
+}
+
+.ask-echo__kb-link--muted {
+  color: var(--echo-muted);
+  font-weight: 500;
 }
 
 .ask-echo__feedback-row {
