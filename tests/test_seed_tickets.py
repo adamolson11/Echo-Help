@@ -40,3 +40,5 @@ def test_seed_tickets_idempotent_reset(tmp_path: Path) -> None:
         assert first_row.priority in {"P0", "P1", "P2", "P3"}
         assert first_row.answer_quality_label in {"good", "bad", "mixed"}
         assert first_row.source_system == "seed"
+        assert first_row.owning_team
+        assert first_row.escalation_target

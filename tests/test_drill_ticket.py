@@ -17,6 +17,8 @@ def _ticket_fixture() -> Ticket:
         status="closed",
         product_area="auth",
         environment="prod",
+        owning_team="identity-platform",
+        escalation_target="oncall-identity",
         severity="S1",
         priority="P0",
         repro_steps=["Open app", "Login via SSO", "Observe redirect loop"],
@@ -43,3 +45,4 @@ def test_drill_reveal_includes_fix_and_did_not_work() -> None:
     out = render_drill(_ticket_fixture(), mode="reveal", comments_limit=5)
     assert "Final fix:" in out
     assert "[DID_NOT_WORK]" in out
+    assert "identity-platform -> oncall-identity" in out

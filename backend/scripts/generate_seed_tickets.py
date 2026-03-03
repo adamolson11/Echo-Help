@@ -121,6 +121,15 @@ AREA_TEMPLATES = {
 	],
 }
 
+TEAM_MAP = {
+	"auth": ("identity-platform", "oncall-identity"),
+	"billing": ("billing-core", "oncall-billing"),
+	"search": ("search-relevance", "oncall-search"),
+	"embeddings": ("ml-platform", "oncall-ml"),
+	"frontend": ("web-experience", "oncall-web"),
+	"integrations": ("integrations-core", "oncall-integrations"),
+}
+
 
 def _rand_description(area: str, env: str) -> str:
 	examples = {
@@ -146,6 +155,7 @@ def generate_rows(*, count: int, seed: int = 42) -> list[dict]:
 
 	for idx in range(count):
 		area = PRODUCT_AREAS[idx % len(PRODUCT_AREAS)]
+		owning_team, escalation_target = TEAM_MAP.get(area, ("general-support", "oncall-support"))
 		env_weights = [0.18, 0.27, 0.55] if area in {"auth", "billing", "search"} else [0.35, 0.35, 0.30]
 		env = rng.choices(ENVIRONMENTS, weights=env_weights, k=1)[0]
 
@@ -192,6 +202,8 @@ def generate_rows(*, count: int, seed: int = 42) -> list[dict]:
 			"description": desc,
 			"product_area": area,
 			"environment": env,
+			"owning_team": owning_team,
+			"escalation_target": escalation_target,
 			"severity": sev,
 			"priority": prio,
 			"created_at": created_at.isoformat(),

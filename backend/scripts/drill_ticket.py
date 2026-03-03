@@ -228,7 +228,9 @@ def select_ticket(
             if (not resolved) and not allowed_open:
                 continue
 
-        team, _ = TEAM_MAP.get((row.product_area or "").lower(), ("general-support", "oncall-support"))
+        team = (row.owning_team or "").strip()
+        if not team:
+            team, _ = TEAM_MAP.get((row.product_area or "").lower(), ("general-support", "oncall-support"))
         if owning_team:
             if team != owning_team:
                 continue
@@ -243,7 +245,12 @@ def select_ticket(
 
 def render_drill(ticket: Ticket, *, mode: str, comments_limit: int = 4, answer_text: str | None = None) -> str:
     area = (ticket.product_area or "").lower()
-    team, escalation = TEAM_MAP.get(area, ("general-support", "oncall-support"))
+    team = (ticket.owning_team or "").strip()
+    escalation = (ticket.escalation_target or "").strip()
+    if not team or not escalation:
+        fallback_team, fallback_escalation = TEAM_MAP.get(area, ("general-support", "oncall-support"))
+        team = team or fallback_team
+        escalation = escalation or fallback_escalation
     resolved = _is_resolved(ticket)
 
     lines: list[str] = []

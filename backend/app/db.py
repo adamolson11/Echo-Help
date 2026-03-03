@@ -130,6 +130,8 @@ def init_db():
             add_col("root_cause_bad TEXT", "root_cause_bad")
             add_col("bad_reason TEXT", "bad_reason")
             add_col("environment TEXT", "environment")
+            add_col("owning_team TEXT", "owning_team")
+            add_col("escalation_target TEXT", "escalation_target")
             add_col("product_area TEXT", "product_area")
             add_col("severity TEXT", "severity")
             add_col("source_system TEXT", "source_system")

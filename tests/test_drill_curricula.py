@@ -41,6 +41,7 @@ def test_curriculum_filters_ticket_selection() -> None:
                 description="Auth issue",
                 status="open",
                 product_area="auth",
+                owning_team="identity-platform",
                 severity="S2",
             )
         )
@@ -53,6 +54,7 @@ def test_curriculum_filters_ticket_selection() -> None:
                 description="Billing issue",
                 status="open",
                 product_area="billing",
+                owning_team="billing-core",
                 severity="S2",
             )
         )
@@ -70,3 +72,15 @@ def test_curriculum_filters_ticket_selection() -> None:
 
     assert selected.product_area == "auth"
     assert selected.severity == "S2"
+
+    selected_by_team = select_ticket(
+        status="any",
+        area=None,
+        env=None,
+        severity=None,
+        owning_team=None,
+        key=None,
+        curriculum_filters={"owning_team": ["identity-platform"], "status": ["Open"]},
+    )
+
+    assert selected_by_team.owning_team == "identity-platform"

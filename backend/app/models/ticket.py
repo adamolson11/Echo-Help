@@ -30,6 +30,8 @@ class Ticket(SQLModel, table=True):
     root_cause_bad: str | None = Field(default=None, sa_column=Column(Text))
     bad_reason: str | None = Field(default=None, sa_column=Column(Text))
     environment: str | None = None
+    owning_team: str | None = None
+    escalation_target: str | None = None
     severity: str | None = None
     # Tags stored as JSON array for flexibility
     tags: list[str] | None = Field(default=None, sa_column=Column(JSON))

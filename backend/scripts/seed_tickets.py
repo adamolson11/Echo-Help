@@ -160,6 +160,8 @@ def seed_tickets(*, path: Path, reset: bool = False, source: str = DEFAULT_SOURC
                     root_cause_bad=str(row.get("root_cause_bad") or "") or None,
                     bad_reason=str(row.get("bad_reason") or "") or None,
                     environment=str(row.get("environment") or "") or None,
+                    owning_team=str(row.get("owning_team") or "") or None,
+                    escalation_target=str(row.get("escalation_target") or "") or None,
                     product_area=str(row.get("product_area") or "") or None,
                     severity=str(row.get("severity") or "") or None,
                     tags=_normalize_tags(row),
@@ -193,6 +195,8 @@ def seed_tickets(*, path: Path, reset: bool = False, source: str = DEFAULT_SOURC
                 existing.root_cause_bad = str(row.get("root_cause_bad") or "") or None
                 existing.bad_reason = str(row.get("bad_reason") or "") or None
                 existing.environment = str(row.get("environment") or "") or None
+                existing.owning_team = str(row.get("owning_team") or "") or None
+                existing.escalation_target = str(row.get("escalation_target") or "") or None
                 existing.product_area = str(row.get("product_area") or "") or None
                 existing.severity = str(row.get("severity") or "") or None
                 existing.tags = _normalize_tags(row)
