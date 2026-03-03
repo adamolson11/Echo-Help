@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import random
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlmodel import select
@@ -18,6 +20,9 @@ TEAM_MAP = {
     "frontend": ("web-experience", "oncall-web"),
     "integrations": ("integrations-core", "oncall-integrations"),
 }
+
+DEFAULT_CURRICULA_PATH = Path("backend/app/seed_data/curricula.json")
+DEFAULT_SESSION_OUT = Path("backend/app/seed_data/drill_sessions.jsonl")
 
 
 def _is_resolved(ticket: Ticket) -> bool:
@@ -72,6 +77,97 @@ def _evaluate_answer(ticket: Ticket, answer_text: str) -> tuple[int, list[str]]:
     return max(0, score), missed
 
 
+def load_curricula(path: Path = DEFAULT_CURRICULA_PATH) -> dict[str, dict]:
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, dict] = {}
+    for name, cfg in data.items():
+        if isinstance(name, str) and isinstance(cfg, dict):
+            out[name] = cfg
+    return out
+
+
+def list_curricula_text(curricula: dict[str, dict]) -> str:
+    if not curricula:
+        return "No curricula configured."
+    lines = ["Available curricula:"]
+    for name in sorted(curricula.keys()):
+        row = curricula[name]
+        label = str(row.get("label") or name)
+        desc = str(row.get("description") or "")
+        lines.append(f"- {name}: {label}" + (f" — {desc}" if desc else ""))
+    return "\n".join(lines)
+
+
+def _norm_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+    return out
+
+
+def build_session_row(
+    *,
+    curriculum: str | None,
+    ticket_key: str,
+    mode: str,
+    score: int | None,
+    missed: list[str],
+    user_answer_path: str | None,
+) -> dict:
+    return {
+        "ts": datetime.now(UTC).isoformat(),
+        "curriculum": curriculum,
+        "ticket_key": ticket_key,
+        "mode": mode,
+        "score": score,
+        "missed": missed,
+        "user_answer_path": user_answer_path,
+    }
+
+
+def log_session_row(path: Path, row: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def session_summary(path: Path, *, curriculum: str | None = None) -> dict[str, float | int]:
+    if not path.exists():
+        return {"attempts": 0, "avg_score": 0.0, "last_5_avg_score": 0.0}
+
+    rows: list[dict] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                row = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            if curriculum and row.get("curriculum") != curriculum:
+                continue
+            rows.append(row)
+
+    scores = [int(r["score"]) for r in rows if isinstance(r.get("score"), int)]
+    if not scores:
+        return {"attempts": len(rows), "avg_score": 0.0, "last_5_avg_score": 0.0}
+
+    avg = sum(scores) / float(len(scores))
+    last = scores[-5:]
+    last_avg = sum(last) / float(len(last))
+    return {"attempts": len(rows), "avg_score": avg, "last_5_avg_score": last_avg}
+
+
 def select_ticket(
     *,
     status: str,
@@ -80,27 +176,63 @@ def select_ticket(
     severity: str | None,
     owning_team: str | None,
     key: str | None,
+    curriculum_filters: dict | None = None,
 ) -> Ticket:
     init_db()
     with SessionLocal() as session:
         rows = list(session.exec(select(Ticket)).all())
 
+    curriculum_filters = curriculum_filters or {}
+    c_area = [x.lower() for x in _norm_list(curriculum_filters.get("product_area"))]
+    c_env = [x.lower() for x in _norm_list(curriculum_filters.get("environment"))]
+    c_severity = [x.upper() for x in _norm_list(curriculum_filters.get("severity"))]
+    c_status = [x.lower() for x in _norm_list(curriculum_filters.get("status"))]
+    c_team = [x for x in _norm_list(curriculum_filters.get("owning_team"))]
+
     filtered: list[Ticket] = []
     for row in rows:
         if key and (row.external_key != key and row.key != key and row.short_id != key):
             continue
-        if area and (row.product_area or "").lower() != area.lower():
+        row_area = (row.product_area or "").lower()
+        row_env = (row.environment or "").lower()
+        row_sev = (row.severity or "").upper()
+
+        if area:
+            if row_area != area.lower():
+                continue
+        elif c_area and row_area not in c_area:
             continue
-        if env and (row.environment or "").lower() != env.lower():
+
+        if env:
+            if row_env != env.lower():
+                continue
+        elif c_env and row_env not in c_env:
             continue
-        if severity and (row.severity or "").upper() != severity.upper():
+
+        if severity:
+            if row_sev != severity.upper():
+                continue
+        elif c_severity and row_sev not in c_severity:
             continue
-        if status == "open" and _is_resolved(row):
+
+        resolved = _is_resolved(row)
+        if status == "open" and resolved:
             continue
-        if status == "resolved" and not _is_resolved(row):
+        if status == "resolved" and not resolved:
             continue
+        if status == "any" and c_status:
+            allowed_open = "open" in c_status
+            allowed_resolved = "resolved" in c_status or "closed" in c_status
+            if resolved and not allowed_resolved:
+                continue
+            if (not resolved) and not allowed_open:
+                continue
+
         team, _ = TEAM_MAP.get((row.product_area or "").lower(), ("general-support", "oncall-support"))
-        if owning_team and team != owning_team:
+        if owning_team:
+            if team != owning_team:
+                continue
+        elif c_team and team not in c_team:
             continue
         filtered.append(row)
 
@@ -182,10 +314,27 @@ def main() -> None:
     parser.add_argument("--severity", type=str, default=None)
     parser.add_argument("--owning-team", type=str, default=None)
     parser.add_argument("--key", type=str, default=None)
+    parser.add_argument("--curriculum", type=str, default=None)
+    parser.add_argument("--curricula-path", type=Path, default=DEFAULT_CURRICULA_PATH)
+    parser.add_argument("--list-curricula", action="store_true")
     parser.add_argument("--mode", choices=["prompt", "reveal", "evaluate"], default="prompt")
     parser.add_argument("--comments", type=int, default=4)
     parser.add_argument("--answer-file", type=Path, default=None)
+    parser.add_argument("--log-session", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--session-out", type=Path, default=DEFAULT_SESSION_OUT)
     args = parser.parse_args()
+
+    curricula = load_curricula(args.curricula_path)
+    if args.list_curricula:
+        print(list_curricula_text(curricula))
+        return
+
+    curriculum_filters: dict | None = None
+    if args.curriculum:
+        row = curricula.get(args.curriculum)
+        if row is None:
+            raise ValueError(f"Unknown curriculum: {args.curriculum}")
+        curriculum_filters = row.get("filters") if isinstance(row.get("filters"), dict) else {}
 
     ticket = select_ticket(
         status=args.status,
@@ -194,9 +343,32 @@ def main() -> None:
         severity=args.severity,
         owning_team=args.owning_team,
         key=args.key,
+        curriculum_filters=curriculum_filters,
     )
     answer_text = args.answer_file.read_text(encoding="utf-8") if args.answer_file and args.answer_file.exists() else None
     print(render_drill(ticket, mode=args.mode, comments_limit=args.comments, answer_text=answer_text))
+
+    score: int | None = None
+    missed: list[str] = []
+    if args.mode == "evaluate":
+        score, missed = _evaluate_answer(ticket, answer_text or "")
+
+    if args.log_session:
+        ticket_key = ticket.external_key or ticket.key or ticket.short_id or "unknown"
+        row = build_session_row(
+            curriculum=args.curriculum,
+            ticket_key=ticket_key,
+            mode=args.mode,
+            score=score,
+            missed=missed,
+            user_answer_path=str(args.answer_file) if args.answer_file else None,
+        )
+        log_session_row(args.session_out, row)
+        summary = session_summary(args.session_out, curriculum=args.curriculum)
+        print("\nSESSION SUMMARY")
+        print(f"- attempts: {int(summary['attempts'])}")
+        print(f"- avg_score: {float(summary['avg_score']):.2f}")
+        print(f"- last_5_avg_score: {float(summary['last_5_avg_score']):.2f}")
 
 
 if __name__ == "__main__":

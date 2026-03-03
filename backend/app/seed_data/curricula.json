@@ -1,0 +1,29 @@
+{
+  "auth_week_1": {
+    "label": "Auth Week 1",
+    "description": "Core auth triage and QA scenarios for onboarding week 1.",
+    "filters": {
+      "product_area": ["auth"],
+      "severity": ["S2", "S3"],
+      "status": ["Resolved", "Open"]
+    }
+  },
+  "frontend_week_1": {
+    "label": "Frontend Week 1",
+    "description": "Routing, proxy, and browser-facing issue drills.",
+    "filters": {
+      "product_area": ["frontend"],
+      "severity": ["S2", "S3", "S4"],
+      "status": ["Resolved", "Open"]
+    }
+  },
+  "search_week_1": {
+    "label": "Search Week 1",
+    "description": "Ask Echo and retrieval quality drills for support + QA blend.",
+    "filters": {
+      "product_area": ["search"],
+      "severity": ["S2", "S3"],
+      "status": ["Resolved", "Open"]
+    }
+  }
+}
