@@ -245,12 +245,11 @@ def select_ticket(
 
 def render_drill(ticket: Ticket, *, mode: str, comments_limit: int = 4, answer_text: str | None = None) -> str:
     area = (ticket.product_area or "").lower()
-    team = (ticket.owning_team or "").strip()
-    escalation = (ticket.escalation_target or "").strip()
-    if not team or not escalation:
-        fallback_team, fallback_escalation = TEAM_MAP.get(area, ("general-support", "oncall-support"))
-        team = team or fallback_team
-        escalation = escalation or fallback_escalation
+    explicit_team = (ticket.owning_team or "").strip()
+    explicit_escalation = (ticket.escalation_target or "").strip()
+    fallback_team, fallback_escalation = TEAM_MAP.get(area, ("general-support", "oncall-support"))
+    team = explicit_team or fallback_team or "Unknown"
+    escalation = explicit_escalation or fallback_escalation or "Unknown"
     resolved = _is_resolved(ticket)
 
     lines: list[str] = []
@@ -258,9 +257,10 @@ def render_drill(ticket: Ticket, *, mode: str, comments_limit: int = 4, answer_t
     lines.append(f"- Summary: {ticket.summary}")
     lines.append(f"- Environment: {ticket.environment or 'unknown'}")
     lines.append(f"- Severity/Priority: {ticket.severity or 'unknown'} / {ticket.priority or 'unknown'}")
+    lines.append(f"- Owning Team: {team}")
+    lines.append(f"- Escalation Target: {escalation}")
     for bullet in _what_to_ask(ticket):
         lines.append(f"- Ask next: {bullet}")
-    lines.append(f"- Escalation target suggestion: {team} -> {escalation}")
 
     lines.append("")
     lines.append("QA BLOCK")

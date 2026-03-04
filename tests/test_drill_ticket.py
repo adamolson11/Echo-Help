@@ -45,4 +45,5 @@ def test_drill_reveal_includes_fix_and_did_not_work() -> None:
     out = render_drill(_ticket_fixture(), mode="reveal", comments_limit=5)
     assert "Final fix:" in out
     assert "[DID_NOT_WORK]" in out
-    assert "identity-platform -> oncall-identity" in out
+    assert "Owning Team:" in out
+    assert "Escalation Target:" in out
