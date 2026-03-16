@@ -106,9 +106,9 @@ if embeddings_enabled():
         model = _get_model()
         if model is None:
             _log_disabled_once()
-            digest = hashlib.sha256
+            hash_func = hashlib.sha256
             fallback = [
-                [b / 255.0 for b in digest(t.encode("utf-8", "ignore")).digest()[:8]]
+                [b / 255.0 for b in hash_func(t.encode("utf-8", "ignore")).digest()[:8]]
                 for t in texts
             ]
             return fallback[0] if single else fallback
