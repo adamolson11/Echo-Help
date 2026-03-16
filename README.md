@@ -19,6 +19,16 @@ It lets agents search historical tickets, record what actually fixed each issue,
 
 ---
 
+## 📚 Project documentation
+
+- `docs/PROJECT_STATE_AUDIT.md` – reconstruction summary, retained/excluded PR
+  work, and current follow-up risks.
+- `ARCHITECTURE.md` – new engineer architecture overview and system contracts.
+- `docs/ARCHITECTURE.md` – endpoint-focused architecture notes.
+- `DEV_NOTES.md` – tradeoffs, rough edges, and current development notes.
+
+---
+
 ## ✨ Features
 
 - **Ticket search console**
