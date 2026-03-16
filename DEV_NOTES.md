@@ -111,6 +111,9 @@ DONE means all criteria are true:
   and local runs do not attempt model downloads.
 - Runtime embeddings loading now falls back to the deterministic hash-based path
   if model initialization fails.
+- Environments without access to the `all-MiniLM-L6-v2` model still degrade
+  cleanly to the deterministic 8-d hash fallback instead of failing ingest or
+  Ask Echo flows.
 
 ## 2026-02-26 big seed corpus + bad-aware retrieval
 
