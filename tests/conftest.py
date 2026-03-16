@@ -1,6 +1,12 @@
 import os
 import tempfile
 
+# Force the fallback (hash-based) embedding path in all tests so that
+# the test suite never tries to download the sentence-transformers model
+# from huggingface.co. This must be set before any backend module that
+# imports `backend.app.services.embeddings` is imported.
+os.environ.setdefault("ECHO_EMBEDDINGS", "off")
+
 import pytest
 
 

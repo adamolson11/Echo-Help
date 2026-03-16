@@ -101,6 +101,17 @@ DONE means all criteria are true:
 - Test command: `pytest -q tests/test_ask_echo.py`
 - Build command (frontend criterion): `cd frontend && npm run build`
 
+## 2026-03-16 dependency security follow-up
+
+- `transformers` has been raised to `4.48.0` to pick up the patched
+  deserialization fix.
+- `tokenizers` was raised to `0.21.4` to stay compatible with the newer
+  `transformers` pin.
+- Tests now force `ECHO_EMBEDDINGS=off` before backend imports so offline CI
+  and local runs do not attempt model downloads.
+- Runtime embeddings loading now falls back to the deterministic hash-based path
+  if model initialization fails.
+
 ## 2026-02-26 big seed corpus + bad-aware retrieval
 
 Generate dataset (JSONL):

@@ -51,15 +51,38 @@ def log_embeddings_disabled_once() -> None:
 if embeddings_enabled():
 
     def _get_model():
-        global _model
+        global _model, _DISABLED_REASON
         if _model is None:
-            _model = SentenceTransformer(MODEL_NAME)
+            try:
+                _model = SentenceTransformer(MODEL_NAME)
+            except Exception as exc:
+                _DISABLED_REASON = f"model load failed: {exc}"
+                _model = None
+                return None
         return _model
 
     def cosine_similarity(a, b):
         """
         Compute cosine similarity between two vectors (lists or numpy arrays).
         """
+        if _DISABLED_REASON is not None:
+            if not a or not b:
+                return 0.0
+            length = min(len(a), len(b))
+            if length == 0:
+                return 0.0
+            dot = 0.0
+            norm_a = 0.0
+            norm_b = 0.0
+            for i in range(length):
+                va = float(a[i])
+                vb = float(b[i])
+                dot += va * vb
+                norm_a += va * va
+                norm_b += vb * vb
+            if norm_a == 0.0 or norm_b == 0.0:
+                return 0.0
+            return dot / (math.sqrt(norm_a) * math.sqrt(norm_b))
         va = np.array(a)
         vb = np.array(b)
         denom = np.linalg.norm(va) * np.linalg.norm(vb)
@@ -77,10 +100,18 @@ if embeddings_enabled():
             texts = [text]
             single = True
         else:
-            texts = text
+            texts = list(text)
             single = False
 
         model = _get_model()
+        if model is None:
+            _log_disabled_once()
+            digest = hashlib.sha256
+            fallback = [
+                [b / 255.0 for b in digest(t.encode("utf-8", "ignore")).digest()[:8]]
+                for t in texts
+            ]
+            return fallback[0] if single else fallback
         # The SentenceTransformer encode API may return numpy arrays or tensors
         # depending on environment; coerce to numpy array and then tolist for a
         # predictable Python list return type. Narrow-ignore where external stubs
