@@ -101,6 +101,39 @@ DONE means all criteria are true:
 - Test command: `pytest -q tests/test_ask_echo.py`
 - Build command (frontend criterion): `cd frontend && npm run build`
 
+## 2026-03-16 project-state reconstruction
+
+### Environment snapshot
+
+- `sentence_transformers` **is installed** in this environment, but model download
+  from `huggingface.co` is not available (no outbound network in the sandbox).
+- `ECHO_EMBEDDINGS=off` is now set unconditionally in `tests/conftest.py` so the
+  test suite always uses the hash-based fallback path and never requires a network
+  connection.
+- Runtime path: `embeddings.py` has been hardened so that if the model fails to
+  load (e.g. no network), both `embed_text()` and `cosine_similarity()` fall back
+  gracefully to the deterministic hash-based implementation instead of raising.
+
+### Tests
+
+- All 69 tests pass as of this entry.
+- Test command: `pytest -q`
+
+### What works
+
+- Full backend: search, semantic search (fallback), Ask Echo, ingest, feedback
+  loop, snippet CRUD, insights, pattern radar — all endpoints exercised by tests.
+- Frontend build passes: `npm --prefix frontend run build`.
+
+### Ongoing known limitations (unchanged from earlier entries)
+
+- ML-quality semantic search (384-d vectors) is unavailable until
+  `sentence_transformers` model weights are reachable; fallback 8-d vectors are
+  used instead.
+- `datetime.utcnow()` deprecation migration deferred to a Phase 1 post-hardening
+  pass.
+- SQLite only; PostgreSQL migration is a future phase.
+
 ## 2026-02-26 big seed corpus + bad-aware retrieval
 
 Generate dataset (JSONL):
