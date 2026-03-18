@@ -5,6 +5,7 @@ import logging
 
 # ruff: noqa: B008
 from fastapi import APIRouter, Depends, HTTPException
+
 try:
     from sklearn.cluster import KMeans
 except ModuleNotFoundError:
