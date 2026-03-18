@@ -1,9 +1,8 @@
-from collections.abc import Sequence
 import hashlib
 import logging
 import math
 import os
-
+from collections.abc import Sequence
 
 _LOGGER = logging.getLogger(__name__)
 _LOGGED_DISABLED = False
@@ -48,12 +47,22 @@ def log_embeddings_disabled_once() -> None:
     _log_disabled_once()
 
 
+def _fallback_vector(text: str, dim: int = 8) -> list[float]:
+    digest = hashlib.sha256(text.encode("utf-8", "ignore")).digest()
+    return [b / 255.0 for b in digest[:dim]]
+
+
 if embeddings_enabled():
 
     def _get_model():
-        global _model
+        global _DISABLED_REASON, _model
         if _model is None:
-            _model = SentenceTransformer(MODEL_NAME)
+            try:
+                _model = SentenceTransformer(MODEL_NAME)
+            except Exception as exc:
+                _DISABLED_REASON = f"model load failed: {type(exc).__name__}"
+                _log_disabled_once()
+                return None
         return _model
 
     def cosine_similarity(a, b):
@@ -67,7 +76,7 @@ if embeddings_enabled():
             return 0.0
         return float(np.dot(va, vb) / denom)
 
-    def embed_text(text: str | Sequence[str]):
+    def embed_text(text: str | Sequence[str]):  # pyright: ignore[reportRedeclaration]
         """
         Return embeddings as Python lists.
         If a single string is passed, return a single vector.
@@ -81,6 +90,10 @@ if embeddings_enabled():
             single = False
 
         model = _get_model()
+        if model is None:
+            if single:
+                return _fallback_vector(texts[0])
+            return [_fallback_vector(item) for item in texts]
         # The SentenceTransformer encode API may return numpy arrays or tensors
         # depending on environment; coerce to numpy array and then tolist for a
         # predictable Python list return type. Narrow-ignore where external stubs
@@ -91,11 +104,6 @@ if embeddings_enabled():
         return lists[0] if single else lists
 
 else:
-
-    def _fallback_vector(text: str, dim: int = 8) -> list[float]:
-        digest = hashlib.sha256(text.encode("utf-8", "ignore")).digest()
-        values = [b / 255.0 for b in digest[:dim]]
-        return values
 
     def cosine_similarity(a, b):
         _log_disabled_once()

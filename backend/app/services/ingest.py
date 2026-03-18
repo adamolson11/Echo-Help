@@ -1,3 +1,5 @@
+from typing import cast
+
 from sqlmodel import Session, select
 
 from backend.app.models.embedding import Embedding
@@ -79,7 +81,11 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
             if not embeddings_enabled():
                 log_embeddings_disabled_once()
             text_for_embedding = f"{ticket.summary}\n\n{ticket.description or ''}"
-            vector = embed_text(text_for_embedding)
+            raw_vector = embed_text(text_for_embedding)
+            vector = cast(
+                list[float],
+                raw_vector[0] if raw_vector and isinstance(raw_vector[0], list) else raw_vector,
+            )
             embedding = Embedding(
                 ticket_id=ticket_id,
                 text=text_for_embedding,
