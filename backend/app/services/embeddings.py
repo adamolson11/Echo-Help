@@ -60,7 +60,7 @@ if embeddings_enabled():
             try:
                 _model = SentenceTransformer(MODEL_NAME)
             except Exception as exc:
-                _DISABLED_REASON = f"model load failed: {type(exc).__name__}"
+                _DISABLED_REASON = f"model load failed: {type(exc).__name__}: {exc}"
                 _log_disabled_once()
                 return None
         return _model

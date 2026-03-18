@@ -15,6 +15,12 @@ from backend.app.services.embeddings import (
 from backend.app.services.tickets import assign_short_id
 
 
+def _single_embedding_vector(vector: list[float] | list[list[float]]) -> list[float]:
+    if vector and isinstance(vector[0], list):
+        return cast(list[float], vector[0])
+    return cast(list[float], vector)
+
+
 def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
     """Create a Ticket from an IngestThread. If resolved, also create a TicketFeedback row.
 
@@ -81,11 +87,7 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
             if not embeddings_enabled():
                 log_embeddings_disabled_once()
             text_for_embedding = f"{ticket.summary}\n\n{ticket.description or ''}"
-            raw_vector = embed_text(text_for_embedding)
-            vector = cast(
-                list[float],
-                raw_vector[0] if raw_vector and isinstance(raw_vector[0], list) else raw_vector,
-            )
+            vector = _single_embedding_vector(embed_text(text_for_embedding))
             embedding = Embedding(
                 ticket_id=ticket_id,
                 text=text_for_embedding,
