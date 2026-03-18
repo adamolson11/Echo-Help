@@ -1,9 +1,12 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+
+_log = logging.getLogger(__name__)
 
 # ...existing imports...
 from . import db
@@ -27,6 +30,24 @@ async def lifespan(app: FastAPI):
     # app lifecycle; calling `init_db()` here makes table creation
     # deterministic regardless of test import order.
     db.init_db()
+
+    # Seed demo data on first run so the product is ready to explore out of
+    # the box (QA, demos, local dev). Both helpers are idempotent — they check
+    # for existing rows before inserting, so re-runs are safe.
+    try:
+        from .db_init import seed_tickets
+
+        seed_tickets()
+    except Exception as exc:
+        _log.warning("seed_tickets() skipped: %s", exc)
+
+    try:
+        from scripts.seed_demo_org import seed_demo_org  # type: ignore
+
+        seed_demo_org()
+    except Exception as exc:
+        _log.warning("seed_demo_org() skipped: %s", exc)
+
     yield
 
 
