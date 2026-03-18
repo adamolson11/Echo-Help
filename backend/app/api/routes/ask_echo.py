@@ -25,6 +25,12 @@ from backend.app.schemas.insights import AskEchoLogDetail, AskEchoLogSummary
 from backend.app.schemas.snippets import SnippetSearchResult
 from backend.app.services.ask_echo_engine import AskEchoEngine, AskEchoEngineRequest
 from backend.app.services.embeddings import embeddings_enabled, log_embeddings_disabled_once
+from backend.app.services.feedback import (
+    apply_feedback_analytics,
+    apply_user_feedback,
+    build_feedback_analytics,
+    list_feedback_records,
+)
 
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
 logger = logging.getLogger("uvicorn.error")
@@ -44,7 +50,9 @@ def submit_ask_echo_feedback(
         helped=payload.helped,
         notes=(payload.notes.strip() if payload.notes else None),
     )
+    apply_user_feedback(log=log, helped=payload.helped)
     session.add(row)
+    session.add(log)
     session.commit()
     session.refresh(row)
     if row.id is None:
@@ -83,6 +91,23 @@ def get_ask_echo_feedback_summary(
     )
 
 
+@router.get("/ask-echo/feedback/records")
+def get_ask_echo_feedback_records(
+    limit: int = 100,
+    low_confidence_only: bool = False,
+    session: Session = Depends(get_session),
+):
+    items = list_feedback_records(
+        session,
+        limit=limit,
+        low_confidence_only=low_confidence_only,
+    )
+    return {
+        "meta": {"kind": "ask_echo_feedback_records", "version": "v1"},
+        "items": items,
+    }
+
+
 @router.post("/ask-echo", response_model=AskEchoResponse)
 def ask_echo(
     req: AskEchoRequest,
@@ -119,22 +144,63 @@ def ask_echo(
         for c in (result.reasoning.candidate_snippets or [])
     ]
     chosen_ids = list(result.reasoning.chosen_snippet_ids or [])
+    analytics = build_feedback_analytics(
+        answer=result.answer_text,
+        confidence=result.kb_confidence,
+        sources=list(result.response["sources"]),
+        reasoning=result.response["reasoning"],
+        mode=result.mode,
+    )
 
     log = AskEchoLog(
         query=req.q,
+        answer_text=analytics["answer_text"],
         top_score=float(result.top_ticket_score or 0.0),
         kb_confidence=float(result.kb_confidence or 0.0),
         mode=result.mode,
         references_count=refs_count,
+        source_count=analytics["source_count"],
+        reasoning_summary=analytics["reasoning_summary"],
+        low_confidence=analytics["low_confidence"],
+        no_sources=analytics["no_sources"],
+        fallback_only=analytics["fallback_only"],
+        feedback_status=analytics["feedback_status"],
+        feedback_rating=analytics["feedback_rating"],
         candidate_snippet_ids_json=(json.dumps(candidate_data) if candidate_data else None),
         chosen_snippet_ids_json=json.dumps(chosen_ids) if chosen_ids else None,
         echo_score=result.reasoning.echo_score,
         reasoning_notes=(
-            json.dumps({"features": result.features, "response": result.response})
+            json.dumps(
+                {
+                    "features": result.features,
+                    "response": result.response,
+                    "analytics": {
+                        "source_count": analytics["source_count"],
+                        "low_confidence": analytics["low_confidence"],
+                        "no_sources": analytics["no_sources"],
+                        "fallback_only": analytics["fallback_only"],
+                        "feedback_status": analytics["feedback_status"],
+                        "feedback_rating": analytics["feedback_rating"],
+                    },
+                }
+            )
             if getattr(result, "features", None)
-            else json.dumps({"response": result.response})
+            else json.dumps(
+                {
+                    "response": result.response,
+                    "analytics": {
+                        "source_count": analytics["source_count"],
+                        "low_confidence": analytics["low_confidence"],
+                        "no_sources": analytics["no_sources"],
+                        "fallback_only": analytics["fallback_only"],
+                        "feedback_status": analytics["feedback_status"],
+                        "feedback_rating": analytics["feedback_rating"],
+                    },
+                }
+            )
         ),
     )
+    apply_feedback_analytics(log=log, analytics=analytics)
     try:
         session.add(log)
         session.commit()
@@ -253,7 +319,7 @@ def get_ask_echo_log(
     return {
         "id": log.id,
         "query_text": log.query,
-        "answer_text": "",
+        "answer_text": log.answer_text,
         "ticket_id": None,
         "echo_score": log.echo_score,
         "created_at": log.created_at.isoformat() if log.created_at else None,

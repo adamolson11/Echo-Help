@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 
-
 client = TestClient(app)
 
 
@@ -24,6 +23,8 @@ def test_ask_echo_logs_list_and_detail_smoke():
   assert r2.status_code == 200
   detail = r2.json()
   assert detail["id"] == log_id
+  assert isinstance(detail["answer_text"], str)
   assert "reasoning" in detail
   assert "candidate_snippets" in detail["reasoning"]
   assert "chosen_snippet_ids" in detail["reasoning"]
+  assert "reasoning_notes" in detail

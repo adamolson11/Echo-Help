@@ -163,6 +163,34 @@ def init_db():
             _add_col_if_missing(
                 table="askecholog", col_def="reasoning_notes TEXT", col_name="reasoning_notes"
             )
+            _add_col_if_missing(table="askecholog", col_def="answer_text TEXT DEFAULT ''", col_name="answer_text")
+            _add_col_if_missing(
+                table="askecholog", col_def="source_count INTEGER NOT NULL DEFAULT 0", col_name="source_count"
+            )
+            _add_col_if_missing(
+                table="askecholog", col_def="reasoning_summary TEXT", col_name="reasoning_summary"
+            )
+            _add_col_if_missing(
+                table="askecholog",
+                col_def="low_confidence BOOLEAN NOT NULL DEFAULT 0",
+                col_name="low_confidence",
+            )
+            _add_col_if_missing(
+                table="askecholog", col_def="no_sources BOOLEAN NOT NULL DEFAULT 0", col_name="no_sources"
+            )
+            _add_col_if_missing(
+                table="askecholog", col_def="fallback_only BOOLEAN NOT NULL DEFAULT 0", col_name="fallback_only"
+            )
+            _add_col_if_missing(
+                table="askecholog",
+                col_def="feedback_status TEXT DEFAULT 'pending'",
+                col_name="feedback_status",
+            )
+            _add_col_if_missing(
+                table="askecholog",
+                col_def="feedback_rating INTEGER NOT NULL DEFAULT 0",
+                col_name="feedback_rating",
+            )
 
             # Ticket feedback has grown new columns over time; older DBs may be missing them.
             _add_col_if_missing(table="ticketfeedback", col_def="helped BOOLEAN", col_name="helped")

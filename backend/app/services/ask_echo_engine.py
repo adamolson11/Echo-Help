@@ -18,7 +18,6 @@ from ..schemas.ask_echo import (
     AskEchoTicketSummary,
 )
 from .ask_echo_templates import AskEchoTemplates
-from .feedback import record_feedback
 from .kb_adapter import search_kb_entries
 from .kb_confidence_policy import calculate_kb_confidence
 from .ranking_policy import clamp01, rank_snippets, rank_tickets
@@ -488,7 +487,6 @@ class AskEchoEngine:
             scored_tickets=[(float(s), t) for s, t in scored],
             snippets=snippets,
         )
-        record_feedback(question=q, answer=response["answer"], rating=0)
 
         return AskEchoEngineResult(
             response=response,

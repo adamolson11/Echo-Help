@@ -3,12 +3,10 @@ from fastapi.testclient import TestClient
 from backend.app.db import SessionLocal, init_db
 from backend.app.main import app
 from backend.app.services.ask_echo_engine import AskEchoEngine, AskEchoEngineRequest
-from backend.app.services.feedback import clear_recorded_feedback, list_recorded_feedback
 
 
 def test_ask_echo_engine_response_schema_is_always_present() -> None:
     init_db()
-    clear_recorded_feedback()
 
     engine = AskEchoEngine(
         ticket_retriever=lambda **_: [],
@@ -27,11 +25,6 @@ def test_ask_echo_engine_response_schema_is_always_present() -> None:
     assert isinstance(response["reasoning"], str)
     assert result.answer_text == response["answer"]
     assert result.kb_confidence == response["confidence"]
-
-    recorded = list_recorded_feedback()
-    assert recorded[-1]["question"] == "reset my password"
-    assert recorded[-1]["answer"] == response["answer"]
-    assert recorded[-1]["rating"] == 0
 
 
 def test_ask_echo_engine_fallback_response_has_empty_sources() -> None:
