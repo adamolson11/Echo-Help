@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlmodel import select
@@ -122,7 +122,7 @@ def build_session_row(
     user_answer_path: str | None,
 ) -> dict:
     return {
-        "ts": datetime.now(UTC).isoformat(),
+        "ts": datetime.now(timezone.utc).isoformat(),
         "curriculum": curriculum,
         "ticket_key": ticket_key,
         "mode": mode,

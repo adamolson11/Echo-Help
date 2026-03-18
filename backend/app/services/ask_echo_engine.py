@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import Literal, cast
 
 from sqlmodel import Session
 
@@ -17,8 +18,8 @@ from ..schemas.ask_echo import (
     AskEchoTicketSummary,
 )
 from .ask_echo_templates import AskEchoTemplates
-from .kb_confidence_policy import calculate_kb_confidence
 from .kb_adapter import search_kb_entries
+from .kb_confidence_policy import calculate_kb_confidence
 from .ranking_policy import rank_snippets, rank_tickets
 from .semantic_search import semantic_search_tickets
 from .snippet_repository import search_snippets as repo_search_snippets
@@ -286,12 +287,16 @@ class AskEchoEngine:
             boosts_applied = signals.get("boosts_applied") if isinstance(signals, dict) else []
             quality_label = signals.get("answer_quality_label") if isinstance(signals, dict) else None
             final_score = signals.get("final_score") if isinstance(signals, dict) else None
+            evidence_quality_label = cast(
+                Literal["good", "bad", "mixed"] | None,
+                quality_label if quality_label in {"good", "bad", "mixed"} else None,
+            )
 
             evidence_rows.append(
                 AskEchoEvidence(
                     ticket_id=int(tid),
                     external_key=getattr(row.ticket, "external_key", None),
-                    answer_quality_label=str(quality_label) if quality_label in {"good", "bad", "mixed"} else None,
+                    answer_quality_label=evidence_quality_label,
                     boosts_applied=[str(x) for x in boosts_applied] if isinstance(boosts_applied, list) else [],
                     final_score=float(final_score) if isinstance(final_score, (int, float)) else None,
                 )
