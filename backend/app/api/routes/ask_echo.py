@@ -129,7 +129,11 @@ def ask_echo(
         candidate_snippet_ids_json=(json.dumps(candidate_data) if candidate_data else None),
         chosen_snippet_ids_json=json.dumps(chosen_ids) if chosen_ids else None,
         echo_score=result.reasoning.echo_score,
-        reasoning_notes=(json.dumps({"features": result.features}) if getattr(result, "features", None) else None),
+        reasoning_notes=(
+            json.dumps({"features": result.features, "response": result.response})
+            if getattr(result, "features", None)
+            else json.dumps({"response": result.response})
+        ),
     )
     try:
         session.add(log)
