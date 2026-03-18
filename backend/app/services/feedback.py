@@ -41,10 +41,12 @@ class FeedbackInspectionRecord(TypedDict):
 
 
 def _normalize_answer(answer: str) -> str:
+    """Normalize answer text by collapsing repeated whitespace."""
     return " ".join((answer or "").split())
 
 
 def normalize_sources(sources: list[str]) -> list[str]:
+    """Deduplicate and whitespace-normalize source labels while preserving order."""
     normalized: list[str] = []
     seen: set[str] = set()
     for raw in sources:
@@ -216,18 +218,23 @@ def list_feedback_records(
 
         source_count = int(log.source_count or len(sources))
         answer_text = _normalize_answer(log.answer_text or _extract_response_answer(log))
+        computed_low_confidence = bool(
+            log.low_confidence or float(log.kb_confidence or 0.0) < LOW_CONFIDENCE_THRESHOLD
+        )
+        computed_no_sources = bool(log.no_sources or source_count == 0)
+        computed_fallback_only = bool(log.fallback_only or computed_no_sources or log.mode == "general_answer")
         reasoning_summary = (
             log.reasoning_summary
             or _normalize_reasoning_summary(
                 reasoning=_extract_response_reasoning(log),
-                low_confidence=bool(log.low_confidence or float(log.kb_confidence or 0.0) < LOW_CONFIDENCE_THRESHOLD),
-                no_sources=bool(log.no_sources or source_count == 0),
-                fallback_only=bool(log.fallback_only or source_count == 0 or log.mode == "general_answer"),
+                low_confidence=computed_low_confidence,
+                no_sources=computed_no_sources,
+                fallback_only=computed_fallback_only,
             )
         ).strip()
-        low_confidence = bool(log.low_confidence or float(log.kb_confidence or 0.0) < LOW_CONFIDENCE_THRESHOLD)
-        no_sources = bool(log.no_sources or source_count == 0)
-        fallback_only = bool(log.fallback_only or no_sources or log.mode == "general_answer")
+        low_confidence = computed_low_confidence
+        no_sources = computed_no_sources
+        fallback_only = computed_fallback_only
 
         if low_confidence_only and not low_confidence:
             continue

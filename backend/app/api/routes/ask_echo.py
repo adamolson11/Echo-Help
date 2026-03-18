@@ -180,6 +180,12 @@ def ask_echo(
         "feedback_status": analytics["feedback_status"],
         "feedback_rating": analytics["feedback_rating"],
     }
+    reasoning_notes_payload: dict[str, object] = {
+        "response": result.response,
+        "analytics": analytics_payload,
+    }
+    if getattr(result, "features", None):
+        reasoning_notes_payload["features"] = result.features
 
     log = AskEchoLog(
         query=req.q,
@@ -198,22 +204,7 @@ def ask_echo(
         candidate_snippet_ids_json=(json.dumps(candidate_data) if candidate_data else None),
         chosen_snippet_ids_json=json.dumps(chosen_ids) if chosen_ids else None,
         echo_score=result.reasoning.echo_score,
-        reasoning_notes=(
-            json.dumps(
-                {
-                    "features": result.features,
-                    "response": result.response,
-                    "analytics": analytics_payload,
-                }
-            )
-            if getattr(result, "features", None)
-            else json.dumps(
-                {
-                    "response": result.response,
-                    "analytics": analytics_payload,
-                }
-            )
-        ),
+        reasoning_notes=json.dumps(reasoning_notes_payload),
     )
     apply_feedback_analytics(log=log, analytics=analytics)
     try:
