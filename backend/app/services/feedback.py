@@ -41,7 +41,7 @@ class FeedbackInspectionRecord(TypedDict):
 
 
 def _normalize_answer(answer: str) -> str:
-    """Normalize answer text by collapsing repeated whitespace."""
+    """Normalize answer text only by collapsing repeated whitespace."""
     return " ".join((answer or "").split())
 
 

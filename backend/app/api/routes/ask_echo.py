@@ -181,11 +181,10 @@ def ask_echo(
         "feedback_rating": analytics["feedback_rating"],
     }
     reasoning_notes_payload: dict[str, object] = {
+        "features": result.features,
         "response": result.response,
         "analytics": analytics_payload,
     }
-    if getattr(result, "features", None):
-        reasoning_notes_payload["features"] = result.features
 
     log = AskEchoLog(
         query=req.q,
