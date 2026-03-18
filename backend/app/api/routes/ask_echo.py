@@ -171,6 +171,15 @@ def ask_echo(
         reasoning=result.response["reasoning"],
         mode=result.mode,
     )
+    analytics_payload = {
+        "source_count": analytics["source_count"],
+        "sources": response_sources,
+        "low_confidence": analytics["low_confidence"],
+        "no_sources": analytics["no_sources"],
+        "fallback_only": analytics["fallback_only"],
+        "feedback_status": analytics["feedback_status"],
+        "feedback_rating": analytics["feedback_rating"],
+    }
 
     log = AskEchoLog(
         query=req.q,
@@ -194,30 +203,14 @@ def ask_echo(
                 {
                     "features": result.features,
                     "response": result.response,
-                    "analytics": {
-                        "source_count": analytics["source_count"],
-                        "sources": response_sources,
-                        "low_confidence": analytics["low_confidence"],
-                        "no_sources": analytics["no_sources"],
-                        "fallback_only": analytics["fallback_only"],
-                        "feedback_status": analytics["feedback_status"],
-                        "feedback_rating": analytics["feedback_rating"],
-                    },
+                    "analytics": analytics_payload,
                 }
             )
             if getattr(result, "features", None)
             else json.dumps(
                 {
                     "response": result.response,
-                    "analytics": {
-                        "source_count": analytics["source_count"],
-                        "sources": response_sources,
-                        "low_confidence": analytics["low_confidence"],
-                        "no_sources": analytics["no_sources"],
-                        "fallback_only": analytics["fallback_only"],
-                        "feedback_status": analytics["feedback_status"],
-                        "feedback_rating": analytics["feedback_rating"],
-                    },
+                    "analytics": analytics_payload,
                 }
             )
         ),
