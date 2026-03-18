@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
 from backend.app.db import SessionLocal, init_db
 from backend.app.main import app
+from backend.app.models.ask_echo_feedback import AskEchoFeedback
+from backend.app.models.ask_echo_log import AskEchoLog
 from backend.app.models.ticket import Ticket
 from backend.app.models.ticket_feedback import TicketFeedback
 from backend.app.services.ranking_policy import rank_tickets
@@ -21,6 +24,22 @@ def _make_ticket(*, external_key: str, summary: str, created_at: datetime) -> Ti
         status="open",
         created_at=created_at,
         updated_at=created_at,
+    )
+
+
+def _make_answer_feedback_log(*, query: str, ticket_ids: list[int]) -> AskEchoLog:
+    return AskEchoLog(
+        query=query,
+        mode="kb_answer",
+        reasoning_notes=json.dumps(
+            {
+                "features": {
+                    "ticket": {
+                        "signal_evidence": [{"ticket_id": ticket_id} for ticket_id in ticket_ids],
+                    }
+                }
+            }
+        ),
     )
 
 
@@ -66,6 +85,115 @@ def test_rank_tickets_feedback_can_change_rank():
 
         ranked = rank_tickets(session, candidates=[t_a, t_b], query="mfa")
         assert ranked[0].ticket.id == t_b.id
+
+
+def test_rank_tickets_answer_feedback_positive_boosts_ranking():
+    init_db()
+    base = datetime(2025, 1, 10, 12, 0, 0)
+
+    with SessionLocal() as session:
+        t_boosted = _make_ticket(external_key="AF-POS", summary="Password reset loop", created_at=base)
+        t_baseline = _make_ticket(external_key="AF-BASE", summary="Password reset loop", created_at=base)
+        session.add(t_boosted)
+        session.add(t_baseline)
+        session.commit()
+        session.refresh(t_boosted)
+        session.refresh(t_baseline)
+
+        assert t_boosted.id is not None
+        assert t_baseline.id is not None
+
+        baseline = rank_tickets(session, candidates=[t_boosted, t_baseline], query="password reset")
+        assert baseline[0].ticket.id == t_baseline.id
+
+        log = _make_answer_feedback_log(query="password reset", ticket_ids=[int(t_boosted.id)])
+        session.add(log)
+        session.commit()
+        session.refresh(log)
+        assert log.id is not None
+
+        session.add(AskEchoFeedback(ask_echo_log_id=int(log.id), helped=True, notes="worked"))
+        session.commit()
+
+        ranked = rank_tickets(session, candidates=[t_boosted, t_baseline], query="password reset")
+        assert ranked[0].ticket.id == t_boosted.id
+        assert ranked[0].signals is not None
+        assert ranked[0].signals.get("answer_feedback") == 1.0
+
+
+def test_rank_tickets_answer_feedback_negative_penalizes():
+    init_db()
+    base = datetime(2025, 1, 10, 12, 0, 0)
+
+    with SessionLocal() as session:
+        t_baseline = _make_ticket(external_key="AF-NEG-BASE", summary="MFA prompt loop", created_at=base)
+        t_penalized = _make_ticket(external_key="AF-NEG", summary="MFA prompt loop", created_at=base)
+        session.add(t_baseline)
+        session.add(t_penalized)
+        session.commit()
+        session.refresh(t_baseline)
+        session.refresh(t_penalized)
+
+        assert t_baseline.id is not None
+        assert t_penalized.id is not None
+
+        baseline = rank_tickets(session, candidates=[t_baseline, t_penalized], query="mfa prompt")
+        assert baseline[0].ticket.id == t_penalized.id
+
+        log = _make_answer_feedback_log(query="mfa prompt", ticket_ids=[int(t_penalized.id)])
+        session.add(log)
+        session.commit()
+        session.refresh(log)
+        assert log.id is not None
+
+        session.add(AskEchoFeedback(ask_echo_log_id=int(log.id), helped=False, notes="not useful"))
+        session.commit()
+
+        ranked = rank_tickets(session, candidates=[t_baseline, t_penalized], query="mfa prompt")
+        assert ranked[0].ticket.id == t_baseline.id
+        assert ranked[1].signals is not None
+        assert ranked[1].signals.get("answer_feedback") == -1.0
+
+
+def test_rank_tickets_answer_feedback_signal_deterministic():
+    init_db()
+    base = datetime(2025, 1, 10, 12, 0, 0)
+
+    with SessionLocal() as session:
+        t_boosted = _make_ticket(external_key="AF-DET", summary="VPN split tunnel broken", created_at=base)
+        t_other = _make_ticket(external_key="AF-OTHER", summary="VPN split tunnel broken", created_at=base)
+        session.add(t_boosted)
+        session.add(t_other)
+        session.commit()
+        session.refresh(t_boosted)
+        session.refresh(t_other)
+
+        assert t_boosted.id is not None
+        assert t_other.id is not None
+
+        log_yes = _make_answer_feedback_log(query="vpn split tunnel", ticket_ids=[int(t_boosted.id)])
+        log_no = _make_answer_feedback_log(query="vpn split tunnel", ticket_ids=[int(t_boosted.id)])
+        session.add(log_yes)
+        session.add(log_no)
+        session.commit()
+        session.refresh(log_yes)
+        session.refresh(log_no)
+
+        assert log_yes.id is not None
+        assert log_no.id is not None
+
+        session.add(AskEchoFeedback(ask_echo_log_id=int(log_yes.id), helped=True, notes="good"))
+        session.add(AskEchoFeedback(ask_echo_log_id=int(log_no.id), helped=False, notes="bad"))
+        session.add(AskEchoFeedback(ask_echo_log_id=int(log_yes.id), helped=True, notes="good again"))
+        session.commit()
+
+        r1 = rank_tickets(session, candidates=[t_boosted, t_other], query="vpn split tunnel")
+        r2 = rank_tickets(session, candidates=[t_other, t_boosted], query="vpn split tunnel")
+
+        assert [rt.ticket.id for rt in r1] == [rt.ticket.id for rt in r2]
+        assert r1[0].ticket.id == t_boosted.id
+        assert r1[0].signals is not None
+        assert r1[0].signals.get("answer_feedback") == 1.0 / 3.0
 
 
 def test_search_endpoint_uses_ranking_policy_ordering():

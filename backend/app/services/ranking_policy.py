@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -7,6 +8,8 @@ from datetime import datetime
 from sqlalchemy import case, func
 from sqlmodel import Session, select
 
+from ..models.ask_echo_feedback import AskEchoFeedback
+from ..models.ask_echo_log import AskEchoLog
 from ..models.snippets import SolutionSnippet
 from ..models.ticket import Ticket
 from ..models.ticket_feedback import TicketFeedback
@@ -188,6 +191,83 @@ def _ticket_feedback_maps(session: Session, *, ticket_ids: list[int]) -> tuple[d
     return ratio_map, usage_map
 
 
+def _ticket_ids_from_reasoning_notes(reasoning_notes: str | None) -> set[int]:
+    if not reasoning_notes:
+        return set()
+
+    try:
+        payload = json.loads(reasoning_notes)
+    except json.JSONDecodeError:
+        return set()
+
+    if not isinstance(payload, dict):
+        return set()
+
+    features = payload.get("features")
+    if not isinstance(features, dict):
+        return set()
+
+    ticket_features = features.get("ticket")
+    if not isinstance(ticket_features, dict):
+        return set()
+
+    signal_evidence = ticket_features.get("signal_evidence")
+    if not isinstance(signal_evidence, list):
+        return set()
+
+    ticket_ids: set[int] = set()
+    for item in signal_evidence:
+        if not isinstance(item, dict):
+            continue
+        ticket_id = item.get("ticket_id")
+        if isinstance(ticket_id, int):
+            ticket_ids.add(ticket_id)
+
+    return ticket_ids
+
+
+def _answer_feedback_signal_map(session: Session, *, ticket_ids: list[int]) -> dict[int, float]:
+    """Return a bounded answer-feedback signal in [-1, 1] for each ticket_id."""
+    if not ticket_ids:
+        return {}
+
+    relevant_ids = set(ticket_ids)
+    feedback_rows = list(session.exec(select(AskEchoFeedback)).all())
+    log_ids = sorted({int(row.ask_echo_log_id) for row in feedback_rows})
+    logs_by_id: dict[int, AskEchoLog] = {}
+    if log_ids:
+        logs_by_id = {
+            int(log.id): log
+            for log in session.exec(
+                select(AskEchoLog).where(AskEchoLog.id.in_(log_ids))  # type: ignore[reportAttributeAccessIssue]
+            ).all()
+            if log.id is not None
+        }
+
+    totals: dict[int, float] = {}
+    counts: dict[int, int] = {}
+    for feedback_row in feedback_rows:
+        log_row = logs_by_id.get(int(feedback_row.ask_echo_log_id))
+        if log_row is None:
+            continue
+        related_ticket_ids = relevant_ids.intersection(
+            _ticket_ids_from_reasoning_notes(getattr(log_row, "reasoning_notes", None))
+        )
+        if not related_ticket_ids:
+            continue
+
+        value = 1.0 if getattr(feedback_row, "helped", False) else -1.0
+        for ticket_id in related_ticket_ids:
+            totals[ticket_id] = totals.get(ticket_id, 0.0) + value
+            counts[ticket_id] = counts.get(ticket_id, 0) + 1
+
+    return {
+        ticket_id: max(-1.0, min(1.0, totals[ticket_id] / float(counts[ticket_id])))
+        for ticket_id in sorted(counts)
+        if counts[ticket_id] > 0
+    }
+
+
 def rank_tickets(
     session: Session,
     *,
@@ -198,12 +278,14 @@ def rank_tickets(
 ) -> list[RankedTicket]:
     """Rank ticket candidates deterministically.
 
-    Signals (v1): semantic similarity, keyword match, recency, feedback ratio, usage count.
+    Signals: semantic similarity, keyword match, recency, ticket feedback, answer feedback,
+    usage count, and small quality/context adjustments.
     """
     semantic_scores = semantic_scores or {}
 
     ticket_ids: list[int] = [int(t.id) for t in candidates if t.id is not None]
     feedback_ratio_map, usage_map = _ticket_feedback_maps(session, ticket_ids=ticket_ids)
+    answer_feedback_map = _answer_feedback_signal_map(session, ticket_ids=ticket_ids)
 
     # Compute recency in a way that does NOT depend on candidate list order.
     created_by_tid: dict[int, datetime] = {
@@ -228,6 +310,7 @@ def rank_tickets(
         keyword = _keyword_match_score(query=query, haystack=haystack)
 
         feedback = float(feedback_ratio_map.get(tid, 0.5))
+        answer_feedback = float(answer_feedback_map.get(tid, 0.0))
         usage = float(usage_map.get(tid, 0.0))
         recency = float(recency_norm_by_tid.get(tid, 0.0)) if tid != -1 else 0.0
         fix_confirmed = _ticket_fix_confirmed(t)
@@ -243,6 +326,10 @@ def rank_tickets(
             boosts_applied.append("env_match")
         if severity_match > 0.0:
             boosts_applied.append("severity_match")
+        if answer_feedback > 0.0:
+            boosts_applied.append("answer_feedback_positive")
+        if answer_feedback < 0.0:
+            boosts_applied.append("answer_feedback_negative")
         if bad_quality_penalty > 0.0:
             boosts_applied.append("bad_quality_penalty")
 
@@ -253,6 +340,7 @@ def rank_tickets(
                 0.48 * semantic
                 + 0.18 * keyword
                 + 0.10 * feedback
+                + 0.10 * answer_feedback
                 + 0.05 * usage
                 + 0.05 * recency
                 + 0.08 * fix_confirmed
@@ -265,6 +353,7 @@ def rank_tickets(
                 0.55 * semantic
                 + 0.25 * keyword
                 + 0.10 * feedback
+                + 0.10 * answer_feedback
                 + 0.05 * usage
                 + 0.05 * recency
             )
@@ -277,6 +366,7 @@ def rank_tickets(
                     "semantic": float(semantic),
                     "keyword": float(keyword),
                     "feedback": float(feedback),
+                    "answer_feedback": float(answer_feedback),
                     "usage": float(usage),
                     "recency": float(recency),
                     "fix_confirmed": float(fix_confirmed),
