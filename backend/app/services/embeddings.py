@@ -90,7 +90,9 @@ if embeddings_enabled():
             return 0.0
         return float(np.dot(va, vb) / denom)
 
-    def _embed_text_impl(text: str | Sequence[str]) -> list[float] | list[list[float]]:
+    def _embed_text_with_sentence_transformers(
+        text: str | Sequence[str],
+    ) -> list[float] | list[list[float]]:
         """
         Return embeddings as Python lists.
         If a single string is passed, return a single vector.
@@ -148,7 +150,7 @@ else:
             return 0.0
         return dot / (math.sqrt(norm_a) * math.sqrt(norm_b))
 
-    def _embed_text_impl(text: str | Sequence[str]) -> list[float] | list[list[float]]:
+    def _embed_text_fallback(text: str | Sequence[str]) -> list[float] | list[list[float]]:
         _log_disabled_once()
         if isinstance(text, str):
             return _fallback_vector(text)
@@ -164,4 +166,6 @@ def embed_text(text: Sequence[str]) -> list[list[float]]: ...
 
 
 def embed_text(text: str | Sequence[str]) -> list[float] | list[list[float]]:
-    return _embed_text_impl(text)
+    if embeddings_enabled():
+        return _embed_text_with_sentence_transformers(text)
+    return _embed_text_fallback(text)
