@@ -42,20 +42,20 @@ def _tokenize(text: str) -> set[str]:
 
 
 def _keyword_match_score(*, query: str, haystack: str) -> float:
-    q = (query or "").strip().lower()
-    if not q:
+    normalized_query = (query or "").strip().lower()
+    if not normalized_query:
         return 0.0
-    query_tokens = _tokenize(q)
+    query_tokens = _tokenize(normalized_query)
     if not query_tokens:
         return 0.0
 
-    haystack_text = (haystack or "").lower()
+    haystack_text = haystack or ""
     haystack_tokens = _tokenize(haystack_text)
     if not haystack_tokens:
         return 0.0
 
     overlap = len(query_tokens & haystack_tokens) / float(len(query_tokens))
-    phrase_match = 1.0 if q in haystack_text else 0.0
+    phrase_match = 1.0 if normalized_query in haystack_text.lower() else 0.0
     return clamp01((0.7 * overlap) + (0.3 * phrase_match))
 
 

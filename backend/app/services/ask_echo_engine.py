@@ -43,11 +43,9 @@ class AskEchoEngineRequest:
 @dataclass(frozen=True)
 class AskEchoEngineResult:
     response: AskEchoResponseSchema
-    answer_text: str
     answer_kind: str  # "grounded" | "ungrounded"
     mode: str
     kb_backed: bool
-    kb_confidence: float
     top_ticket_score: float
     references: list[AskEchoReference]
     reasoning: AskEchoReasoning
@@ -56,6 +54,14 @@ class AskEchoEngineResult:
     features: dict
     evidence: list[AskEchoEvidence]
     kb_evidence: list[AskEchoKBEvidence]
+
+    @property
+    def answer_text(self) -> str:
+        return self.response["answer"]
+
+    @property
+    def kb_confidence(self) -> float:
+        return float(self.response["confidence"])
 
 
 def _first_line(text: str | None, max_len: int = 200) -> str:
@@ -139,12 +145,15 @@ def _build_reasoning_summary(
 ) -> str:
     if kb_backed:
         parts: list[str] = []
+        kb_count = len(kb_evidence[:2])
+        ticket_count = len(scored_tickets[:3])
+        snippet_count = len(snippets[:3])
         if kb_evidence:
-            parts.append(f"{len(kb_evidence[:2])} KB entr{'y' if len(kb_evidence[:2]) == 1 else 'ies'}")
+            parts.append(f"{kb_count} KB entr{'y' if kb_count == 1 else 'ies'}")
         if scored_tickets:
-            parts.append(f"{len(scored_tickets[:3])} related ticket{'s' if len(scored_tickets[:3]) != 1 else ''}")
+            parts.append(f"{ticket_count} related ticket{'s' if ticket_count != 1 else ''}")
         if snippets:
-            parts.append(f"{len(snippets[:3])} snippet{'s' if len(snippets[:3]) != 1 else ''}")
+            parts.append(f"{snippet_count} snippet{'s' if snippet_count != 1 else ''}")
         detail = ", ".join(parts) if parts else "available support evidence"
         return f"Grounded answer using {detail}."
 
@@ -483,11 +492,9 @@ class AskEchoEngine:
 
         return AskEchoEngineResult(
             response=response,
-            answer_text=response["answer"],
             answer_kind=answer_kind,
             mode=mode,
             kb_backed=kb_backed,
-            kb_confidence=float(response["confidence"]),
             top_ticket_score=float(max_score or 0.0),
             references=references,
             reasoning=reasoning,

@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from threading import Lock
+from typing import TypedDict
 
 
 @dataclass(frozen=True)
 class FeedbackRecord:
+    question: str
+    answer: str
+    rating: int
+
+
+class FeedbackRecordDict(TypedDict):
     question: str
     answer: str
     rating: int
@@ -25,9 +32,9 @@ def record_feedback(question: str, answer: str, rating: int) -> None:
         _feedback_records.append(record)
 
 
-def list_recorded_feedback() -> list[dict[str, object]]:
+def list_recorded_feedback() -> list[FeedbackRecordDict]:
     with _feedback_lock:
-        return [asdict(record) for record in _feedback_records]
+        return [FeedbackRecordDict(**asdict(record)) for record in _feedback_records]
 
 
 def clear_recorded_feedback() -> None:
