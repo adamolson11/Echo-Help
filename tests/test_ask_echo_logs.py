@@ -24,6 +24,14 @@ def test_ask_echo_logs_list_and_detail_smoke():
   detail = r2.json()
   assert detail["id"] == log_id
   assert isinstance(detail["answer_text"], str)
+  assert isinstance(detail["kb_confidence"], float)
+  assert isinstance(detail["source_count"], int)
+  assert detail["mode"] in ("kb_answer", "general_answer")
+  assert detail["reasoning_summary"] is None or isinstance(detail["reasoning_summary"], str)
+  assert detail["feedback_status"] in ("pending", "helped", "not_helped")
+  assert isinstance(detail["low_confidence"], bool)
+  assert isinstance(detail["no_sources"], bool)
+  assert isinstance(detail["fallback_only"], bool)
   assert "reasoning" in detail
   assert "candidate_snippets" in detail["reasoning"]
   assert "chosen_snippet_ids" in detail["reasoning"]

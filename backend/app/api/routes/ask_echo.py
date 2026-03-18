@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Literal, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,10 +19,17 @@ from backend.app.schemas.ask_echo import (
 )
 from backend.app.schemas.ask_echo_feedback import (
     AskEchoFeedbackCreate,
+    AskEchoFeedbackInspectionRecord,
+    AskEchoFeedbackInspectionResponse,
     AskEchoFeedbackRead,
     AskEchoFeedbackSummaryResponse,
 )
-from backend.app.schemas.insights import AskEchoLogDetail, AskEchoLogSummary
+from backend.app.schemas.insights import (
+    AskEchoLogDetail,
+    AskEchoLogReasoning,
+    AskEchoLogSummary,
+    ReasoningSnippetCandidate,
+)
 from backend.app.schemas.snippets import SnippetSearchResult
 from backend.app.services.ask_echo_engine import AskEchoEngine, AskEchoEngineRequest
 from backend.app.services.embeddings import embeddings_enabled, log_embeddings_disabled_once
@@ -91,21 +99,32 @@ def get_ask_echo_feedback_summary(
     )
 
 
-@router.get("/ask-echo/feedback/records")
+@router.get("/ask-echo/feedback/records", response_model=AskEchoFeedbackInspectionResponse)
 def get_ask_echo_feedback_records(
     limit: int = 100,
     low_confidence_only: bool = False,
     session: Session = Depends(get_session),
-):
+ ) -> AskEchoFeedbackInspectionResponse:
+    """Internal/admin-only inspection route for Ask Echo feedback analytics."""
     items = list_feedback_records(
         session,
         limit=limit,
         low_confidence_only=low_confidence_only,
     )
-    return {
-        "meta": {"kind": "ask_echo_feedback_records", "version": "v1"},
-        "items": items,
-    }
+    return AskEchoFeedbackInspectionResponse(
+        items=[
+            AskEchoFeedbackInspectionRecord(
+                **{
+                    **item,
+                    "feedback_status": cast(
+                        Literal["pending", "helped", "not_helped"],
+                        item["feedback_status"],
+                    ),
+                }
+            )
+            for item in items
+        ]
+    )
 
 
 @router.post("/ask-echo", response_model=AskEchoResponse)
@@ -144,10 +163,11 @@ def ask_echo(
         for c in (result.reasoning.candidate_snippets or [])
     ]
     chosen_ids = list(result.reasoning.chosen_snippet_ids or [])
+    response_sources = list(result.response["sources"])
     analytics = build_feedback_analytics(
         answer=result.answer_text,
         confidence=result.kb_confidence,
-        sources=list(result.response["sources"]),
+        sources=response_sources,
         reasoning=result.response["reasoning"],
         mode=result.mode,
     )
@@ -176,6 +196,7 @@ def ask_echo(
                     "response": result.response,
                     "analytics": {
                         "source_count": analytics["source_count"],
+                        "sources": response_sources,
                         "low_confidence": analytics["low_confidence"],
                         "no_sources": analytics["no_sources"],
                         "fallback_only": analytics["fallback_only"],
@@ -190,6 +211,7 @@ def ask_echo(
                     "response": result.response,
                     "analytics": {
                         "source_count": analytics["source_count"],
+                        "sources": response_sources,
                         "low_confidence": analytics["low_confidence"],
                         "no_sources": analytics["no_sources"],
                         "fallback_only": analytics["fallback_only"],
@@ -266,13 +288,13 @@ def list_ask_echo_logs(
     logs = session.exec(stmt).all()
 
     return [
-        {
-            "id": log.id,
-            "query_text": log.query,
-            "ticket_id": None,
-            "echo_score": log.echo_score,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-        }
+        AskEchoLogSummary(
+            id=int(log.id or 0),
+            query_text=log.query,
+            ticket_id=None,
+            echo_score=log.echo_score,
+            created_at=log.created_at.isoformat() if log.created_at else None,
+        )
         for log in logs
     ]
 
@@ -305,7 +327,7 @@ def get_ask_echo_log(
         chosen_ids = []
 
     # Normalize candidate snippets into id/score/title shape if needed
-    norm_candidates = []
+    norm_candidates: list[ReasoningSnippetCandidate] = []
     for item in candidate_data:
         if not isinstance(item, dict):
             continue
@@ -314,18 +336,32 @@ def get_ask_echo_log(
         title = item.get("title")
         if cid is None:
             continue
-        norm_candidates.append({"id": cid, "score": score, "title": title})
+        norm_candidates.append(
+            ReasoningSnippetCandidate(id=int(cid), score=float(score) if score is not None else None, title=title)
+        )
 
-    return {
-        "id": log.id,
-        "query_text": log.query,
-        "answer_text": log.answer_text,
-        "ticket_id": None,
-        "echo_score": log.echo_score,
-        "created_at": log.created_at.isoformat() if log.created_at else None,
-        "reasoning": {
-            "candidate_snippets": norm_candidates,
-            "chosen_snippet_ids": chosen_ids,
-        },
-        "reasoning_notes": log.reasoning_notes,
-    }
+    return AskEchoLogDetail(
+        id=int(log.id or 0),
+        query_text=log.query,
+        answer_text=log.answer_text,
+        ticket_id=None,
+        echo_score=log.echo_score,
+        kb_confidence=float(log.kb_confidence or 0.0),
+        source_count=int(log.source_count or 0),
+        mode=log.mode,
+        reasoning_summary=log.reasoning_summary,
+        feedback_status=log.feedback_status or "pending",
+        low_confidence=bool(log.low_confidence),
+        no_sources=bool(log.no_sources),
+        fallback_only=bool(log.fallback_only),
+        created_at=log.created_at.isoformat() if log.created_at else None,
+        reasoning=AskEchoLogReasoning(
+            candidate_snippets=norm_candidates,
+            chosen_snippet_ids=[
+                int(v)
+                for v in chosen_ids
+                if isinstance(v, int) or (isinstance(v, str) and v.isdigit())
+            ],
+        ),
+        reasoning_notes=log.reasoning_notes,
+    )

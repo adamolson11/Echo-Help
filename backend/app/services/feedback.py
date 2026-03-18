@@ -44,6 +44,18 @@ def _normalize_answer(answer: str) -> str:
     return " ".join((answer or "").split())
 
 
+def normalize_sources(sources: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in sources:
+        source = " ".join((raw or "").split())
+        if not source or source in seen:
+            continue
+        seen.add(source)
+        normalized.append(source)
+    return normalized
+
+
 def _normalize_reasoning_summary(
     *,
     reasoning: str,
@@ -69,7 +81,8 @@ def build_feedback_analytics(
     reasoning: str,
     mode: str,
 ) -> FeedbackAnalytics:
-    source_count = len(sources)
+    normalized_sources = normalize_sources(sources)
+    source_count = len(normalized_sources)
     low_confidence = float(confidence) < LOW_CONFIDENCE_THRESHOLD
     no_sources = source_count == 0
     fallback_only = mode == "general_answer" or no_sources
@@ -124,7 +137,7 @@ def _extract_response_sources(log: AskEchoLog) -> list[str]:
     raw_sources = response.get("sources")
     if not isinstance(raw_sources, list):
         return []
-    return [str(source) for source in raw_sources if isinstance(source, str)]
+    return normalize_sources([str(source) for source in raw_sources if isinstance(source, str)])
 
 
 def _extract_response_reasoning(log: AskEchoLog) -> str:
@@ -203,7 +216,15 @@ def list_feedback_records(
 
         source_count = int(log.source_count or len(sources))
         answer_text = _normalize_answer(log.answer_text or _extract_response_answer(log))
-        reasoning_summary = (log.reasoning_summary or _extract_response_reasoning(log) or "").strip()
+        reasoning_summary = (
+            log.reasoning_summary
+            or _normalize_reasoning_summary(
+                reasoning=_extract_response_reasoning(log),
+                low_confidence=bool(log.low_confidence or float(log.kb_confidence or 0.0) < LOW_CONFIDENCE_THRESHOLD),
+                no_sources=bool(log.no_sources or source_count == 0),
+                fallback_only=bool(log.fallback_only or source_count == 0 or log.mode == "general_answer"),
+            )
+        ).strip()
         low_confidence = bool(log.low_confidence or float(log.kb_confidence or 0.0) < LOW_CONFIDENCE_THRESHOLD)
         no_sources = bool(log.no_sources or source_count == 0)
         fallback_only = bool(log.fallback_only or no_sources or log.mode == "general_answer")
