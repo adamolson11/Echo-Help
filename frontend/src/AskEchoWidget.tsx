@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import AskEchoReasoningDetails from "./components/AskEchoReasoning";
 import { ApiError, formatApiError } from "./api/client";
 import {
@@ -7,7 +7,15 @@ import {
   postAskEchoFeedback,
   postSnippetFeedback,
 } from "./api/endpoints";
-import type { AskEchoResponse } from "./api/types";
+import type {
+  AskEchoKBEvidence,
+  AskEchoReference,
+  AskEchoResponse,
+  AskEchoTicketSummary,
+  SnippetFeedbackRequest,
+  SnippetSearchResult,
+  TicketFeedbackCreate,
+} from "./api/types";
 
 type AskEchoWidgetResponse = AskEchoResponse | { error: string };
 
@@ -18,80 +26,267 @@ type AskEchoErrorInfo = {
   status?: number;
 };
 
-function isAskEchoError(r: AskEchoWidgetResponse): r is { error: string } {
-  return typeof (r as any)?.error === "string";
+type SourceItem = {
+  key: string;
+  title: string;
+  detail: string;
+  kind: "ticket" | "kb" | "snippet";
+  confidence: number | null;
+  href?: string | null;
+};
+
+type ConfidenceTone = "high" | "medium" | "low" | "unknown";
+
+type ConfidenceInfo = {
+  value: number | null;
+  percent: number | null;
+  label: string;
+  tone: ConfidenceTone;
+  description: string;
+  sourceLabel: string;
+};
+
+function isAskEchoError(response: AskEchoWidgetResponse): response is { error: string } {
+  return typeof (response as { error?: unknown })?.error === "string";
+}
+
+function normalizeConfidence(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  if (value <= 1) return Math.max(0, Math.min(1, value));
+  return Math.max(0, Math.min(1, value / 100));
+}
+
+function formatConfidence(value: number | null): string {
+  if (value === null) return "Unavailable";
+  return `${Math.round(value * 100)}%`;
+}
+
+function getConfidenceInfo(response: AskEchoResponse): ConfidenceInfo {
+  const referenceConfidence = normalizeConfidence(response.references?.[0]?.confidence ?? null);
+  const kbConfidence = normalizeConfidence(response.kb_confidence ?? null);
+  const reasoningConfidence = normalizeConfidence(response.reasoning?.echo_score ?? null);
+
+  const candidate =
+    referenceConfidence ??
+    (response.kb_backed ? kbConfidence : null) ??
+    reasoningConfidence;
+
+  if (candidate === null) {
+    return {
+      value: null,
+      percent: null,
+      label: "Confidence unavailable",
+      tone: "unknown",
+      description: "Echo returned an answer, but this response did not include a confidence score.",
+      sourceLabel: "No confidence field",
+    };
+  }
+
+  if (candidate >= 0.78) {
+    return {
+      value: candidate,
+      percent: Math.round(candidate * 100),
+      label: "High confidence",
+      tone: "high",
+      description: "The answer is backed by a strong match in past support activity.",
+      sourceLabel: referenceConfidence !== null ? "Top ticket match" : response.kb_backed ? "Knowledge base score" : "Reasoning score",
+    };
+  }
+
+  if (candidate >= 0.52) {
+    return {
+      value: candidate,
+      percent: Math.round(candidate * 100),
+      label: "Moderate confidence",
+      tone: "medium",
+      description: "Useful guidance, but review the sources before acting on it.",
+      sourceLabel: referenceConfidence !== null ? "Top ticket match" : response.kb_backed ? "Knowledge base score" : "Reasoning score",
+    };
+  }
+
+  return {
+    value: candidate,
+    percent: Math.round(candidate * 100),
+    label: "Low confidence",
+    tone: "low",
+    description: "Echo found a weak match. Use this as a starting point, not a final answer.",
+    sourceLabel: referenceConfidence !== null ? "Top ticket match" : response.kb_backed ? "Knowledge base score" : "Reasoning score",
+  };
+}
+
+function buildTicketSource(reference: AskEchoReference, ticket?: AskEchoTicketSummary): SourceItem {
+  const title = ticket?.title?.trim() || ticket?.summary?.trim() || `Ticket #${reference.ticket_id}`;
+  return {
+    key: `ticket-${reference.ticket_id}`,
+    title,
+    detail: `Resolved ticket #${reference.ticket_id}`,
+    kind: "ticket",
+    confidence: normalizeConfidence(reference.confidence ?? null),
+  };
+}
+
+function buildKbSource(entry: AskEchoKBEvidence): SourceItem {
+  return {
+    key: `kb-${entry.entry_id}`,
+    title: entry.title,
+    detail: entry.source_system || "Knowledge base",
+    kind: "kb",
+    confidence: normalizeConfidence(entry.score ?? null),
+    href: entry.source_url,
+  };
+}
+
+function buildSnippetSource(snippet: SnippetSearchResult): SourceItem {
+  return {
+    key: `snippet-${snippet.id}`,
+    title: snippet.title,
+    detail: snippet.summary?.trim() || `Snippet #${snippet.id}`,
+    kind: "snippet",
+    confidence: normalizeConfidence(snippet.echo_score ?? null),
+  };
+}
+
+function getSourceItems(response: AskEchoResponse): SourceItem[] {
+  const items: SourceItem[] = [];
+  const seen = new Set<string>();
+  const ticketsById = new Map<number, AskEchoTicketSummary>();
+
+  for (const ticket of response.suggested_tickets ?? []) {
+    ticketsById.set(ticket.id, ticket);
+  }
+
+  for (const reference of response.references ?? []) {
+    const item = buildTicketSource(reference, ticketsById.get(reference.ticket_id));
+    if (!seen.has(item.key)) {
+      seen.add(item.key);
+      items.push(item);
+    }
+  }
+
+  for (const entry of response.kb_evidence ?? []) {
+    const item = buildKbSource(entry);
+    if (!seen.has(item.key)) {
+      seen.add(item.key);
+      items.push(item);
+    }
+  }
+
+  if (items.length === 0) {
+    for (const ticket of response.suggested_tickets ?? []) {
+      const item: SourceItem = {
+        key: `ticket-${ticket.id}`,
+        title: ticket.title?.trim() || ticket.summary?.trim() || `Ticket #${ticket.id}`,
+        detail: `Suggested ticket #${ticket.id}`,
+        kind: "ticket",
+        confidence: null,
+      };
+      if (!seen.has(item.key)) {
+        seen.add(item.key);
+        items.push(item);
+      }
+    }
+  }
+
+  if (items.length === 0) {
+    for (const snippet of response.suggested_snippets ?? []) {
+      const item = buildSnippetSource(snippet);
+      if (!seen.has(item.key)) {
+        seen.add(item.key);
+        items.push(item);
+      }
+    }
+  }
+
+  return items.slice(0, 6);
+}
+
+function getAnswerModeLabel(response: AskEchoResponse): { label: string; tone: "default" | "warning" | "success" } {
+  if (response.answer_kind === "grounded" || response.mode === "kb_answer") {
+    return { label: "Grounded answer", tone: "success" };
+  }
+
+  if (response.answer_kind === "ungrounded" || response.mode === "general_answer") {
+    return { label: "General guidance", tone: "warning" };
+  }
+
+  return { label: `Mode: ${response.mode ?? "unknown"}`, tone: "default" };
 }
 
 export default function AskEchoWidget() {
-  const [q, setQ] = useState("");
+  const [queryText, setQueryText] = useState("");
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorInfo, setErrorInfo] = useState<AskEchoErrorInfo | null>(null);
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [lastQuery, setLastQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  // feedback UI state
-  const [fbSubmitting, setFbSubmitting] = useState(false);
-  const [fbSaved, setFbSaved] = useState(false);
-  const [fbError, setFbError] = useState<string | null>(null);
-  const [fbNotesVisible, setFbNotesVisible] = useState(false);
-  const [fbNotes, setFbNotes] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackSaved, setFeedbackSaved] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackNotesVisible, setFeedbackNotesVisible] = useState(false);
+  const [feedbackNotes, setFeedbackNotes] = useState("");
   const [selectedFeedbackTicketId, setSelectedFeedbackTicketId] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   function logDevDebug(event: string, payload: Record<string, unknown>) {
     if (!import.meta.env.DEV) return;
-    // eslint-disable-next-line no-console
     console.debug("[ask-echo]", { event, ...payload });
   }
 
   function logDevError(event: string, payload: Record<string, unknown>) {
     if (!import.meta.env.DEV) return;
-    // eslint-disable-next-line no-console
     console.error("[ask-echo]", { event, ...payload });
   }
 
-  function classifyAskEchoError(err: unknown): AskEchoErrorInfo {
-    const detail = formatApiError(err);
+  function classifyAskEchoError(error: unknown): AskEchoErrorInfo {
+    const detail = formatApiError(error);
 
-    if (err instanceof ApiError) {
-      if (err.status >= 500) {
+    if (error instanceof ApiError) {
+      if (error.status >= 500) {
         return {
           headline: "Echo hit an error",
-          guidance: "Please try again in a moment.",
+          guidance: "The service is reachable, but the request failed on the server. Try again in a moment.",
           detail,
-          status: err.status,
+          status: error.status,
         };
       }
+
       return {
         headline: "Request failed",
-        guidance: "Please check your input and try again.",
+        guidance: "Check the wording of your question and try again.",
         detail,
-        status: err.status,
+        status: error.status,
       };
     }
 
     return {
       headline: "Backend not running",
-      guidance: "Start backend on :8001, then try again.",
+      guidance: "Start the backend on port 8001, then retry your question.",
       detail,
     };
   }
 
-  async function askWithQuery(query: string) {
-    if (!query.trim()) return;
+  async function askWithQuery(nextQuery: string) {
+    const trimmedQuery = nextQuery.trim();
+    if (!trimmedQuery) return;
+
     setLoading(true);
     setResponse(null);
     setErrorInfo(null);
     setShowErrorDetails(false);
-    setFbSaved(false);
-    setLastQuery(query);
+    setFeedbackSaved(false);
+    setFeedbackError(null);
+    setFeedbackNotes("");
+    setFeedbackNotesVisible(false);
+    setLastQuery(trimmedQuery);
+
     logDevDebug("submit", {
       source: "ask_echo",
-      query,
+      query: trimmedQuery,
       limit: 5,
     });
+
     try {
-      const data = await postAskEcho({ q: query, limit: 5 });
+      const data = await postAskEcho({ q: trimmedQuery, limit: 5 });
       if (!data) {
         setResponse({ error: "No response received" });
         setErrorInfo({
@@ -101,15 +296,15 @@ export default function AskEchoWidget() {
         });
         return;
       }
+
       setResponse(data);
-    } catch (err: unknown) {
-      // Preserve prior rendering behavior: store an error string on response.
-      setResponse({ error: formatApiError(err) });
-      const classified = classifyAskEchoError(err);
+    } catch (error: unknown) {
+      setResponse({ error: formatApiError(error) });
+      const classified = classifyAskEchoError(error);
       setErrorInfo(classified);
       logDevError("request_failed", {
         source: "ask_echo",
-        query,
+        query: trimmedQuery,
         headline: classified.headline,
         status: classified.status ?? null,
         detail: classified.detail,
@@ -120,241 +315,259 @@ export default function AskEchoWidget() {
   }
 
   function ask() {
-    void askWithQuery(q).catch((err: unknown) => {
-      const fallback = classifyAskEchoError(err);
+    void askWithQuery(queryText).catch((error: unknown) => {
+      const fallback = classifyAskEchoError(error);
       setResponse({ error: fallback.detail });
       setErrorInfo(fallback);
       setLoading(false);
       logDevError("unexpected_rejection", {
         source: "ask_echo",
-        query: q,
+        query: queryText,
         detail: fallback.detail,
       });
     });
   }
 
-  // when a new Ask Echo response arrives, auto-select a sensible ticket id for feedback
   useEffect(() => {
     if (!response || isAskEchoError(response)) {
       setSelectedFeedbackTicketId(null);
-      setFbSaved(false);
+      setFeedbackSaved(false);
       return;
     }
 
-    setFbSaved(false);
+    setFeedbackSaved(false);
+    setFeedbackError(null);
 
-    // Prefer references (returned as { ticket_id, confidence }), then results (full tickets), then snippet.ticket_id
-    let pick: number | null = null;
+    let selectedTicketId: number | null = null;
+
     if (Array.isArray(response.references) && response.references.length > 0) {
-      pick = response.references[0].ticket_id ?? null;
-    }
-    if (!pick && Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
-      const r0 = response.suggested_tickets[0];
-      pick = r0?.id ?? null;
-    }
-    if (!pick && Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
-      const s0 = response.suggested_snippets[0];
-      if (s0 && s0.ticket_id) pick = s0.ticket_id;
+      selectedTicketId = response.references[0].ticket_id ?? null;
     }
 
-    setSelectedFeedbackTicketId(pick);
+    if (!selectedTicketId && Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
+      selectedTicketId = response.suggested_tickets[0]?.id ?? null;
+    }
+
+    if (!selectedTicketId && Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
+      selectedTicketId = response.suggested_snippets[0]?.ticket_id ?? null;
+    }
+
+    setSelectedFeedbackTicketId(selectedTicketId);
   }, [response]);
 
   async function submitFeedback(helped: boolean) {
-    setFbError(null);
-    setFbSubmitting(true);
+    setFeedbackError(null);
+    setFeedbackSubmitting(true);
+
     try {
       if (!response || isAskEchoError(response)) {
         throw new Error("No Ask Echo response to attach feedback to.");
       }
 
-      const askEchoLogId: number | null = response?.ask_echo_log_id ?? null;
+      const askEchoLogId = response.ask_echo_log_id ?? null;
       if (!askEchoLogId) {
         throw new Error("Missing Ask Echo log id; please ask again.");
       }
 
-      // Always record Ask Echo feedback by log id (works even when ungrounded).
+      const trimmedNotes = feedbackNotes.trim();
+
       await postAskEchoFeedback({
         ask_echo_log_id: askEchoLogId,
         helped,
-        notes: (!helped && fbNotes.trim().length > 0) ? fbNotes.trim() : null,
+        notes: !helped && trimmedNotes.length > 0 ? trimmedNotes : null,
       });
 
-      // Determine ticket id to attach to feedback.
-      // Priority: explicit selectedFeedbackTicketId -> response.references -> response.results -> snippet.ticket_id
-      let ticketId: number | undefined = undefined;
-      if (selectedFeedbackTicketId) ticketId = selectedFeedbackTicketId as number;
+      let ticketId = selectedFeedbackTicketId ?? undefined;
 
-      if ((!ticketId || ticketId === null) && response) {
-        if (Array.isArray(response.references) && response.references.length > 0) {
-          ticketId = response.references[0].ticket_id;
-        }
-        if ((!ticketId || ticketId === null) && Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
-          const r0 = response.suggested_tickets[0];
-          ticketId = r0?.id ?? undefined;
-        }
-        if ((!ticketId || ticketId === null) && Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
-          const s0 = response.suggested_snippets[0];
-          if (s0 && s0.ticket_id) ticketId = s0.ticket_id;
-        }
+      if (!ticketId) {
+        ticketId = response.references?.[0]?.ticket_id;
       }
 
-      // If we found a ticket id, ensure the local state reflects it so subsequent clicks reuse it.
-      if (ticketId) setSelectedFeedbackTicketId(ticketId as number);
-
-      // If there is no ticket id, we've still captured Ask Echo feedback by log id.
-      // Skip snippet/ticket feedback persistence in that case.
-      if (!ticketId && ticketId !== 0) {
-        setFbNotes("");
-        setFbNotesVisible(false);
-        setFbSaved(true);
-        return;
+      if (!ticketId) {
+        ticketId = response.suggested_tickets?.[0]?.id;
       }
 
-      // Build payload. Backend expects `notes` for resolution notes; include `resolution_notes` and `query_text` as well for context.
-      const payload: any = { helped, ticket_id: ticketId, source: "ask_echo" };
-      if (!helped && fbNotes.trim().length > 0) {
-        payload.notes = fbNotes.trim();
-        payload.resolution_notes = fbNotes.trim();
+      if (!ticketId) {
+        ticketId = response.suggested_snippets?.[0]?.ticket_id ?? undefined;
       }
-      if (q && q.trim().length > 0) payload.query_text = q.trim();
 
-      await postSnippetFeedback(payload);
+      if (ticketId) {
+        setSelectedFeedbackTicketId(ticketId);
 
-      // Also record a ticket-feedback row so Ask Echo feedback is visible in Insights.
-      // Map helped -> rating (5 for helped, 1 for not helped) to satisfy TicketFeedback.rating requirement.
-      try {
-        const tfPayload: any = {
+        const snippetPayload: SnippetFeedbackRequest = {
+          helped,
           ticket_id: ticketId,
-          rating: helped ? 5 : 1,
-          resolution_notes: fbNotes.trim() || undefined,
-          query_text: q.trim() || "",
-          helped: helped,
+          source: "ask_echo",
         };
 
-        // Fire-and-forget; we don't block the UI on this.
-        await createTicketFeedback(tfPayload);
-      } catch (e) {
-        // ignore ticket-feedback errors in the UI flow
+        if (!helped && trimmedNotes.length > 0) {
+          snippetPayload.notes = trimmedNotes;
+          snippetPayload.resolution_notes = trimmedNotes;
+        }
+
+        if (queryText.trim().length > 0) {
+          snippetPayload.query_text = queryText.trim();
+        }
+
+        await postSnippetFeedback(snippetPayload);
+
+        const ticketFeedbackPayload: TicketFeedbackCreate = {
+          ticket_id: ticketId,
+          rating: helped ? 5 : 1,
+          resolution_notes: trimmedNotes || undefined,
+          query_text: queryText.trim() || lastQuery,
+          helped,
+        };
+
+        try {
+          await createTicketFeedback(ticketFeedbackPayload);
+        } catch {
+          // Keep the Ask Echo feedback flow responsive even if analytics persistence fails.
+        }
       }
 
-      // on success: clear notes and hide
-      setFbNotes("");
-      setFbNotesVisible(false);
-      setFbSaved(true);
-    } catch (err: any) {
-      setFbError(formatApiError(err));
+      setFeedbackNotes("");
+      setFeedbackNotesVisible(false);
+      setFeedbackSaved(true);
+    } catch (error: unknown) {
+      setFeedbackError(formatApiError(error));
     } finally {
-      setFbSubmitting(false);
+      setFeedbackSubmitting(false);
     }
   }
 
-  const tryExamples = [
-    "password reset doesn't work",
-    "vpn auth_failed",
-    "mfa codes invalid",
-    "outlook keeps asking for password",
+  const exampleQueries = [
+    "password reset does not work after MFA enrollment",
+    "vpn auth_failed after laptop replacement",
+    "outlook keeps prompting for credentials",
+    "new hire cannot access payroll portal",
   ];
+
+  const retryQuery = (lastQuery || queryText).trim();
+  const canRetry = retryQuery.length > 0;
+  const showInitialEmptyState = !queryText.trim() && !response && !loading;
+  const showNoResponseState = !loading && !response && !!lastQuery.trim() && !errorInfo;
+  const responseData = response && !isAskEchoError(response) ? response : null;
+  const confidence = responseData ? getConfidenceInfo(responseData) : null;
+  const sourceItems = responseData ? getSourceItems(responseData) : [];
+  const answerMode = responseData ? getAnswerModeLabel(responseData) : null;
 
   return (
     <div className="ask-echo-shell">
       <div className="ask-echo">
-        <div className="ask-echo__hero">
-          <header className="ask-echo__header">
-            <div>
-              <h1 className="ask-echo__title">Ask Echo</h1>
-              <p className="ask-echo__subtitle">
-                Ask a question to search resolved tickets and get a confident, grounded answer.
+        <section className="ask-echo__hero">
+          <div className="ask-echo__hero-copy">
+            <span className="ask-echo__eyebrow">Live Ask Echo</span>
+            <h1 className="ask-echo__title">Get the likely fix, plus the evidence behind it.</h1>
+            <p className="ask-echo__lede">
+              Ask a support question in plain language. Echo returns an answer, shows how confident it is,
+              and points to the tickets or knowledge base entries that shaped the response.
+            </p>
+            <div className="ask-echo__hero-chips" aria-label="Ask Echo workflow">
+              <span className="ask-echo__hero-chip">1. Ask a real issue</span>
+              <span className="ask-echo__hero-chip">2. Review confidence and sources</span>
+              <span className="ask-echo__hero-chip">3. Mark whether it helped</span>
+            </div>
+          </div>
+
+          <div className="ask-echo__command-wrap">
+            <label className="ask-echo__input-label" htmlFor="ask-echo-query">
+              Describe the problem
+            </label>
+            <div className="ask-echo__command">
+              <input
+                id="ask-echo-query"
+                ref={inputRef}
+                className="op-input ask-echo__input"
+                placeholder="Example: user cannot connect to VPN after password reset"
+                value={queryText}
+                onChange={(event) => setQueryText(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && ask()}
+              />
+              <button
+                type="button"
+                className="op-button op-button--primary ask-echo__submit"
+                onClick={ask}
+                disabled={loading || !queryText.trim()}
+              >
+                {loading ? "Searching..." : "Get answer"}
+              </button>
+            </div>
+            <p className="ask-echo__command-help">Press Enter to ask. Start with the user-visible symptom, not the suspected root cause.</p>
+          </div>
+        </section>
+
+        {showInitialEmptyState && (
+          <section className="ask-echo__empty-grid">
+            <div className="ask-echo__card ask-echo__empty-card">
+              <div className="ask-echo__card-head">
+                <div>
+                  <div className="ask-echo__eyebrow">Start here</div>
+                  <h2 className="ask-echo__section-title">Ask about the issue exactly as support would hear it.</h2>
+                </div>
+              </div>
+              <p className="ask-echo__empty-copy">
+                Good prompts mention the symptom, system, or trigger. Echo will search prior tickets and show its supporting evidence.
               </p>
-              <p className="ask-echo__lede">
-                Echo remembers what worked before and turns support history into next-step guidance.
-              </p>
-              <div className="ask-echo__hero-chips" aria-label="Ask Echo capabilities">
-                <span className="ask-echo__hero-chip">Ticket intelligence</span>
-                <span className="ask-echo__hero-chip">KB support</span>
-                <span className="ask-echo__hero-chip">Feedback loop</span>
+            </div>
+
+            <div className="ask-echo__card ask-echo__examples-card">
+              <div className="ask-echo__card-head">
+                <div>
+                  <div className="ask-echo__eyebrow">Try one</div>
+                  <h2 className="ask-echo__section-title">Example questions</h2>
+                </div>
+              </div>
+              <div className="ask-echo__examples">
+                {exampleQueries.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    className="operator-pill"
+                    onClick={() => {
+                      setQueryText(example);
+                      setResponse(null);
+                      setErrorInfo(null);
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    {example}
+                  </button>
+                ))}
               </div>
             </div>
-          </header>
-
-          <div className="ask-echo__command">
-            <input
-              ref={inputRef}
-              className="op-input ask-echo__input"
-              placeholder="Ask Echo a question about tickets..."
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && ask()}
-            />
-            <button
-              type="button"
-              className="op-button op-button--primary ask-echo__submit"
-              onClick={ask}
-              disabled={loading}
-            >
-              {loading ? "Thinking..." : "Ask Echo"}
-            </button>
-          </div>
-        </div>
-
-        {!q.trim() && !response && (
-          <div className="ask-echo__empty">
-            <div className="ask-echo__card ask-echo__empty-card">
-              Ask a question to search resolved tickets.
-            </div>
-            <div className="ask-echo__examples">
-              <span>Try an example:</span>
-              {tryExamples.map((example) => (
-                <button
-                  key={example}
-                  type="button"
-                  className="operator-pill"
-                  onClick={() => {
-                    setQ(example);
-                    setResponse(null);
-                    try {
-                      inputRef.current?.focus();
-                    } catch {
-                      // no-op
-                    }
-                  }}
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
-          </div>
+          </section>
         )}
 
         {loading && (
-          <div className="ask-echo__loading-card">
+          <section className="ask-echo__loading-card" aria-live="polite">
             <div className="ask-echo__spinner" />
             <div>
-              <div className="ask-echo__loading-title">Thinking…</div>
-              <div className="ask-echo__loading-sub">Searching tickets and snippets.</div>
+              <div className="ask-echo__loading-title">Searching past resolutions...</div>
+              <div className="ask-echo__loading-sub">Echo is ranking ticket matches, snippets, and knowledge base evidence.</div>
             </div>
-          </div>
+          </section>
         )}
 
         {response && isAskEchoError(response) && errorInfo && (
-          <div className="ask-echo__error">
+          <section className="ask-echo__error" aria-live="polite">
             <div className="ask-echo__error-title">{errorInfo.headline}</div>
             <div className="ask-echo__error-message">{errorInfo.guidance}</div>
             <div className="ask-echo__error-actions">
               <button
                 type="button"
                 className="op-button op-button--primary"
-                onClick={() => askWithQuery(lastQuery || q)}
-                disabled={loading || !(lastQuery || q).trim()}
+                onClick={() => askWithQuery(retryQuery)}
+                disabled={loading || !canRetry}
               >
-                Try again
+                Retry question
               </button>
               <button
                 type="button"
                 className="ask-echo__link-button"
-                onClick={() => setShowErrorDetails((prev) => !prev)}
+                onClick={() => setShowErrorDetails((currentValue) => !currentValue)}
               >
-                {showErrorDetails ? "Hide details" : "Details"}
+                {showErrorDetails ? "Hide technical details" : "Show technical details"}
               </button>
             </div>
             {showErrorDetails && (
@@ -369,159 +582,217 @@ export default function AskEchoWidget() {
                 </div>
               </div>
             )}
-          </div>
+          </section>
         )}
 
-        {response && !isAskEchoError(response) && (
-          <div className="ask-echo__grid">
-            <div className="ask-echo__stack">
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Answer</div>
-              <div className="ask-echo__answer">{response.answer || "No answer returned yet."}</div>
-              <div className="ask-echo__meta">
-                {response.answer_kind === "grounded" || response.mode === "kb_answer" ? (
-                  <span className="ask-echo__badge">Based on your past tickets</span>
-                ) : response.answer_kind === "ungrounded" || response.mode === "general_answer" ? (
-                  <span className="ask-echo__badge badge--warning">General guidance</span>
-                ) : (
-                  <span className="ask-echo__badge">Mode: {response.mode ?? "unknown"}</span>
-                )}
-                <span className="ask-echo__badge" style={{ marginLeft: "8px" }}>
-                  source: ask_echo
-                </span>
-              </div>
-            </div>
-
-            {response.reasoning && <AskEchoReasoningDetails reasoning={response.reasoning} />}
-
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Knowledge Base</div>
-              {Array.isArray(response.kb_evidence) && response.kb_evidence.length > 0 ? (
-                <div className="snippet-list">
-                  {response.kb_evidence.slice(0, 5).map((entry) => (
-                    <div key={String(entry.entry_id)} className="snippet-item">
-                      <div className="snippet-item__title">
-                        <span>{entry.title}</span>
-                        {typeof entry.score === "number" && (
-                          <span className="ask-echo__badge">{entry.score.toFixed(2)}</span>
-                        )}
-                      </div>
-                      <div className="snippet-item__meta">
-                        <span className="ask-echo__badge ask-echo__badge--kb">{entry.source_system || "seed_kb"}</span>
-                        {entry.source_url ? (
-                          <a className="ask-echo__kb-link" href={entry.source_url} target="_blank" rel="noreferrer">
-                            Open source
-                          </a>
-                        ) : (
-                          <span className="ask-echo__kb-link ask-echo__kb-link--muted">No link</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="state-panel">No knowledge base matches for this query yet.</div>
-              )}
-            </div>
-
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Suggested snippets</div>
-              {Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0 ? (
-                <div className="snippet-list">
-                  {response.suggested_snippets.slice(0, 5).map((s) => (
-                    <div key={String(s.id)} className="snippet-item">
-                      <div className="snippet-item__title">
-                        <span>{s.title}</span>
-                        {typeof s.echo_score === "number" && (
-                          <span className="ask-echo__badge">{s.echo_score.toFixed(2)}</span>
-                        )}
-                      </div>
-                      {s.summary && <div className="snippet-item__meta">{s.summary}</div>}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="state-panel">No snippets returned yet.</div>
-              )}
-            </div>
-
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Feedback</div>
-              <div className="ask-echo__feedback-row">
-                <span>Was this helpful?</span>
-                {fbSaved && <span className="ask-echo__badge ask-echo__badge--success">Saved</span>}
-                <button
-                  type="button"
-                  onClick={() => submitFeedback(true)}
-                  disabled={fbSubmitting || fbSaved}
-                  className="op-button op-button--primary"
-                >
-                  👍 Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFbNotesVisible(true)}
-                  disabled={fbSubmitting || fbSaved}
-                  className="op-button op-button--danger"
-                >
-                  👎 No
-                </button>
-              </div>
-
-              {fbNotesVisible && (
-                <div className="ask-echo__meta">
-                  <textarea
-                    rows={3}
-                    className="op-input"
-                    placeholder="What went wrong or what did you do to resolve it?"
-                    value={fbNotes}
-                    onChange={(e) => setFbNotes(e.target.value)}
-                  />
-                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                    <button
-                      type="button"
-                      className="op-button op-button--ghost"
-                      onClick={() => submitFeedback(false)}
-                      disabled={fbSubmitting}
-                    >
-                      Submit
-                    </button>
-                    <button
-                      type="button"
-                      className="op-button op-button--ghost"
-                      onClick={() => {
-                        setFbNotesVisible(false);
-                        setFbNotes("");
-                      }}
-                    >
-                      Cancel
-                    </button>
+        {responseData && confidence && answerMode && (
+          <section className="ask-echo__results">
+            <div className="ask-echo__results-main">
+              <div className="ask-echo__card ask-echo__card--answer">
+                <div className="ask-echo__card-head ask-echo__card-head--split">
+                  <div>
+                    <div className="ask-echo__eyebrow">Answer</div>
+                    <h2 className="ask-echo__section-title">Recommended next step</h2>
+                    <p className="ask-echo__section-subtitle">For: {lastQuery}</p>
                   </div>
-                  {fbError && <div className="ask-echo__meta">{fbError}</div>}
+                  <span className={`ask-echo__badge ask-echo__badge--${answerMode.tone}`}>{answerMode.label}</span>
+                </div>
+
+                <div className="ask-echo__answer">{responseData.answer || "No answer returned yet."}</div>
+
+                <div className="ask-echo__result-stats" aria-label="response summary">
+                  <div className="ask-echo__stat">
+                    <span className="ask-echo__stat-label">Confidence</span>
+                    <strong>{formatConfidence(confidence.value)}</strong>
+                  </div>
+                  <div className="ask-echo__stat">
+                    <span className="ask-echo__stat-label">Sources</span>
+                    <strong>{sourceItems.length}</strong>
+                  </div>
+                  <div className="ask-echo__stat">
+                    <span className="ask-echo__stat-label">Log ID</span>
+                    <strong>{responseData.ask_echo_log_id}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="ask-echo__card">
+                <div className="ask-echo__card-head ask-echo__card-head--split">
+                  <div>
+                    <div className="ask-echo__eyebrow">Sources</div>
+                    <h2 className="ask-echo__section-title">Why Echo chose this answer</h2>
+                  </div>
+                  <span className="ask-echo__badge">{sourceItems.length} shown</span>
+                </div>
+
+                {sourceItems.length > 0 ? (
+                  <div className="ask-echo__sources">
+                    {sourceItems.map((item) => (
+                      <div key={item.key} className="ask-echo__source-item">
+                        <div className="ask-echo__source-topline">
+                          <div>
+                            <div className="ask-echo__source-title">{item.title}</div>
+                            <div className="ask-echo__source-detail">{item.detail}</div>
+                          </div>
+                          <div className="ask-echo__source-meta">
+                            <span className={`ask-echo__badge ask-echo__badge--source-${item.kind}`}>{item.kind}</span>
+                            <span className="ask-echo__badge">{formatConfidence(item.confidence)}</span>
+                          </div>
+                        </div>
+                        {item.href ? (
+                          <a className="ask-echo__kb-link" href={item.href} target="_blank" rel="noreferrer">
+                            Open source document
+                          </a>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="state-panel">Echo returned an answer, but there were no explicit sources in this response.</div>
+                )}
+              </div>
+
+              {Array.isArray(responseData.suggested_snippets) && responseData.suggested_snippets.length > 0 && (
+                <div className="ask-echo__card">
+                  <div className="ask-echo__card-head">
+                    <div>
+                      <div className="ask-echo__eyebrow">Supporting evidence</div>
+                      <h2 className="ask-echo__section-title">Related snippets</h2>
+                    </div>
+                  </div>
+                  <div className="snippet-list">
+                    {responseData.suggested_snippets.slice(0, 4).map((snippet) => (
+                      <div key={String(snippet.id)} className="snippet-item">
+                        <div className="snippet-item__title">
+                          <span>{snippet.title}</span>
+                          <span className="ask-echo__badge">{formatConfidence(normalizeConfidence(snippet.echo_score ?? null))}</span>
+                        </div>
+                        {snippet.summary && <div className="snippet-item__meta">{snippet.summary}</div>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              <AskEchoReasoningDetails reasoning={responseData.reasoning} />
             </div>
-            </div>
-          </div>
+
+            <aside className="ask-echo__results-side">
+              <div className="ask-echo__card ask-echo__confidence-card">
+                <div className="ask-echo__card-head">
+                  <div>
+                    <div className="ask-echo__eyebrow">Confidence</div>
+                    <h2 className="ask-echo__section-title">How strong is this answer?</h2>
+                  </div>
+                </div>
+                <div className="ask-echo__confidence-value">
+                  <span>{formatConfidence(confidence.value)}</span>
+                  <strong>{confidence.label}</strong>
+                </div>
+                <div className="ask-echo__confidence-meter" aria-hidden="true">
+                  <div
+                    className={`ask-echo__confidence-fill ask-echo__confidence-fill--${confidence.tone}`}
+                    style={{ width: `${confidence.percent ?? 12}%` }}
+                  />
+                </div>
+                <p className="ask-echo__confidence-copy">{confidence.description}</p>
+                <div className="ask-echo__confidence-footnote">Source: {confidence.sourceLabel}</div>
+              </div>
+
+              <div className="ask-echo__card ask-echo__feedback-card">
+                <div className="ask-echo__card-head">
+                  <div>
+                    <div className="ask-echo__eyebrow">Feedback</div>
+                    <h2 className="ask-echo__section-title">Did this help you move forward?</h2>
+                  </div>
+                </div>
+
+                <div className="ask-echo__feedback-row">
+                  <button
+                    type="button"
+                    className="op-button op-button--primary ask-echo__feedback-button"
+                    onClick={() => submitFeedback(true)}
+                    disabled={feedbackSubmitting || feedbackSaved}
+                  >
+                    <span aria-hidden="true">👍</span>
+                    Helpful
+                  </button>
+                  <button
+                    type="button"
+                    className="op-button op-button--ghost ask-echo__feedback-button"
+                    onClick={() => setFeedbackNotesVisible(true)}
+                    disabled={feedbackSubmitting || feedbackSaved}
+                  >
+                    <span aria-hidden="true">👎</span>
+                    Not helpful
+                  </button>
+                </div>
+
+                {feedbackSaved && <div className="ask-echo__feedback-success">Feedback saved. Future answers can improve from this signal.</div>}
+
+                {!feedbackSaved && !feedbackNotesVisible && (
+                  <p className="ask-echo__feedback-hint">Choose “Not helpful” if the answer was misleading, incomplete, or missing key context.</p>
+                )}
+
+                {feedbackNotesVisible && !feedbackSaved && (
+                  <div className="ask-echo__feedback-form">
+                    <label className="ask-echo__input-label" htmlFor="ask-echo-feedback-notes">
+                      What was missing or wrong?
+                    </label>
+                    <textarea
+                      id="ask-echo-feedback-notes"
+                      rows={4}
+                      className="op-input ask-echo__textarea"
+                      placeholder="Example: the answer ignored the recent VPN client rollout, and the actual fix was to clear the stale certificate."
+                      value={feedbackNotes}
+                      onChange={(event) => setFeedbackNotes(event.target.value)}
+                    />
+                    <div className="ask-echo__feedback-actions">
+                      <button
+                        type="button"
+                        className="op-button op-button--danger"
+                        onClick={() => submitFeedback(false)}
+                        disabled={feedbackSubmitting}
+                      >
+                        {feedbackSubmitting ? "Saving..." : "Save negative feedback"}
+                      </button>
+                      <button
+                        type="button"
+                        className="op-button op-button--ghost"
+                        onClick={() => {
+                          setFeedbackNotesVisible(false);
+                          setFeedbackNotes("");
+                          setFeedbackError(null);
+                        }}
+                        disabled={feedbackSubmitting}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {feedbackError && <div className="ask-echo__feedback-error">Failed to save feedback: {feedbackError}</div>}
+              </div>
+            </aside>
+          </section>
         )}
 
-        {!loading && !response && !!lastQuery.trim() && (
-          <div className="ask-echo__error">
-            <div className="ask-echo__error-title">Request failed</div>
-            <div className="ask-echo__error-message">
-              No response was returned. Please try again.
-            </div>
+        {showNoResponseState && (
+          <section className="ask-echo__error">
+            <div className="ask-echo__error-title">No answer returned</div>
+            <div className="ask-echo__error-message">Echo did not return a usable payload for that question.</div>
             <div className="ask-echo__error-actions">
               <button
                 type="button"
                 className="op-button op-button--primary"
-                onClick={() => askWithQuery(lastQuery || q)}
-                disabled={loading || !(lastQuery || q).trim()}
+                onClick={() => askWithQuery(retryQuery)}
+                disabled={!canRetry}
               >
-                Try again
+                Ask again
               </button>
             </div>
-          </div>
+          </section>
         )}
       </div>
     </div>

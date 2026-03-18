@@ -22,36 +22,33 @@ export default function AskEchoReasoningDetails({ reasoning }: Props) {
   const chosenIds = reasoning.chosen_snippet_ids || [];
 
   return (
-    <details className="mt-3 rounded-md border border-slate-700 bg-slate-900/40 p-3">
-      <summary className="cursor-pointer text-xs font-semibold text-slate-200">
+    <details className="ask-echo-reasoning">
+      <summary className="ask-echo-reasoning__summary">
         Why Echo chose this answer
       </summary>
-      <div className="mt-2 space-y-2 text-xs text-slate-200">
+      <div className="ask-echo-reasoning__body">
         {typeof reasoning.echo_score === "number" && (
-          <p className="text-[11px] text-slate-400">
+          <p className="ask-echo-reasoning__meta">
             EchoScore: {reasoning.echo_score.toFixed(2)}
           </p>
         )}
 
         {candidates.length === 0 && (
-          <p className="text-slate-400">No snippet reasoning available for this answer.</p>
+          <p className="ask-echo-reasoning__meta">No snippet reasoning available for this answer.</p>
         )}
 
         {candidates.map((c) => {
           const selected = chosenIds.includes(c.id);
           return (
-            <div
-              key={c.id}
-              className="flex items-center justify-between rounded bg-slate-900/60 px-2 py-1"
-            >
+            <div key={c.id} className="ask-echo-reasoning__item">
               <div>
-                <div className="font-medium">{c.title ?? `Snippet #${c.id}`}</div>
-                <div className="text-[11px] text-slate-400">
+                <div className="ask-echo-reasoning__title">{c.title ?? `Snippet #${c.id}`}</div>
+                <div className="ask-echo-reasoning__meta">
                   Score: {typeof c.score === "number" ? c.score.toFixed(3) : "N/A"}
                 </div>
               </div>
               {selected && (
-                <span className="rounded-full bg-emerald-600/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-50">
+                <span className="ask-echo-reasoning__used">
                   Used
                 </span>
               )}

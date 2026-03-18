@@ -124,6 +124,9 @@ export type SnippetFeedbackRequest = {
   ticket_id?: number | null;
   helped: boolean;
   notes?: string | null;
+  query_text?: string | null;
+  resolution_notes?: string | null;
+  source?: string | null;
 };
 
 export type SnippetFeedbackResponse = {
