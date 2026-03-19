@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Literal, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,13 +19,26 @@ from backend.app.schemas.ask_echo import (
 )
 from backend.app.schemas.ask_echo_feedback import (
     AskEchoFeedbackCreate,
+    AskEchoFeedbackInspectionRecord,
+    AskEchoFeedbackInspectionResponse,
     AskEchoFeedbackRead,
     AskEchoFeedbackSummaryResponse,
 )
-from backend.app.schemas.insights import AskEchoLogDetail, AskEchoLogSummary
+from backend.app.schemas.insights import (
+    AskEchoLogDetail,
+    AskEchoLogReasoning,
+    AskEchoLogSummary,
+    ReasoningSnippetCandidate,
+)
 from backend.app.schemas.snippets import SnippetSearchResult
 from backend.app.services.ask_echo_engine import AskEchoEngine, AskEchoEngineRequest
 from backend.app.services.embeddings import embeddings_enabled, log_embeddings_disabled_once
+from backend.app.services.feedback import (
+    apply_feedback_analytics,
+    apply_user_feedback,
+    build_feedback_analytics,
+    list_feedback_records,
+)
 
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
 logger = logging.getLogger("uvicorn.error")
@@ -44,7 +58,9 @@ def submit_ask_echo_feedback(
         helped=payload.helped,
         notes=(payload.notes.strip() if payload.notes else None),
     )
+    apply_user_feedback(log=log, helped=payload.helped)
     session.add(row)
+    session.add(log)
     session.commit()
     session.refresh(row)
     if row.id is None:
@@ -80,6 +96,34 @@ def get_ask_echo_feedback_summary(
         total_feedback=total,
         helped_true=helped_true,
         helped_false=helped_false,
+    )
+
+
+@router.get("/ask-echo/feedback/records", response_model=AskEchoFeedbackInspectionResponse)
+def get_ask_echo_feedback_records(
+    limit: int = 100,
+    low_confidence_only: bool = False,
+    session: Session = Depends(get_session),
+ ) -> AskEchoFeedbackInspectionResponse:
+    """Internal/admin-only inspection route for Ask Echo feedback analytics."""
+    items = list_feedback_records(
+        session,
+        limit=limit,
+        low_confidence_only=low_confidence_only,
+    )
+    return AskEchoFeedbackInspectionResponse(
+        items=[
+            AskEchoFeedbackInspectionRecord(
+                **{
+                    **item,
+                    "feedback_status": cast(
+                        Literal["pending", "helped", "not_helped"],
+                        item["feedback_status"],
+                    ),
+                }
+            )
+            for item in items
+        ]
     )
 
 
@@ -119,18 +163,49 @@ def ask_echo(
         for c in (result.reasoning.candidate_snippets or [])
     ]
     chosen_ids = list(result.reasoning.chosen_snippet_ids or [])
+    response_sources = list(result.response["sources"])
+    analytics = build_feedback_analytics(
+        answer=result.answer_text,
+        confidence=result.kb_confidence,
+        sources=response_sources,
+        reasoning=result.response["reasoning"],
+        mode=result.mode,
+    )
+    analytics_payload = {
+        "source_count": analytics["source_count"],
+        "sources": response_sources,
+        "low_confidence": analytics["low_confidence"],
+        "no_sources": analytics["no_sources"],
+        "fallback_only": analytics["fallback_only"],
+        "feedback_status": analytics["feedback_status"],
+        "feedback_rating": analytics["feedback_rating"],
+    }
+    reasoning_notes_payload: dict[str, object] = {
+        "features": result.features,
+        "response": result.response,
+        "analytics": analytics_payload,
+    }
 
     log = AskEchoLog(
         query=req.q,
+        answer_text=analytics["answer_text"],
         top_score=float(result.top_ticket_score or 0.0),
         kb_confidence=float(result.kb_confidence or 0.0),
         mode=result.mode,
         references_count=refs_count,
+        source_count=analytics["source_count"],
+        reasoning_summary=analytics["reasoning_summary"],
+        low_confidence=analytics["low_confidence"],
+        no_sources=analytics["no_sources"],
+        fallback_only=analytics["fallback_only"],
+        feedback_status=analytics["feedback_status"],
+        feedback_rating=analytics["feedback_rating"],
         candidate_snippet_ids_json=(json.dumps(candidate_data) if candidate_data else None),
         chosen_snippet_ids_json=json.dumps(chosen_ids) if chosen_ids else None,
         echo_score=result.reasoning.echo_score,
-        reasoning_notes=(json.dumps({"features": result.features}) if getattr(result, "features", None) else None),
+        reasoning_notes=json.dumps(reasoning_notes_payload),
     )
+    apply_feedback_analytics(log=log, analytics=analytics)
     try:
         session.add(log)
         session.commit()
@@ -196,13 +271,13 @@ def list_ask_echo_logs(
     logs = session.exec(stmt).all()
 
     return [
-        {
-            "id": log.id,
-            "query_text": log.query,
-            "ticket_id": None,
-            "echo_score": log.echo_score,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-        }
+        AskEchoLogSummary(
+            id=int(log.id or 0),
+            query_text=log.query,
+            ticket_id=None,
+            echo_score=log.echo_score,
+            created_at=log.created_at.isoformat() if log.created_at else None,
+        )
         for log in logs
     ]
 
@@ -235,7 +310,7 @@ def get_ask_echo_log(
         chosen_ids = []
 
     # Normalize candidate snippets into id/score/title shape if needed
-    norm_candidates = []
+    norm_candidates: list[ReasoningSnippetCandidate] = []
     for item in candidate_data:
         if not isinstance(item, dict):
             continue
@@ -244,18 +319,32 @@ def get_ask_echo_log(
         title = item.get("title")
         if cid is None:
             continue
-        norm_candidates.append({"id": cid, "score": score, "title": title})
+        norm_candidates.append(
+            ReasoningSnippetCandidate(id=int(cid), score=float(score) if score is not None else None, title=title)
+        )
 
-    return {
-        "id": log.id,
-        "query_text": log.query,
-        "answer_text": "",
-        "ticket_id": None,
-        "echo_score": log.echo_score,
-        "created_at": log.created_at.isoformat() if log.created_at else None,
-        "reasoning": {
-            "candidate_snippets": norm_candidates,
-            "chosen_snippet_ids": chosen_ids,
-        },
-        "reasoning_notes": log.reasoning_notes,
-    }
+    return AskEchoLogDetail(
+        id=int(log.id or 0),
+        query_text=log.query,
+        answer_text=log.answer_text,
+        ticket_id=None,
+        echo_score=log.echo_score,
+        kb_confidence=float(log.kb_confidence or 0.0),
+        source_count=int(log.source_count or 0),
+        mode=log.mode,
+        reasoning_summary=log.reasoning_summary,
+        feedback_status=log.feedback_status or "pending",
+        low_confidence=bool(log.low_confidence),
+        no_sources=bool(log.no_sources),
+        fallback_only=bool(log.fallback_only),
+        created_at=log.created_at.isoformat() if log.created_at else None,
+        reasoning=AskEchoLogReasoning(
+            candidate_snippets=norm_candidates,
+            chosen_snippet_ids=[
+                int(v)
+                for v in chosen_ids
+                if isinstance(v, int) or (isinstance(v, str) and v.isdigit())
+            ],
+        ),
+        reasoning_notes=log.reasoning_notes,
+    )

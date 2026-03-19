@@ -25,15 +25,38 @@ class RankedSnippet:
     snippet: SolutionSnippet
 
 
+def clamp01(x: float) -> float:
+    return float(max(0.0, min(1.0, x)))
+
+
 def _safe_dt(value: datetime | None) -> datetime | None:
     return value if isinstance(value, datetime) else None
 
 
+def _tokenize(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", (text or "").lower())
+        if token
+    }
+
+
 def _keyword_match_score(*, query: str, haystack: str) -> float:
-    q = (query or "").strip().lower()
-    if not q:
+    normalized_query = (query or "").strip().lower()
+    if not normalized_query:
         return 0.0
-    return 1.0 if q in (haystack or "").lower() else 0.0
+    query_tokens = _tokenize(normalized_query)
+    if not query_tokens:
+        return 0.0
+
+    haystack_text = haystack or ""
+    haystack_tokens = _tokenize(haystack_text)
+    if not haystack_tokens:
+        return 0.0
+
+    overlap = len(query_tokens & haystack_tokens) / float(len(query_tokens))
+    phrase_match = 1.0 if normalized_query in haystack_text.lower() else 0.0
+    return clamp01((0.7 * overlap) + (0.3 * phrase_match))
 
 
 def _normalize(values: list[float]) -> list[float]:
@@ -186,6 +209,40 @@ def _ticket_feedback_maps(session: Session, *, ticket_ids: list[int]) -> tuple[d
     usage_map = {i: usage_norm[idx] for idx, i in enumerate(ids)}
 
     return ratio_map, usage_map
+
+
+def calculate_kb_confidence(
+    *,
+    kb_backed: bool,
+    top_snippet_echo_score: float | None,
+    top_ticket_score: float,
+    has_snippets: bool,
+    has_tickets: bool,
+    semantic_similarity: float | None = None,
+    keyword_overlap: float | None = None,
+    recency: float | None = None,
+) -> float:
+    """Blend the best available retrieval signals into a bounded confidence."""
+    if not kb_backed:
+        return 0.0
+
+    if has_snippets and top_snippet_echo_score is not None:
+        base_confidence = clamp01(float(top_snippet_echo_score))
+    elif has_tickets:
+        base_confidence = clamp01(float(top_ticket_score or 0.0))
+    else:
+        base_confidence = 0.0
+
+    signal_values = [
+        clamp01(float(value))
+        for value in (semantic_similarity, keyword_overlap, recency)
+        if value is not None
+    ]
+    if not signal_values:
+        return base_confidence
+
+    signal_average = sum(signal_values) / float(len(signal_values))
+    return clamp01((0.85 * base_confidence) + (0.15 * signal_average))
 
 
 def rank_tickets(

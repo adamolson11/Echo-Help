@@ -79,6 +79,14 @@ class AskEchoLogDetail(SQLModel):
     answer_text: str
     ticket_id: int | None = None
     echo_score: float | None = None
+    kb_confidence: float = 0.0
+    source_count: int = 0
+    mode: str | None = None
+    reasoning_summary: str | None = None
+    feedback_status: str = "pending"
+    low_confidence: bool = False
+    no_sources: bool = False
+    fallback_only: bool = False
     created_at: str | None = None
     reasoning: AskEchoLogReasoning | None = None
     reasoning_notes: str | None = None

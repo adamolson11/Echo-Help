@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 
 from sqlmodel import Session
 
@@ -20,10 +20,17 @@ from ..schemas.ask_echo import (
 from .ask_echo_templates import AskEchoTemplates
 from .kb_adapter import search_kb_entries
 from .kb_confidence_policy import calculate_kb_confidence
-from .ranking_policy import rank_snippets, rank_tickets
+from .ranking_policy import clamp01, rank_snippets, rank_tickets
 from .semantic_search import semantic_search_tickets
 from .snippet_repository import search_snippets as repo_search_snippets
 from .ticket_search import keyword_search_tickets
+
+
+class AskEchoResponseSchema(TypedDict):
+    answer: str
+    confidence: float
+    sources: list[str]
+    reasoning: str
 
 
 @dataclass(frozen=True)
@@ -34,11 +41,10 @@ class AskEchoEngineRequest:
 
 @dataclass(frozen=True)
 class AskEchoEngineResult:
-    answer_text: str
+    response: AskEchoResponseSchema
     answer_kind: str  # "grounded" | "ungrounded"
     mode: str
     kb_backed: bool
-    kb_confidence: float
     top_ticket_score: float
     references: list[AskEchoReference]
     reasoning: AskEchoReasoning
@@ -47,6 +53,14 @@ class AskEchoEngineResult:
     features: dict
     evidence: list[AskEchoEvidence]
     kb_evidence: list[AskEchoKBEvidence]
+
+    @property
+    def answer_text(self) -> str:
+        return self.response["answer"]
+
+    @property
+    def kb_confidence(self) -> float:
+        return float(self.response["confidence"])
 
 
 def _first_line(text: str | None, max_len: int = 200) -> str:
@@ -92,6 +106,86 @@ def _build_kb_answer(
 
 def _build_general_answer(templates: AskEchoTemplates, query: str) -> tuple[str, list[AskEchoReference]]:
     return templates.ungrounded_answer, []
+
+
+def _build_response_sources(
+    *,
+    scored_tickets: Sequence[tuple[float, Ticket]],
+    kb_evidence: Sequence[AskEchoKBEvidence],
+) -> list[str]:
+    sources: list[str] = []
+
+    for kb in kb_evidence[:2]:
+        sources.append(f"KB {kb.entry_id}: {kb.title}")
+
+    for _, ticket in scored_tickets[:3]:
+        ticket_id = getattr(ticket, "id", None)
+        if ticket_id is None:
+            continue
+        title = getattr(ticket, "summary", None) or getattr(ticket, "title", None) or f"Ticket {ticket_id}"
+        sources.append(f"Ticket #{ticket_id}: {title}")
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for source in sources:
+        if source in seen:
+            continue
+        seen.add(source)
+        deduped.append(source)
+    return deduped
+
+
+def _build_reasoning_summary(
+    *,
+    kb_backed: bool,
+    kb_evidence: Sequence[AskEchoKBEvidence],
+    scored_tickets: Sequence[tuple[float, Ticket]],
+    snippets: Sequence[SolutionSnippet],
+) -> str:
+    if kb_backed:
+        parts: list[str] = []
+        kb_count = len(kb_evidence[:2])
+        ticket_count = len(scored_tickets[:3])
+        snippet_count = len(snippets[:3])
+        if kb_evidence:
+            parts.append(f"{kb_count} KB entr{'y' if kb_count == 1 else 'ies'}")
+        if scored_tickets:
+            parts.append(f"{ticket_count} related ticket{'s' if ticket_count != 1 else ''}")
+        if snippets:
+            parts.append(f"{snippet_count} snippet{'s' if snippet_count != 1 else ''}")
+        detail = ", ".join(parts) if parts else "available support evidence"
+        return f"Grounded answer using {detail}."
+
+    return "Fallback answer because no strong KB-backed match was available."
+
+
+def _build_structured_response(
+    *,
+    answer: str,
+    kb_confidence: float,
+    kb_backed: bool,
+    kb_evidence: Sequence[AskEchoKBEvidence],
+    scored_tickets: Sequence[tuple[float, Ticket]],
+    snippets: Sequence[SolutionSnippet],
+) -> AskEchoResponseSchema:
+    return {
+        "answer": str(answer or "").strip(),
+        "confidence": clamp01(float(kb_confidence or 0.0)),
+        "sources": _build_response_sources(scored_tickets=scored_tickets, kb_evidence=kb_evidence),
+        "reasoning": _build_reasoning_summary(
+            kb_backed=kb_backed,
+            kb_evidence=kb_evidence,
+            scored_tickets=scored_tickets,
+            snippets=snippets,
+        ),
+    }
+
+
+def _signal_float(signals: Mapping[str, object] | None, key: str) -> float | None:
+    if signals is None:
+        return None
+    value = signals.get(key)
+    return float(value) if isinstance(value, (int, float)) else None
 
 
 def _build_ticket_summaries(scored: list[tuple[float, Ticket]]) -> list[AskEchoTicketSummary]:
@@ -277,6 +371,7 @@ class AskEchoEngine:
             query=q,
             semantic_scores=semantic_scores,
         )
+        top_ticket_signals = ranked_for_evidence[0].signals if ranked_for_evidence else {}
         ticket_signal_evidence: list[dict] = []
         evidence_rows: list[AskEchoEvidence] = []
         for row in ranked_for_evidence[:3]:
@@ -338,6 +433,9 @@ class AskEchoEngine:
                 top_ticket_score=float(max_score or 0.0),
                 has_snippets=bool(snippets),
                 has_tickets=bool(scored),
+                semantic_similarity=_signal_float(top_ticket_signals, "semantic"),
+                keyword_overlap=_signal_float(top_ticket_signals, "keyword"),
+                recency=_signal_float(top_ticket_signals, "recency"),
             )
         else:
             answer_text, references = _build_general_answer(self.templates, q)
@@ -348,6 +446,9 @@ class AskEchoEngine:
                 top_ticket_score=float(max_score or 0.0),
                 has_snippets=bool(snippets),
                 has_tickets=bool(scored),
+                semantic_similarity=_signal_float(top_ticket_signals, "semantic"),
+                keyword_overlap=_signal_float(top_ticket_signals, "keyword"),
+                recency=_signal_float(top_ticket_signals, "recency"),
             )
 
         answer_kind = "grounded" if kb_backed else "ungrounded"
@@ -378,13 +479,20 @@ class AskEchoEngine:
         )
 
         answer_text = answer_text + self.templates.experimental_note
+        response = _build_structured_response(
+            answer=answer_text,
+            kb_confidence=kb_confidence,
+            kb_backed=kb_backed,
+            kb_evidence=kb_evidence,
+            scored_tickets=[(float(s), t) for s, t in scored],
+            snippets=snippets,
+        )
 
         return AskEchoEngineResult(
-            answer_text=answer_text,
+            response=response,
             answer_kind=answer_kind,
             mode=mode,
             kb_backed=kb_backed,
-            kb_confidence=float(kb_confidence or 0.0),
             top_ticket_score=float(max_score or 0.0),
             references=references,
             reasoning=reasoning,
