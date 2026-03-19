@@ -262,6 +262,14 @@ export default function AskEchoWidget() {
     "mfa codes invalid",
     "outlook keeps asking for password",
   ];
+  const responseData = response && !isAskEchoError(response) ? response : null;
+  const responseMode = responseData?.mode ?? "unknown";
+  const responseConfidence =
+    responseData?.kb_confidence ?? responseData?.references?.[0]?.confidence;
+  const responseTopTicket =
+    responseData?.references?.[0]?.ticket_id ?? responseData?.suggested_tickets?.[0]?.id ?? null;
+  const responseSourceCount =
+    (responseData?.references?.length ?? 0) + (responseData?.kb_evidence?.length ?? 0);
 
   return (
     <div className="ask-echo-shell">
@@ -389,7 +397,7 @@ export default function AskEchoWidget() {
                   <div className="ask-echo__signal-card">
                     <span className="ask-echo__signal-label">Confidence</span>
                     <strong className="ask-echo__signal-value">
-                      {formatConfidencePercent(response.kb_confidence ?? response.references[0]?.confidence)}
+                      {formatConfidencePercent(responseConfidence)}
                     </strong>
                     <span className="ask-echo__signal-note">
                       {response.answer_kind === "grounded" || response.mode === "kb_answer"
@@ -401,23 +409,15 @@ export default function AskEchoWidget() {
                 <div className="ask-echo__signal-grid">
                   <div className="ask-echo__signal-tile">
                     <span className="ask-echo__signal-label">Mode</span>
-                    <strong>{response.mode ?? "unknown"}</strong>
+                    <strong>{responseMode}</strong>
                   </div>
                   <div className="ask-echo__signal-tile">
                     <span className="ask-echo__signal-label">Sources</span>
-                    <strong>
-                      {(response.references?.length ?? 0) + (response.kb_evidence?.length ?? 0)}
-                    </strong>
+                    <strong>{responseSourceCount}</strong>
                   </div>
                   <div className="ask-echo__signal-tile">
                     <span className="ask-echo__signal-label">Top ticket</span>
-                    <strong>
-                      {response.references?.[0]?.ticket_id != null
-                        ? `#${response.references[0].ticket_id}`
-                        : response.suggested_tickets?.[0]?.id != null
-                          ? `#${response.suggested_tickets[0].id}`
-                          : "None"}
-                    </strong>
+                    <strong>{responseTopTicket != null ? `#${responseTopTicket}` : "None"}</strong>
                   </div>
                 </div>
                 <div className="ask-echo__meta ask-echo__meta--chips">
@@ -426,7 +426,7 @@ export default function AskEchoWidget() {
                   ) : response.answer_kind === "ungrounded" || response.mode === "general_answer" ? (
                     <span className="ask-echo__badge ask-echo__badge--warning">General guidance</span>
                   ) : (
-                    <span className="ask-echo__badge">Mode: {response.mode ?? "unknown"}</span>
+                    <span className="ask-echo__badge">Mode: {responseMode}</span>
                   )}
                   <span className="ask-echo__badge ask-echo__badge--source">source: ask_echo</span>
                 </div>
