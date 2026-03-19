@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, select
 
-from backend.app.db import SessionLocal, init_db
+from backend.app import db as _db
+from backend.app.db import init_db
 from backend.app.models.ask_echo_feedback import AskEchoFeedback
 from backend.app.models.ask_echo_log import AskEchoLog
 from backend.app.models.snippets import SnippetFeedback, SolutionSnippet
@@ -369,7 +370,7 @@ def seed_demo_org() -> None:
         },
     ]
 
-    with SessionLocal() as session:
+    with _db.SessionLocal() as session:
         created: list[Ticket] = []
         for idx, spec in enumerate(tickets_spec):
             created.append(
