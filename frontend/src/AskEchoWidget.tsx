@@ -18,6 +18,13 @@ type AskEchoErrorInfo = {
   status?: number;
 };
 
+function formatConfidencePercent(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "Unknown";
+  const normalized = value <= 1 ? value * 100 : value;
+  const clamped = Math.max(0, Math.min(100, normalized));
+  return `${Math.round(clamped)}%`;
+}
+
 function isAskEchoError(r: AskEchoWidgetResponse): r is { error: string } {
   return typeof (r as any)?.error === "string";
 }
@@ -375,132 +382,192 @@ export default function AskEchoWidget() {
         {response && !isAskEchoError(response) && (
           <div className="ask-echo__grid">
             <div className="ask-echo__stack">
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Answer</div>
-              <div className="ask-echo__answer">{response.answer || "No answer returned yet."}</div>
-              <div className="ask-echo__meta">
-                {response.answer_kind === "grounded" || response.mode === "kb_answer" ? (
-                  <span className="ask-echo__badge">Based on your past tickets</span>
-                ) : response.answer_kind === "ungrounded" || response.mode === "general_answer" ? (
-                  <span className="ask-echo__badge badge--warning">General guidance</span>
+              <div className="ask-echo__card ask-echo__card--answer">
+                <div className="ask-echo__card-title">Answer</div>
+                <div className="ask-echo__answer-header">
+                  <div className="ask-echo__answer">{response.answer || "No answer returned yet."}</div>
+                  <div className="ask-echo__signal-card">
+                    <span className="ask-echo__signal-label">Confidence</span>
+                    <strong className="ask-echo__signal-value">
+                      {formatConfidencePercent(response.kb_confidence ?? response.references[0]?.confidence)}
+                    </strong>
+                    <span className="ask-echo__signal-note">
+                      {response.answer_kind === "grounded" || response.mode === "kb_answer"
+                        ? "Grounded in prior support context"
+                        : "Useful guidance with lighter grounding"}
+                    </span>
+                  </div>
+                </div>
+                <div className="ask-echo__signal-grid">
+                  <div className="ask-echo__signal-tile">
+                    <span className="ask-echo__signal-label">Mode</span>
+                    <strong>{response.mode ?? "unknown"}</strong>
+                  </div>
+                  <div className="ask-echo__signal-tile">
+                    <span className="ask-echo__signal-label">Sources</span>
+                    <strong>
+                      {(response.references?.length ?? 0) + (response.kb_evidence?.length ?? 0)}
+                    </strong>
+                  </div>
+                  <div className="ask-echo__signal-tile">
+                    <span className="ask-echo__signal-label">Top ticket</span>
+                    <strong>
+                      {response.references?.[0]?.ticket_id != null
+                        ? `#${response.references[0].ticket_id}`
+                        : response.suggested_tickets?.[0]?.id != null
+                          ? `#${response.suggested_tickets[0].id}`
+                          : "None"}
+                    </strong>
+                  </div>
+                </div>
+                <div className="ask-echo__meta ask-echo__meta--chips">
+                  {response.answer_kind === "grounded" || response.mode === "kb_answer" ? (
+                    <span className="ask-echo__badge">Based on your past tickets</span>
+                  ) : response.answer_kind === "ungrounded" || response.mode === "general_answer" ? (
+                    <span className="ask-echo__badge ask-echo__badge--warning">General guidance</span>
+                  ) : (
+                    <span className="ask-echo__badge">Mode: {response.mode ?? "unknown"}</span>
+                  )}
+                  <span className="ask-echo__badge ask-echo__badge--source">source: ask_echo</span>
+                </div>
+              </div>
+
+              {response.reasoning && <AskEchoReasoningDetails reasoning={response.reasoning} />}
+
+              <div className="ask-echo__card">
+                <div className="ask-echo__card-header">
+                  <div>
+                    <div className="ask-echo__card-title">Knowledge Base</div>
+                    <div className="ask-echo__card-subtitle">Evidence Echo used to shape this answer.</div>
+                  </div>
+                  {Array.isArray(response.kb_evidence) && response.kb_evidence.length > 0 && (
+                    <span className="ask-echo__badge ask-echo__badge--soft">
+                      {response.kb_evidence.length} source{response.kb_evidence.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
+                {Array.isArray(response.kb_evidence) && response.kb_evidence.length > 0 ? (
+                  <div className="snippet-list">
+                    {response.kb_evidence.slice(0, 5).map((entry) => (
+                      <div key={String(entry.entry_id)} className="snippet-item">
+                        <div className="snippet-item__title">
+                          <span>{entry.title}</span>
+                          {typeof entry.score === "number" && (
+                            <span className="ask-echo__badge ask-echo__badge--soft">{entry.score.toFixed(2)}</span>
+                          )}
+                        </div>
+                        <div className="snippet-item__meta">
+                          <span className="ask-echo__badge ask-echo__badge--kb">{entry.source_system || "seed_kb"}</span>
+                          {entry.source_url ? (
+                            <a className="ask-echo__kb-link" href={entry.source_url} target="_blank" rel="noreferrer">
+                              Open source
+                            </a>
+                          ) : (
+                            <span className="ask-echo__kb-link ask-echo__kb-link--muted">No link</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <span className="ask-echo__badge">Mode: {response.mode ?? "unknown"}</span>
+                  <div className="state-panel">No knowledge base matches for this query yet.</div>
                 )}
-                <span className="ask-echo__badge" style={{ marginLeft: "8px" }}>
-                  source: ask_echo
-                </span>
-              </div>
-            </div>
-
-            {response.reasoning && <AskEchoReasoningDetails reasoning={response.reasoning} />}
-
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Knowledge Base</div>
-              {Array.isArray(response.kb_evidence) && response.kb_evidence.length > 0 ? (
-                <div className="snippet-list">
-                  {response.kb_evidence.slice(0, 5).map((entry) => (
-                    <div key={String(entry.entry_id)} className="snippet-item">
-                      <div className="snippet-item__title">
-                        <span>{entry.title}</span>
-                        {typeof entry.score === "number" && (
-                          <span className="ask-echo__badge">{entry.score.toFixed(2)}</span>
-                        )}
-                      </div>
-                      <div className="snippet-item__meta">
-                        <span className="ask-echo__badge ask-echo__badge--kb">{entry.source_system || "seed_kb"}</span>
-                        {entry.source_url ? (
-                          <a className="ask-echo__kb-link" href={entry.source_url} target="_blank" rel="noreferrer">
-                            Open source
-                          </a>
-                        ) : (
-                          <span className="ask-echo__kb-link ask-echo__kb-link--muted">No link</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="state-panel">No knowledge base matches for this query yet.</div>
-              )}
-            </div>
-
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Suggested snippets</div>
-              {Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0 ? (
-                <div className="snippet-list">
-                  {response.suggested_snippets.slice(0, 5).map((s) => (
-                    <div key={String(s.id)} className="snippet-item">
-                      <div className="snippet-item__title">
-                        <span>{s.title}</span>
-                        {typeof s.echo_score === "number" && (
-                          <span className="ask-echo__badge">{s.echo_score.toFixed(2)}</span>
-                        )}
-                      </div>
-                      {s.summary && <div className="snippet-item__meta">{s.summary}</div>}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="state-panel">No snippets returned yet.</div>
-              )}
-            </div>
-
-            <div className="ask-echo__card">
-              <div className="ask-echo__card-title">Feedback</div>
-              <div className="ask-echo__feedback-row">
-                <span>Was this helpful?</span>
-                {fbSaved && <span className="ask-echo__badge ask-echo__badge--success">Saved</span>}
-                <button
-                  type="button"
-                  onClick={() => submitFeedback(true)}
-                  disabled={fbSubmitting || fbSaved}
-                  className="op-button op-button--primary"
-                >
-                  👍 Yes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFbNotesVisible(true)}
-                  disabled={fbSubmitting || fbSaved}
-                  className="op-button op-button--danger"
-                >
-                  👎 No
-                </button>
               </div>
 
-              {fbNotesVisible && (
-                <div className="ask-echo__meta">
-                  <textarea
-                    rows={3}
-                    className="op-input"
-                    placeholder="What went wrong or what did you do to resolve it?"
-                    value={fbNotes}
-                    onChange={(e) => setFbNotes(e.target.value)}
-                  />
-                  <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <div className="ask-echo__card">
+                <div className="ask-echo__card-header">
+                  <div>
+                    <div className="ask-echo__card-title">Suggested snippets</div>
+                    <div className="ask-echo__card-subtitle">Relevant excerpts from previous support work.</div>
+                  </div>
+                  {Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0 && (
+                    <span className="ask-echo__badge ask-echo__badge--soft">
+                      {response.suggested_snippets.length} match{response.suggested_snippets.length === 1 ? "" : "es"}
+                    </span>
+                  )}
+                </div>
+                {Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0 ? (
+                  <div className="snippet-list">
+                    {response.suggested_snippets.slice(0, 5).map((s) => (
+                      <div key={String(s.id)} className="snippet-item">
+                        <div className="snippet-item__title">
+                          <span>{s.title}</span>
+                          {typeof s.echo_score === "number" && (
+                            <span className="ask-echo__badge ask-echo__badge--soft">{s.echo_score.toFixed(2)}</span>
+                          )}
+                        </div>
+                        {s.summary && <div className="snippet-item__meta">{s.summary}</div>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="state-panel">No snippets returned yet.</div>
+                )}
+              </div>
+
+              <div className="ask-echo__card ask-echo__card--feedback">
+                <div className="ask-echo__card-header">
+                  <div>
+                    <div className="ask-echo__card-title">Feedback</div>
+                    <div className="ask-echo__card-subtitle">Train Echo with a quick thumbs-up or a correction.</div>
+                  </div>
+                  {fbSaved && <span className="ask-echo__badge ask-echo__badge--success">Saved</span>}
+                </div>
+                <div className="ask-echo__feedback-row">
+                  <span className="ask-echo__feedback-question">Was this helpful?</span>
+                  <div className="ask-echo__feedback-actions">
                     <button
                       type="button"
-                      className="op-button op-button--ghost"
-                      onClick={() => submitFeedback(false)}
-                      disabled={fbSubmitting}
+                      onClick={() => submitFeedback(true)}
+                      disabled={fbSubmitting || fbSaved}
+                      className="op-button op-button--primary ask-echo__feedback-button"
                     >
-                      Submit
+                      👍 Yes
                     </button>
                     <button
                       type="button"
-                      className="op-button op-button--ghost"
-                      onClick={() => {
-                        setFbNotesVisible(false);
-                        setFbNotes("");
-                      }}
+                      onClick={() => setFbNotesVisible(true)}
+                      disabled={fbSubmitting || fbSaved}
+                      className="op-button op-button--danger ask-echo__feedback-button"
                     >
-                      Cancel
+                      👎 No
                     </button>
                   </div>
-                  {fbError && <div className="ask-echo__meta">{fbError}</div>}
                 </div>
-              )}
-            </div>
+
+                {fbNotesVisible && (
+                  <div className="ask-echo__feedback-panel">
+                    <textarea
+                      rows={3}
+                      className="op-input ask-echo__feedback-textarea"
+                      placeholder="What went wrong or what did you do to resolve it?"
+                      value={fbNotes}
+                      onChange={(e) => setFbNotes(e.target.value)}
+                    />
+                    <div className="ask-echo__feedback-panel-actions">
+                      <button
+                        type="button"
+                        className="op-button op-button--ghost"
+                        onClick={() => submitFeedback(false)}
+                        disabled={fbSubmitting}
+                      >
+                        Submit feedback
+                      </button>
+                      <button
+                        type="button"
+                        className="op-button op-button--ghost"
+                        onClick={() => {
+                          setFbNotesVisible(false);
+                          setFbNotes("");
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {fbError && <div className="ask-echo__feedback-error">{fbError}</div>}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
