@@ -1,0 +1,49 @@
+name: PR Guard
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+jobs:
+  scope-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin "${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+
+      - name: Check PR scope
+        env:
+          MAX_FILES: "20"
+          MAX_LINES: "600"
+        run: |
+          set -eu
+
+          base_ref="origin/${GITHUB_BASE_REF}"
+          file_count=$(git diff --name-only --diff-filter=ACMRT "${base_ref}...HEAD" | sed '/^$/d' | wc -l | tr -d ' ')
+          total_lines=$(git diff --numstat "${base_ref}...HEAD" | awk '{added += $1; deleted += $2} END {print added + deleted + 0}')
+
+          {
+            echo "## PR Scope"
+            echo
+            echo "- Files changed: ${file_count}"
+            echo "- Lines changed: ${total_lines}"
+            echo "- Guardrail: ${MAX_FILES} files / ${MAX_LINES} lines"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [ "${file_count}" -gt "${MAX_FILES}" ] || [ "${total_lines}" -gt "${MAX_LINES}" ]; then
+            echo "PR scope exceeds guardrails (${file_count} files, ${total_lines} lines). Split the work into a smaller PR."
+            exit 1
+          fi
