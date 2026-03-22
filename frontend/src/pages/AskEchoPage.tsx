@@ -3,7 +3,7 @@ import SectionHeader from "../ui/SectionHeader";
 
 export default function AskEchoPage() {
   return (
-    <div>
+    <div className="ask-echo-page">
       <SectionHeader
         title="Ask Echo"
         description="Ask a support question, inspect the answer trail, and capture feedback without leaving the console."

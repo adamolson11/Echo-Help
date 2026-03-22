@@ -1,3 +1,10 @@
+"""Stable Ask Echo response contracts.
+
+`AskEchoResponse` is the frontend-safe public response. Internal/admin-only
+inspection routes live in separate schema modules and may expose additional
+analytics fields such as weak-answer flags or feedback status.
+"""
+
 from typing import Literal
 
 from pydantic import BaseModel
@@ -51,6 +58,8 @@ class AskEchoRequest(BaseModel):
 
 
 class AskEchoResponse(BaseModel):
+    """Public Ask Echo response safe for UI consumption."""
+
     meta: Meta = Meta(kind="ask_echo", version="v2")
     answer_kind: Literal["grounded", "ungrounded"]
     ask_echo_log_id: int

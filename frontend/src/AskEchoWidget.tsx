@@ -19,6 +19,13 @@ type AskEchoErrorInfo = {
   status?: number;
 };
 
+function formatConfidencePercent(value?: number | null): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "Unknown";
+  const normalized = value <= 1 ? value * 100 : value;
+  const clamped = Math.max(0, Math.min(100, normalized));
+  return `${Math.round(clamped)}%`;
+}
+
 function isAskEchoError(r: AskEchoWidgetResponse): r is { error: string } {
   return typeof r === "object" && r !== null && "error" in r && typeof r.error === "string";
 }
@@ -251,6 +258,14 @@ export default function AskEchoWidget() {
     "mfa codes invalid",
     "outlook keeps asking for password",
   ];
+  const responseData = response && !isAskEchoError(response) ? response : null;
+  const responseMode = responseData?.mode ?? "unknown";
+  const responseConfidence =
+    responseData?.kb_confidence ?? responseData?.references?.[0]?.confidence;
+  const responseTopTicket =
+    responseData?.references?.[0]?.ticket_id ?? responseData?.suggested_tickets?.[0]?.id ?? null;
+  const responseSourceCount =
+    (responseData?.references?.length ?? 0) + (responseData?.kb_evidence?.length ?? 0);
 
   return (
     <div className="ask-echo-shell">

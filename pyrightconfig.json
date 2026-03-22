@@ -4,10 +4,11 @@
   "typeCheckingMode": "basic",
   "reportMissingImports": true,
   "reportMissingTypeStubs": false,
-  "pythonVersion": "3.10",
+  "pythonVersion": "3.11",
   "executionEnvironments": [
     {
-      "root": "backend"
+      "root": ".",
+      "extraPaths": ["."]
     }
   ]
 }
