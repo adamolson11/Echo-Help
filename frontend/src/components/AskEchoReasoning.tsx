@@ -22,38 +22,35 @@ export default function AskEchoReasoningDetails({ reasoning }: Props) {
   const chosenIds = reasoning.chosen_snippet_ids || [];
 
   return (
-    <details className="ask-echo__reasoning">
-      <summary className="ask-echo__reasoning-summary">
+    <details className="ask-echo-reasoning">
+      <summary className="ask-echo-reasoning__summary">
         <span>Why Echo chose this answer</span>
-        {typeof reasoning.echo_score === "number" && (
-          <span className="ask-echo__badge ask-echo__badge--soft">
-            EchoScore {reasoning.echo_score.toFixed(2)}
-          </span>
-        )}
+        <span className="ask-echo-reasoning__summary-note">Inspect ranking context</span>
       </summary>
-      <div className="ask-echo__reasoning-body">
+      <div className="ask-echo-reasoning__body">
         {typeof reasoning.echo_score === "number" && (
-          <p className="ask-echo__reasoning-note">
-            Candidate snippets are ranked below. The selected ones were used to ground the response.
-          </p>
+          <div className="ask-echo-reasoning__score">EchoScore {reasoning.echo_score.toFixed(2)}</div>
         )}
 
         {candidates.length === 0 && (
-          <p className="ask-echo__reasoning-empty">No snippet reasoning available for this answer.</p>
+          <p className="ask-echo-reasoning__empty">No snippet reasoning available for this answer.</p>
         )}
 
         {candidates.map((c) => {
           const selected = chosenIds.includes(c.id);
           return (
-            <div key={c.id} className="ask-echo__reasoning-item">
-              <div>
-                <div className="ask-echo__reasoning-item-title">{c.title ?? `Snippet #${c.id}`}</div>
-                <div className="ask-echo__reasoning-item-score">
+            <div
+              key={c.id}
+              className="ask-echo-reasoning__candidate"
+            >
+              <div className="ask-echo-reasoning__candidate-copy">
+                <div className="ask-echo-reasoning__candidate-title">{c.title ?? `Snippet #${c.id}`}</div>
+                <div className="ask-echo-reasoning__candidate-score">
                   Score: {typeof c.score === "number" ? c.score.toFixed(3) : "N/A"}
                 </div>
               </div>
               {selected && (
-                <span className="ask-echo__badge ask-echo__badge--success">
+                <span className="ask-echo-reasoning__used">
                   Used
                 </span>
               )}

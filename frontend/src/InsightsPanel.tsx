@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import AskEchoLogsPanel from "./AskEchoLogsPanel";
 import AskEchoFeedbackPanel from "./AskEchoFeedbackPanel";
 import {
@@ -25,16 +25,16 @@ export default function InsightsPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function fetchPatternRadar(days: number) {
+  const fetchPatternRadar = useCallback(async (days: number) => {
     setPatternRadar(null);
     try {
       const radarJson = await getTicketPatternRadar(days);
       setPatternRadar(radarJson);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Pattern Radar error:", err);
-      setError(err?.message ?? "Failed to load pattern radar");
+      setError(err instanceof Error ? err.message : "Failed to load pattern radar");
     }
-  }
+  }, []);
 
   useEffect(() => {
     const fetchInsights = async () => {
@@ -53,17 +53,21 @@ export default function InsightsPanel() {
         setInsights(insightsJson);
         setClusters(clustersJson);
         setFeedbackPatterns(feedbackPatternsJson);
-        void fetchPatternRadar(patternRadarDays);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error loading insights:", err);
-        setError(err?.message ?? "Failed to load insights");
+        setError(err instanceof Error ? err.message : "Failed to load insights");
       } finally {
         setLoading(false);
       }
     };
 
     fetchInsights();
-  }, []);
+  }, [fetchPatternRadar]);
+
+  useEffect(() => {
+    if (!insights) return;
+    void fetchPatternRadar(patternRadarDays);
+  }, [fetchPatternRadar, insights, patternRadarDays]);
 
   if (loading && !insights && clusters.length === 0) {
     return (
@@ -305,8 +309,8 @@ export default function InsightsPanel() {
         )}
       </div>
       </div>
-      <AskEchoLogsPanel />
-      <div className="mt-4">
+      <div className="mt-4 grid gap-4">
+        <AskEchoLogsPanel />
         <AskEchoFeedbackPanel />
       </div>
     </React.Fragment>
