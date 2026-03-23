@@ -3,14 +3,12 @@ import SectionHeader from "../ui/SectionHeader";
 
 export default function AskEchoPage() {
   return (
-    <div className="ask-echo-page">
+    <div>
       <SectionHeader
         title="Ask Echo"
-        description="EchoHelp remembers what worked before. Ask a question, inspect past tickets, and Echo gets better from feedback."
+        description="Ask a support question, inspect the answer trail, and capture feedback without leaving the console."
       />
-      <div className="ask-echo-page__frame">
-        <AskEchoWidget />
-      </div>
+      <AskEchoWidget />
     </div>
   );
 }

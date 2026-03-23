@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import type { FormEvent } from "react";
 import AskEchoReasoningDetails from "./components/AskEchoReasoning";
 import { ApiError, formatApiError } from "./api/client";
 import {
@@ -7,7 +8,7 @@ import {
   postAskEchoFeedback,
   postSnippetFeedback,
 } from "./api/endpoints";
-import type { AskEchoResponse } from "./api/types";
+import type { AskEchoResponse, SnippetFeedbackRequest, TicketFeedbackCreate } from "./api/types";
 
 type AskEchoWidgetResponse = AskEchoResponse | { error: string };
 
@@ -26,7 +27,7 @@ function formatConfidencePercent(value?: number | null): string {
 }
 
 function isAskEchoError(r: AskEchoWidgetResponse): r is { error: string } {
-  return typeof (r as any)?.error === "string";
+  return typeof r === "object" && r !== null && "error" in r && typeof r.error === "string";
 }
 
 export default function AskEchoWidget() {
@@ -44,16 +45,16 @@ export default function AskEchoWidget() {
   const [fbNotesVisible, setFbNotesVisible] = useState(false);
   const [fbNotes, setFbNotes] = useState("");
   const [selectedFeedbackTicketId, setSelectedFeedbackTicketId] = useState<number | null>(null);
+  const trimmedQuery = q.trim();
+  const canSubmit = !loading && trimmedQuery.length > 0;
 
   function logDevDebug(event: string, payload: Record<string, unknown>) {
     if (!import.meta.env.DEV) return;
-    // eslint-disable-next-line no-console
     console.debug("[ask-echo]", { event, ...payload });
   }
 
   function logDevError(event: string, payload: Record<string, unknown>) {
     if (!import.meta.env.DEV) return;
-    // eslint-disable-next-line no-console
     console.error("[ask-echo]", { event, ...payload });
   }
 
@@ -140,7 +141,12 @@ export default function AskEchoWidget() {
     });
   }
 
-  // when a new Ask Echo response arrives, auto-select a sensible ticket id for feedback
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    ask();
+  }
+
   useEffect(() => {
     if (!response || isAskEchoError(response)) {
       setSelectedFeedbackTicketId(null);
@@ -175,7 +181,7 @@ export default function AskEchoWidget() {
         throw new Error("No Ask Echo response to attach feedback to.");
       }
 
-      const askEchoLogId: number | null = response?.ask_echo_log_id ?? null;
+      const askEchoLogId: number | null = response.ask_echo_log_id ?? null;
       if (!askEchoLogId) {
         throw new Error("Missing Ask Echo log id; please ask again.");
       }
@@ -189,8 +195,8 @@ export default function AskEchoWidget() {
 
       // Determine ticket id to attach to feedback.
       // Priority: explicit selectedFeedbackTicketId -> response.references -> response.results -> snippet.ticket_id
-      let ticketId: number | undefined = undefined;
-      if (selectedFeedbackTicketId) ticketId = selectedFeedbackTicketId as number;
+      let ticketId: number | undefined;
+      if (selectedFeedbackTicketId) ticketId = selectedFeedbackTicketId;
 
       if ((!ticketId || ticketId === null) && response) {
         if (Array.isArray(response.references) && response.references.length > 0) {
@@ -207,7 +213,7 @@ export default function AskEchoWidget() {
       }
 
       // If we found a ticket id, ensure the local state reflects it so subsequent clicks reuse it.
-      if (ticketId) setSelectedFeedbackTicketId(ticketId as number);
+      if (ticketId) setSelectedFeedbackTicketId(ticketId);
 
       // If there is no ticket id, we've still captured Ask Echo feedback by log id.
       // Skip snippet/ticket feedback persistence in that case.
@@ -219,7 +225,11 @@ export default function AskEchoWidget() {
       }
 
       // Build payload. Backend expects `notes` for resolution notes; include `resolution_notes` and `query_text` as well for context.
-      const payload: any = { helped, ticket_id: ticketId, source: "ask_echo" };
+      const payload: SnippetFeedbackRequest & {
+        source?: string;
+        resolution_notes?: string;
+        query_text?: string;
+      } = { helped, ticket_id: ticketId, source: "ask_echo" };
       if (!helped && fbNotes.trim().length > 0) {
         payload.notes = fbNotes.trim();
         payload.resolution_notes = fbNotes.trim();
@@ -231,25 +241,24 @@ export default function AskEchoWidget() {
       // Also record a ticket-feedback row so Ask Echo feedback is visible in Insights.
       // Map helped -> rating (5 for helped, 1 for not helped) to satisfy TicketFeedback.rating requirement.
       try {
-        const tfPayload: any = {
+        const tfPayload: TicketFeedbackCreate = {
           ticket_id: ticketId,
           rating: helped ? 5 : 1,
           resolution_notes: fbNotes.trim() || undefined,
           query_text: q.trim() || "",
-          helped: helped,
+          helped,
         };
 
-        // Fire-and-forget; we don't block the UI on this.
         await createTicketFeedback(tfPayload);
-      } catch (e) {
-        // ignore ticket-feedback errors in the UI flow
+      } catch {
+        // Ignore ticket feedback persistence failures in this UI flow.
       }
 
       // on success: clear notes and hide
       setFbNotes("");
       setFbNotesVisible(false);
       setFbSaved(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFbError(formatApiError(err));
     } finally {
       setFbSubmitting(false);
@@ -292,33 +301,40 @@ export default function AskEchoWidget() {
             </div>
           </header>
 
-          <div className="ask-echo__command">
+          <div className="ask-echo__command-intro">
+            <span className="ask-echo__command-label">Search resolved tickets, reusable snippets, and KB evidence</span>
+            <span className="ask-echo__command-hint">Press Enter to submit</span>
+          </div>
+
+          <form className="ask-echo__command" onSubmit={handleSubmit}>
             <input
               ref={inputRef}
               className="op-input ask-echo__input"
-              placeholder="Ask Echo a question about tickets..."
+              aria-label="Ask Echo question"
+              placeholder="Ask Echo about a ticket pattern, outage, or known fix"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && ask()}
             />
             <button
-              type="button"
+              type="submit"
               className="op-button op-button--primary ask-echo__submit"
-              onClick={ask}
-              disabled={loading}
+              disabled={!canSubmit}
             >
               {loading ? "Thinking..." : "Ask Echo"}
             </button>
-          </div>
+          </form>
         </div>
 
         {!q.trim() && !response && (
           <div className="ask-echo__empty">
             <div className="ask-echo__card ask-echo__empty-card">
-              Ask a question to search resolved tickets.
+              <div className="ask-echo__empty-title">Start with a support question</div>
+              <p className="ask-echo__empty-copy">
+                Echo will search past tickets and supporting references, then return a grounded answer you can verify.
+              </p>
             </div>
             <div className="ask-echo__examples">
-              <span>Try an example:</span>
+              <span className="ask-echo__examples-label">Try an example</span>
               {tryExamples.map((example) => (
                 <button
                   key={example}
@@ -327,10 +343,12 @@ export default function AskEchoWidget() {
                   onClick={() => {
                     setQ(example);
                     setResponse(null);
+                    setErrorInfo(null);
+                    setShowErrorDetails(false);
                     try {
                       inputRef.current?.focus();
                     } catch {
-                      // no-op
+                      // Ignore focus failures when the input is unavailable.
                     }
                   }}
                 >
@@ -342,7 +360,7 @@ export default function AskEchoWidget() {
         )}
 
         {loading && (
-          <div className="ask-echo__loading-card">
+          <div className="ask-echo__loading-card" role="status" aria-live="polite">
             <div className="ask-echo__spinner" />
             <div>
               <div className="ask-echo__loading-title">Thinking…</div>
