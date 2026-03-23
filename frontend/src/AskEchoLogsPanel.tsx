@@ -31,12 +31,22 @@ type AskEchoLogDetail = {
 
 const LIMIT = 100;
 
+function formatTimestamp(value?: string | null) {
+  const parsed = value ? new Date(value) : null;
+  return parsed && !isNaN(parsed.getTime()) ? parsed.toLocaleString() : value ?? "—";
+}
+
+function getErrorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback;
+}
+
 export default function AskEchoLogsPanel() {
   const [logs, setLogs] = useState<AskEchoLogSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedLog, setSelectedLog] = useState<AskEchoLogDetail | null>(null);
+  const [activeLogId, setActiveLogId] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -50,8 +60,8 @@ export default function AskEchoLogsPanel() {
         const raw = await getInsightsAskEchoLogs(LIMIT);
         const items: AskEchoLogSummary[] = raw.items ?? [];
         if (!cancelled) setLogs(items);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message ?? "Error loading Ask Echo logs");
+      } catch (err: unknown) {
+        if (!cancelled) setError(getErrorMessage(err, "Error loading Ask Echo logs"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -64,6 +74,7 @@ export default function AskEchoLogsPanel() {
   }, []);
 
   async function loadLogDetail(id: number) {
+    setActiveLogId(id);
     setDetailLoading(true);
     setDetailError(null);
     setSelectedLog(null);
@@ -71,64 +82,64 @@ export default function AskEchoLogsPanel() {
       const raw = await getInsightsAskEchoLogDetail(id);
       const item: AskEchoLogDetail = raw.item;
       setSelectedLog(item);
-    } catch (err: any) {
-      setDetailError(err.message ?? "Error loading log detail");
+    } catch (err: unknown) {
+      setDetailError(getErrorMessage(err, "Error loading log detail"));
     } finally {
       setDetailLoading(false);
     }
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
-      <div className="flex items-center justify-between gap-2">
+    <section className="insights-panel insights-panel--ask-echo">
+      <div className="insights-panel__header">
         <div>
-          <h2 className="text-sm font-semibold text-slate-100">Ask Echo Query History</h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <h2 className="insights-panel__title">Ask Echo Query History</h2>
+          <p className="insights-panel__description">
             Review past Ask Echo questions, confidence, and reasoning for each answer.
           </p>
         </div>
+        <span className="insights-panel__tag">Last {LIMIT}</span>
       </div>
 
-      {loading && <div className="mt-3 text-xs text-slate-400">Loading Ask Echo logs…</div>}
-      {error && <div className="mt-3 text-xs text-rose-400">Could not load Ask Echo logs: {error}</div>}
+      {loading && <div className="insights-panel__state">Loading Ask Echo logs…</div>}
+      {error && <div className="insights-panel__state insights-panel__state--error">Could not load Ask Echo logs: {error}</div>}
 
       {!loading && !error && logs.length === 0 && (
-        <div className="mt-3 text-xs text-slate-500">No Ask Echo logs yet.</div>
+        <div className="insights-panel__state">No Ask Echo logs yet.</div>
       )}
 
       {!loading && !error && logs.length > 0 && (
-        <div className="mt-3 max-h-72 overflow-y-auto text-xs">
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-slate-900/80 text-slate-400">
+        <div className="insights-panel__table-wrap">
+          <table className="insights-panel__table">
+            <thead>
               <tr>
-                <th className="text-left py-1 pr-2">Time</th>
-                <th className="text-left py-1 pr-2">Query</th>
-                <th className="text-left py-1 pr-2">Ticket</th>
-                <th className="text-left py-1 pr-2">EchoScore</th>
-                <th className="text-left py-1 pr-2"></th>
+                <th>Time</th>
+                <th>Query</th>
+                <th>Ticket</th>
+                <th>EchoScore</th>
+                <th aria-label="Actions"></th>
               </tr>
             </thead>
             <tbody>
               {logs.map((log) => {
-                const d = log.created_at ? new Date(log.created_at) : null;
-                const time = d && !isNaN(d.getTime()) ? d.toLocaleString() : log.created_at ?? "—";
+                const isActive = activeLogId === log.id;
                 return (
-                  <tr key={log.id} className="border-t border-slate-800 hover:bg-slate-900/60">
-                    <td className="py-1 pr-2 align-top text-slate-300">{time}</td>
-                    <td className="py-1 pr-2 align-top text-slate-100 truncate max-w-xs" title={log.query_text}>
+                  <tr key={log.id} className={isActive ? "is-active" : undefined}>
+                    <td>{formatTimestamp(log.created_at)}</td>
+                    <td className="insights-panel__cell-query" title={log.query_text}>
                       {log.query_text}
                     </td>
-                    <td className="py-1 pr-2 align-top text-slate-300">{log.ticket_id ?? "—"}</td>
-                    <td className="py-1 pr-2 align-top text-slate-300">
+                    <td>{log.ticket_id ?? "—"}</td>
+                    <td>
                       {typeof log.echo_score === "number" ? log.echo_score.toFixed(2) : "N/A"}
                     </td>
-                    <td className="py-1 pr-2 align-top text-right">
+                    <td className="insights-panel__cell-action">
                       <button
                         type="button"
-                        className="rounded bg-slate-800 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-700"
+                        className="insights-panel__button"
                         onClick={() => loadLogDetail(log.id)}
                       >
-                        View
+                        {isActive ? "Open" : "View"}
                       </button>
                     </td>
                   </tr>
@@ -140,26 +151,28 @@ export default function AskEchoLogsPanel() {
       )}
 
       {(detailLoading || selectedLog || detailError) && (
-        <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/80 p-3 text-xs text-slate-200">
-          {detailLoading && <div className="text-slate-400">Loading log details…</div>}
-          {detailError && <div className="text-rose-400">{detailError}</div>}
+        <div className="insights-panel__detail" role="status" aria-live="polite">
+          {detailLoading && <div className="insights-panel__state">Loading log details…</div>}
+          {detailError && <div className="insights-panel__state insights-panel__state--error">{detailError}</div>}
           {selectedLog && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-100">Log #{selectedLog.id}</h4>
+            <div className="insights-panel__detail-stack">
+              <div className="insights-panel__detail-header">
+                <h4 className="insights-panel__detail-title">Log #{selectedLog.id}</h4>
                 {selectedLog.created_at && (
-                  <span className="text-[11px] text-slate-400">
-                    {new Date(selectedLog.created_at).toLocaleString()}
+                  <span className="insights-panel__detail-meta">
+                    {formatTimestamp(selectedLog.created_at)}
                   </span>
                 )}
               </div>
-              <p>
-                <span className="font-semibold">Query:</span> {selectedLog.query_text}
-              </p>
-              <p>
-                <span className="font-semibold">Answer:</span> {selectedLog.answer_text || "(not stored)"}
-              </p>
-              <p className="text-[11px] text-slate-400">
+              <div className="insights-panel__detail-block">
+                <span className="insights-panel__detail-label">Query</span>
+                <p>{selectedLog.query_text}</p>
+              </div>
+              <div className="insights-panel__detail-block">
+                <span className="insights-panel__detail-label">Answer</span>
+                <p>{selectedLog.answer_text || "(not stored)"}</p>
+              </div>
+              <p className="insights-panel__detail-meta">
                 Ticket: {selectedLog.ticket_id ?? "—"} · EchoScore: {" "}
                 {typeof selectedLog.echo_score === "number"
                   ? selectedLog.echo_score.toFixed(2)
@@ -167,31 +180,31 @@ export default function AskEchoLogsPanel() {
               </p>
 
               {selectedLog.reasoning && (
-                <div className="mt-2">
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <div className="insights-panel__detail-section">
+                  <p className="insights-panel__detail-label insights-panel__detail-label--section">
                     Reasoning
                   </p>
                   {selectedLog.reasoning.candidate_snippets.length === 0 && (
-                    <p className="text-slate-400">
+                    <p className="insights-panel__detail-meta">
                       No snippet reasoning recorded for this call.
                     </p>
                   )}
-                  <div className="space-y-1">
+                  <div className="insights-panel__reasoning-list">
                     {selectedLog.reasoning.candidate_snippets.map((c) => {
                       const used = selectedLog.reasoning!.chosen_snippet_ids.includes(c.id);
                       return (
                         <div
                           key={c.id}
-                          className="flex items-center justify-between rounded bg-slate-900/60 px-2 py-1"
+                          className="insights-panel__reasoning-item"
                         >
                           <div>
-                            <div className="font-medium">{c.title ?? `Snippet #${c.id}`}</div>
-                            <div className="text-[11px] text-slate-400">
+                            <div className="insights-panel__reasoning-title">{c.title ?? `Snippet #${c.id}`}</div>
+                            <div className="insights-panel__detail-meta">
                               Score: {typeof c.score === "number" ? c.score.toFixed(3) : "N/A"}
                             </div>
                           </div>
                           {used && (
-                            <span className="rounded-full bg-emerald-600/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-50">
+                            <span className="insights-panel__pill insights-panel__pill--success">
                               Used
                             </span>
                           )}
@@ -202,11 +215,11 @@ export default function AskEchoLogsPanel() {
                 </div>
               )}
 
-              <details className="mt-2 rounded bg-slate-900/60 px-2 py-1">
-                <summary className="cursor-pointer text-[11px] text-slate-400">
+              <details className="insights-panel__json">
+                <summary className="insights-panel__json-summary">
                   Raw log JSON
                 </summary>
-                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[10px] text-slate-300">
+                <pre className="insights-panel__json-pre">
                   {JSON.stringify(selectedLog, null, 2)}
                 </pre>
               </details>
@@ -214,6 +227,6 @@ export default function AskEchoLogsPanel() {
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }
