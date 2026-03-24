@@ -1022,3 +1022,39 @@ button {
     flex-direction: column;
   }
 }
+
+/* Post-cleanup contrast repair: keep Ask Echo result cards readable inside the light shell. */
+.ask-echo__card-title {
+  color: #7fb7c8;
+}
+
+.ask-echo__card-subtitle,
+.ask-echo__meta,
+.ask-echo .snippet-item__meta {
+  color: var(--echo-cyber-muted);
+}
+
+.ask-echo__answer,
+.ask-echo__feedback-question,
+.ask-echo .snippet-item__title {
+  color: var(--echo-cyber-text);
+}
+
+.ask-echo__badge--soft {
+  background: rgba(255, 255, 255, 0.06);
+  color: #d7e6f2;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ask-echo__badge--source {
+  background: rgba(0, 229, 255, 0.08);
+  color: #c6f8ff;
+  border: 1px solid rgba(0, 229, 255, 0.12);
+}
+
+.ask-echo .snippet-item,
+.ask-echo .state-panel {
+  border-color: rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(11, 17, 24, 0.9), rgba(17, 25, 35, 0.96));
+  color: var(--echo-cyber-text);
+}
