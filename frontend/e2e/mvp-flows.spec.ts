@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const askEchoQuery = "password reset doesn't work";
 const knowledgeBaseQuery = "vpn";
+const slowResponseDelayMs = 1_200;
 
 test("Ask Echo returns an answer for a seeded support question", async ({ page }) => {
   await page.goto("/#/ask");
@@ -30,6 +31,7 @@ test("Ask Echo returns an answer for a seeded support question", async ({ page }
 test("Ask Echo feedback persists after a successful answer", async ({ page, request, baseURL }) => {
   await page.goto("/#/ask");
   const main = page.locator("main");
+  const resolvedBaseUrl = baseURL ?? "http://127.0.0.1:5174";
 
   const askResponsePromise = page.waitForResponse(
     (response) =>
@@ -68,7 +70,7 @@ test("Ask Echo feedback persists after a successful answer", async ({ page, requ
   await expect(main.getByText("Saved")).toBeVisible();
 
   const inspectionResponse = await request.get(
-    `${baseURL}/api/ask-echo/feedback/records?limit=25`,
+    `${resolvedBaseUrl}/api/ask-echo/feedback/records?limit=25`,
   );
   expect(inspectionResponse.ok()).toBeTruthy();
 
@@ -134,7 +136,7 @@ test("Ask Echo shows loading state for slow responses and recovers from interrup
   await page.route("**/api/ask-echo", async (route) => {
     const requestBody = route.request().postDataJSON() as { q?: string };
     if (requestBody.q === "slow-response-case") {
-      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      await new Promise((resolve) => setTimeout(resolve, slowResponseDelayMs));
       await route.fulfill({
         status: 200,
         contentType: "application/json",
