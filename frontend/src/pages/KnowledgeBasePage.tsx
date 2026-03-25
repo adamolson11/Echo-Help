@@ -88,9 +88,9 @@ export default function KnowledgeBasePage() {
               </div>
             </div>
 
-            {(s.text ?? s.content ?? s.body ?? s.snippet_text) && (
+            {(s.text ?? s.content ?? s.body ?? s.snippet_text ?? s.content_md ?? s.summary) && (
               <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-950/40 p-3 text-xs text-slate-200">
-                {String(s.text ?? s.content ?? s.body ?? s.snippet_text)}
+                {String(s.text ?? s.content ?? s.body ?? s.snippet_text ?? s.content_md ?? s.summary)}
               </pre>
             )}
           </Card>

@@ -32,6 +32,7 @@ class SnippetSearchResult(BaseModel):
     id: int
     title: str
     summary: str | None
+    content_md: str | None = None
     echo_score: float
     success_count: int | None = 0
     failure_count: int | None = 0

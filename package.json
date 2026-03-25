@@ -2,7 +2,7 @@
   "name": "echo-help-root",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n BACKEND,FRONTEND -c magenta,cyan \"uvicorn backend.app.main:app --reload --port 8001\" \"npm run dev --prefix frontend -- --port 5174\"",
+    "dev": "concurrently -n BACKEND,FRONTEND -c magenta,cyan \"python3 -m uvicorn backend.app.main:app --reload --port 8001\" \"npm run dev --prefix frontend -- --port 5174\"",
     "lint": "ruff check .",
     "test": "pytest",
     "typecheck": "pyright",
