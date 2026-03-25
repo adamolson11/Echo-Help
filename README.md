@@ -108,6 +108,8 @@ It lets agents search historical tickets, record what actually fixed each issue,
 git clone <your-repo-url>.git
 cd Echo-Help   # or your repo folder
 
+npm ci
+
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 
@@ -146,7 +148,7 @@ Troubleshooting:
 ### 3. Run the backend
 
 ```bash
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
+python3 -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 The API root will be at: `http://127.0.0.1:8001`.
@@ -159,7 +161,7 @@ A tiny CLI demo script is included to exercise the real HTTP API and print frien
 
 ```bash
 # Example: start the FastAPI dev server
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
+python3 -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 2. Run the demo script (defaults to `http://localhost:8001`):
@@ -185,7 +187,7 @@ pipeline: ingest -> embedding -> search.
 1. Start the backend (from the repo root):
 
 ```bash
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
+python3 -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 2. Run the ingest→search demo:
@@ -242,6 +244,24 @@ From `frontend/`:
 ```bash
 npm run build
 ```
+
+### 6. Run Playwright E2E checks
+
+From `frontend/`:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+For a visible browser during local QA, run one of:
+
+```bash
+npm run test:e2e:headed
+npm run test:e2e:ui
+```
+
+The earlier “no visible browser” confusion came from Playwright’s default headless mode. The repo now keeps deterministic headless runs for automation, while `--headed`, `--ui`, or `PLAYWRIGHT_HEADED=1` opt into a visible browser for manual debugging.
 
 ---
 

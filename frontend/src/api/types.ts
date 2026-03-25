@@ -113,6 +113,7 @@ export type SnippetSearchResult = {
   id: number;
   title: string;
   summary: string | null;
+  content_md?: string | null;
   echo_score: number;
   success_count?: number;
   failure_count?: number;
