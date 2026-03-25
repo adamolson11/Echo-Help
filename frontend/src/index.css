@@ -60,14 +60,14 @@ button {
 }
 
 .ask-echo-shell {
-  padding: 44px 24px 64px;
+  padding: 40px 24px 60px;
   background:
-    radial-gradient(circle at 14% 12%, rgba(0, 229, 255, 0.12), transparent 28%),
-    radial-gradient(circle at 88% 0%, rgba(124, 58, 237, 0.14), transparent 28%),
-    linear-gradient(180deg, #0b0f14 0%, #0d131a 38%, #0b1016 100%);
+    radial-gradient(circle at 14% 12%, rgba(0, 229, 255, 0.08), transparent 30%),
+    radial-gradient(circle at 86% 2%, rgba(124, 58, 237, 0.1), transparent 30%),
+    linear-gradient(180deg, #0d131b 0%, #101722 42%, #0c1118 100%);
   border-radius: 28px;
-  border: 1px solid rgba(0, 229, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(0, 229, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 18px 34px rgba(2, 6, 23, 0.18);
 }
 
 .ask-echo-page {
@@ -93,17 +93,17 @@ button {
 }
 
 .ask-echo__hero {
-  padding: 30px 30px 26px;
+  padding: 28px 28px 24px;
   border-radius: 28px;
   background:
-    radial-gradient(circle at top right, rgba(0, 229, 255, 0.13), transparent 26%),
-    radial-gradient(circle at 75% 15%, rgba(124, 58, 237, 0.15), transparent 22%),
-    linear-gradient(135deg, rgba(18, 24, 33, 0.98), rgba(22, 32, 43, 0.96));
-  border: 1px solid rgba(0, 229, 255, 0.14);
-  box-shadow: var(--echo-cyber-shadow), 0 0 0 1px rgba(124, 58, 237, 0.06);
+    radial-gradient(circle at top right, rgba(0, 229, 255, 0.1), transparent 28%),
+    radial-gradient(circle at 72% 16%, rgba(124, 58, 237, 0.12), transparent 24%),
+    linear-gradient(135deg, rgba(16, 23, 33, 0.96), rgba(19, 29, 40, 0.96));
+  border: 1px solid rgba(0, 229, 255, 0.11);
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(10px);
   display: grid;
-  gap: 22px;
+  gap: 20px;
 }
 
 .ask-echo__command-intro {
@@ -133,24 +133,27 @@ button {
 
 .ask-echo__title {
   margin: 0;
-  font-size: 40px;
+  font-size: 42px;
+  font-weight: 700;
   letter-spacing: -0.03em;
-  line-height: 0.98;
+  line-height: 1;
   color: #f5fdff;
-  text-shadow: 0 0 20px rgba(0, 229, 255, 0.1);
+  text-shadow: 0 0 18px rgba(0, 229, 255, 0.08);
 }
 
 .ask-echo__subtitle {
   margin: 6px 0 0;
-  color: #9bb2c6;
+  color: #bdd0dd;
   font-size: 15px;
-  max-width: 640px;
+  line-height: 1.55;
+  max-width: 620px;
 }
 
 .ask-echo__lede {
-  margin: 12px 0 0;
-  font-size: 15px;
-  color: #cfdeea;
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: #869caf;
+  line-height: 1.6;
   max-width: 620px;
 }
 
@@ -164,72 +167,79 @@ button {
 .ask-echo__hero-chip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(0, 229, 255, 0.16);
-  background: rgba(11, 18, 26, 0.58);
-  color: #b6f6ff;
+  border: 1px solid rgba(0, 229, 255, 0.08);
+  background: rgba(12, 18, 26, 0.28);
+  color: #a8c3d3;
   border-radius: 999px;
   padding: 6px 11px;
   font-size: 12px;
   font-weight: 600;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: none;
 }
 
 .ask-echo__command {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 10px;
-  background: rgba(9, 14, 20, 0.72);
-  border: 1px solid rgba(0, 229, 255, 0.14);
-  border-radius: 22px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 14px 24px rgba(0, 0, 0, 0.24);
+  padding: 4px 0 0;
+  background: transparent;
+  border: none;
+  border-radius: 20px;
+  box-shadow: none;
 }
 
 .ask-echo__command:focus-within {
-  border-color: rgba(0, 229, 255, 0.38);
-  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.09), 0 0 26px rgba(0, 229, 255, 0.12);
+  box-shadow: none;
 }
 
-.ask-echo__input {
+.ask-echo .ask-echo__command .ask-echo__input {
   flex: 1;
-  border: none;
-  background: transparent;
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  background: rgba(11, 17, 24, 0.36);
   font-size: 16px;
-  padding: 14px 16px;
-  min-height: 52px;
+  padding: 13px 14px;
+  min-height: 50px;
   line-height: 1.4;
   outline: none;
   color: #f0fbff;
-}
-
-.ask-echo__input::placeholder {
-  color: #668099;
-}
-
-.ask-echo__submit {
-  border: none;
-  background: linear-gradient(135deg, var(--echo-cyber-indigo) 0%, var(--echo-cyber-cyan) 100%);
-  color: var(--echo-primary-contrast);
-  padding: 14px 20px;
   border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.ask-echo .ask-echo__command .ask-echo__input::placeholder {
+  color: #7991a7;
+}
+
+.ask-echo .ask-echo__command .ask-echo__input:focus {
+  border-color: rgba(0, 229, 255, 0.24);
+  background: rgba(11, 17, 24, 0.44);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.07);
+}
+
+.ask-echo .ask-echo__command .ask-echo__submit {
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  background: linear-gradient(135deg, rgba(35, 53, 75, 0.94), rgba(26, 41, 58, 0.96));
+  color: var(--echo-primary-contrast);
+  padding: 13px 18px;
+  border-radius: 14px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 14px 26px rgba(0, 229, 255, 0.18), 0 6px 18px rgba(124, 58, 237, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   min-width: 138px;
 }
 
-.ask-echo__submit:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.2), 0 18px 32px rgba(0, 229, 255, 0.2), 0 8px 22px rgba(124, 58, 237, 0.2);
+.ask-echo .ask-echo__command .ask-echo__submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.ask-echo__submit:active {
+.ask-echo .ask-echo__command .ask-echo__submit:active {
   transform: translateY(0);
-  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.24), 0 10px 22px rgba(0, 229, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.ask-echo__submit:disabled {
+.ask-echo .ask-echo__command .ask-echo__submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   box-shadow: none;
@@ -492,19 +502,25 @@ button {
 }
 
 .ask-echo__card {
-  background: linear-gradient(180deg, rgba(18, 24, 33, 0.98), rgba(22, 32, 43, 0.96));
-  border: 1px solid rgba(0, 229, 255, 0.1);
+  background: linear-gradient(180deg, rgba(16, 23, 33, 0.97), rgba(20, 29, 40, 0.95));
+  border: 1px solid rgba(0, 229, 255, 0.08);
   color: var(--echo-cyber-text);
-  box-shadow: var(--echo-cyber-shadow);
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .ask-echo__card--answer {
   border-color: rgba(0, 229, 255, 0.18);
-  box-shadow: var(--echo-cyber-shadow), 0 0 0 1px rgba(0, 229, 255, 0.06), 0 0 28px rgba(0, 229, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(16, 23, 33, 0.98), rgba(19, 29, 40, 0.95));
+  box-shadow: 0 18px 32px rgba(2, 6, 23, 0.24), 0 0 0 1px rgba(0, 229, 255, 0.05), 0 0 24px rgba(0, 229, 255, 0.06);
 }
 
 .ask-echo__card--feedback {
-  border-color: rgba(124, 58, 237, 0.16);
+  border-color: rgba(124, 58, 237, 0.14);
+  background:
+    radial-gradient(circle at top left, rgba(124, 58, 237, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(16, 23, 33, 0.97), rgba(20, 29, 40, 0.95));
 }
 
 .ask-echo .snippet-list {
@@ -738,9 +754,9 @@ button {
   gap: 6px;
   padding: 16px;
   border-radius: 18px;
-  border: 1px solid rgba(31, 75, 255, 0.14);
-  background: linear-gradient(135deg, rgba(31, 75, 255, 0.09), rgba(14, 165, 233, 0.1));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 229, 255, 0.1);
+  background: linear-gradient(135deg, rgba(17, 30, 46, 0.92), rgba(14, 35, 48, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .ask-echo__signal-grid {
@@ -755,8 +771,8 @@ button {
   gap: 6px;
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 229, 255, 0.07);
+  background: linear-gradient(180deg, rgba(12, 18, 26, 0.86), rgba(16, 24, 34, 0.92));
 }
 
 .ask-echo__signal-label {
@@ -764,17 +780,17 @@ button {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #475569;
+  color: #8fb4c8;
 }
 
 .ask-echo__signal-value {
   font-size: 28px;
   line-height: 1;
-  color: #0f172a;
+  color: #f2fbff;
 }
 
 .ask-echo__signal-note {
-  color: #334155;
+  color: #b2c7d7;
   font-size: 13px;
 }
 
@@ -891,8 +907,8 @@ button {
   margin-top: 16px;
   padding: 16px;
   border-radius: 18px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(245, 248, 255, 0.94));
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  background: linear-gradient(180deg, rgba(12, 18, 26, 0.9), rgba(15, 22, 31, 0.96));
 }
 
 .ask-echo__feedback-textarea {
@@ -917,9 +933,9 @@ button {
 
 .ask-echo__reasoning {
   border-radius: 18px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  background: rgba(248, 251, 255, 0.96);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(0, 229, 255, 0.08);
+  background: linear-gradient(180deg, rgba(16, 23, 33, 0.97), rgba(20, 29, 40, 0.95));
+  box-shadow: 0 16px 28px rgba(2, 6, 23, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .ask-echo__reasoning-summary {
@@ -932,7 +948,7 @@ button {
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--echo-cyber-text);
 }
 
 .ask-echo__reasoning-summary::-webkit-details-marker {
@@ -947,7 +963,7 @@ button {
 
 .ask-echo__reasoning-note,
 .ask-echo__reasoning-empty {
-  color: var(--echo-muted);
+  color: var(--echo-cyber-muted);
   font-size: 13px;
 }
 
@@ -958,19 +974,19 @@ button {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  background: #ffffff;
+  border: 1px solid rgba(0, 229, 255, 0.07);
+  background: linear-gradient(180deg, rgba(12, 18, 26, 0.88), rgba(16, 24, 34, 0.94));
 }
 
 .ask-echo__reasoning-item-title {
   font-weight: 600;
-  color: #1e293b;
+  color: #e6f7ff;
 }
 
 .ask-echo__reasoning-item-score {
   margin-top: 4px;
   font-size: 12px;
-  color: var(--echo-muted);
+  color: var(--echo-cyber-muted);
 }
 
 .ask-echo .state-panel {
@@ -1054,7 +1070,7 @@ button {
 
 .ask-echo .snippet-item,
 .ask-echo .state-panel {
-  border-color: rgba(255, 255, 255, 0.05);
-  background: linear-gradient(180deg, rgba(11, 17, 24, 0.9), rgba(17, 25, 35, 0.96));
+  border-color: rgba(0, 229, 255, 0.07);
+  background: linear-gradient(180deg, rgba(12, 18, 26, 0.88), rgba(17, 25, 35, 0.94));
   color: var(--echo-cyber-text);
 }
