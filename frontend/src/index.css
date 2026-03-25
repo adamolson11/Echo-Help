@@ -143,7 +143,7 @@ button {
 
 .ask-echo__subtitle {
   margin: 6px 0 0;
-  color: #c5d7e4;
+  color: #bdd0dd;
   font-size: 15px;
   line-height: 1.55;
   max-width: 620px;
@@ -152,7 +152,7 @@ button {
 .ask-echo__lede {
   margin: 10px 0 0;
   font-size: 14px;
-  color: #92a9bc;
+  color: #869caf;
   line-height: 1.6;
   max-width: 620px;
 }
@@ -167,77 +167,79 @@ button {
 .ask-echo__hero-chip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(0, 229, 255, 0.12);
-  background: rgba(12, 18, 26, 0.5);
-  color: #caf6ff;
+  border: 1px solid rgba(0, 229, 255, 0.08);
+  background: rgba(12, 18, 26, 0.28);
+  color: #a8c3d3;
   border-radius: 999px;
   padding: 6px 11px;
   font-size: 12px;
   font-weight: 600;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: none;
 }
 
 .ask-echo__command {
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 8px;
-  background: linear-gradient(180deg, rgba(8, 13, 19, 0.74), rgba(12, 18, 26, 0.92));
-  border: 1px solid rgba(0, 229, 255, 0.12);
+  padding: 4px 0 0;
+  background: transparent;
+  border: none;
   border-radius: 20px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    inset 0 0 0 1px rgba(124, 58, 237, 0.05);
+  box-shadow: none;
 }
 
 .ask-echo__command:focus-within {
-  border-color: rgba(0, 229, 255, 0.28);
-  box-shadow:
-    0 0 0 3px rgba(0, 229, 255, 0.08),
-    0 0 24px rgba(0, 229, 255, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: none;
 }
 
-.ask-echo__input {
+.ask-echo .ask-echo__command .ask-echo__input {
   flex: 1;
-  border: none;
-  background: transparent;
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  background: rgba(11, 17, 24, 0.36);
   font-size: 16px;
   padding: 13px 14px;
   min-height: 50px;
   line-height: 1.4;
   outline: none;
   color: #f0fbff;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-.ask-echo__input::placeholder {
+.ask-echo .ask-echo__command .ask-echo__input::placeholder {
   color: #7991a7;
 }
 
-.ask-echo__submit {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.92) 0%, rgba(0, 229, 255, 0.86) 100%);
+.ask-echo .ask-echo__command .ask-echo__input:focus {
+  border-color: rgba(0, 229, 255, 0.24);
+  background: rgba(11, 17, 24, 0.44);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.07);
+}
+
+.ask-echo .ask-echo__command .ask-echo__submit {
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  background: linear-gradient(135deg, rgba(35, 53, 75, 0.94), rgba(26, 41, 58, 0.96));
   color: var(--echo-primary-contrast);
   padding: 13px 18px;
   border-radius: 14px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 10px 18px rgba(0, 229, 255, 0.1), 0 4px 12px rgba(124, 58, 237, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   min-width: 138px;
 }
 
-.ask-echo__submit:hover {
+.ask-echo .ask-echo__command .ask-echo__submit:hover {
   transform: translateY(-1px);
-  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.14), 0 14px 22px rgba(0, 229, 255, 0.14), 0 6px 16px rgba(124, 58, 237, 0.18);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.ask-echo__submit:active {
+.ask-echo .ask-echo__command .ask-echo__submit:active {
   transform: translateY(0);
-  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.16), 0 8px 16px rgba(0, 229, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.ask-echo__submit:disabled {
+.ask-echo .ask-echo__command .ask-echo__submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   box-shadow: none;
