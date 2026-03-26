@@ -12,25 +12,35 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --echo-bg: #f2f4f7;
-  --echo-surface: #ffffff;
-  --echo-border: #e3e8ef;
-  --echo-muted: #5f6b7a;
-  --echo-text: #0f172a;
-  --echo-primary: #1f4bff;
+  --bg-main: #0b0f14;
+  --bg-surface: #0f1620;
+  --bg-elevated: #131c27;
+  --bg-soft: #0e141c;
+  --bg-muted: #0c1117;
+  --text-primary: #e6edf3;
+  --text-secondary: #9fb0c0;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --accent-start: #4f46e5;
+  --accent-end: #22d3ee;
+  --echo-bg: var(--bg-main);
+  --echo-surface: var(--bg-surface);
+  --echo-border: var(--border-subtle);
+  --echo-muted: var(--text-secondary);
+  --echo-text: var(--text-primary);
+  --echo-primary: var(--accent-start);
   --echo-primary-contrast: #ffffff;
-  --echo-accent: #0ea5e9;
-  --echo-ink-soft: #334155;
+  --echo-accent: var(--accent-end);
+  --echo-ink-soft: var(--text-secondary);
   --echo-warm: #f97316;
   --echo-success: #0f766e;
-  --echo-cyber-bg: #0b0f14;
-  --echo-cyber-surface: #121821;
-  --echo-cyber-surface-2: #16202b;
-  --echo-cyber-border: rgba(0, 229, 255, 0.16);
-  --echo-cyber-indigo: #7c3aed;
-  --echo-cyber-cyan: #00e5ff;
-  --echo-cyber-text: #e6f7ff;
-  --echo-cyber-muted: #8ca3b8;
+  --echo-cyber-bg: var(--bg-main);
+  --echo-cyber-surface: var(--bg-surface);
+  --echo-cyber-surface-2: var(--bg-elevated);
+  --echo-cyber-border: var(--border-subtle);
+  --echo-cyber-indigo: var(--accent-start);
+  --echo-cyber-cyan: var(--accent-end);
+  --echo-cyber-text: var(--text-primary);
+  --echo-cyber-muted: var(--text-secondary);
   --echo-cyber-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
   --echo-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   --echo-shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.06);
@@ -49,6 +59,7 @@ body {
 
 #root {
   min-height: 100vh;
+  background: var(--bg-main);
 }
 
 a {
@@ -57,6 +68,15 @@ a {
 
 button {
   font-family: inherit;
+  color: inherit;
+  background: transparent;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
 }
 
 .ask-echo-shell {
@@ -75,8 +95,8 @@ button {
   margin-top: 18px;
   padding: 1px;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(148, 163, 184, 0.36), rgba(59, 130, 246, 0.18));
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(34, 211, 238, 0.12));
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
 }
 
 .ask-echo {
@@ -211,7 +231,7 @@ button {
 
 .ask-echo .ask-echo__command .ask-echo__submit {
   border: none;
-  background: linear-gradient(135deg, rgba(49, 92, 255, 0.96), rgba(31, 75, 255, 0.92));
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
   color: var(--echo-primary-contrast);
   padding: 13px 18px;
   border-radius: 14px;
@@ -812,7 +832,7 @@ button {
 }
 
 .ask-echo__kb-link {
-  color: #1f4bff;
+  color: var(--accent-end);
   text-decoration: none;
   font-weight: 600;
 }
