@@ -16,8 +16,8 @@ export default function AskEchoFeedbackPanel() {
     try {
       const data = await getInsightsAskEchoFeedback(LIMIT);
       setRows(Array.isArray(data) ? data : data.items ?? []);
-    } catch (err: any) {
-      setError(err.message ?? "Failed to load feedback rows");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load feedback rows");
     } finally {
       setLoading(false);
     }
@@ -46,45 +46,46 @@ export default function AskEchoFeedbackPanel() {
   });
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-slate-100">Ask Echo Feedback</h2>
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1 text-xs">
-            <button onClick={() => setHelpedFilter("all")} className={`px-2 py-1 rounded ${helpedFilter === "all" ? "bg-indigo-600" : "bg-slate-800"}`}>All</button>
-            <button onClick={() => setHelpedFilter("yes")} className={`px-2 py-1 rounded ${helpedFilter === "yes" ? "bg-emerald-600" : "bg-slate-800"}`}>Helpful</button>
-            <button onClick={() => setHelpedFilter("no")} className={`px-2 py-1 rounded ${helpedFilter === "no" ? "bg-rose-600" : "bg-slate-800"}`}>Not helpful</button>
+    <section className="insights-panel insights-panel--feedback">
+      <div className="insights-panel__header insights-panel__header--wrap">
+        <div>
+          <h2 className="insights-panel__title">Ask Echo Feedback</h2>
+          <p className="insights-panel__description">Review saved Ask Echo feedback and filter for helpful or missed answers.</p>
+        </div>
+        <div className="insights-panel__toolbar">
+          <div className="insights-panel__segmented" role="tablist" aria-label="Feedback filters">
+            <button type="button" onClick={() => setHelpedFilter("all")} className={helpedFilter === "all" ? "is-active" : undefined}>All</button>
+            <button type="button" onClick={() => setHelpedFilter("yes")} className={helpedFilter === "yes" ? "is-active is-success" : undefined}>Helpful</button>
+            <button type="button" onClick={() => setHelpedFilter("no")} className={helpedFilter === "no" ? "is-active is-danger" : undefined}>Needs work</button>
           </div>
-          <div>
-            <button
-              type="button"
-              onClick={() => fetchRows()}
-              disabled={loading}
-              className="text-xs border border-slate-600 px-2 py-1 rounded hover:bg-slate-800 disabled:opacity-50"
-            >
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => fetchRows()}
+            disabled={loading}
+            className="insights-panel__button"
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
         </div>
       </div>
 
-      {loading && <div className="text-xs text-slate-400">Loading feedback…</div>}
-      {error && <div className="text-xs text-rose-400">Failed to load feedback: {error}</div>}
+      {loading && <div className="insights-panel__state">Loading feedback…</div>}
+      {error && <div className="insights-panel__state insights-panel__state--error">Failed to load feedback: {error}</div>}
 
       {!loading && !error && filtered.length === 0 && (
-        <div className="text-xs text-slate-500">No Ask Echo feedback yet.</div>
+        <div className="insights-panel__state">No Ask Echo feedback yet.</div>
       )}
 
       {!loading && !error && filtered.length > 0 && (
-        <div className="max-h-72 overflow-y-auto text-xs">
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-slate-900/80 text-slate-400">
+        <div className="insights-panel__table-wrap">
+          <table className="insights-panel__table">
+            <thead>
               <tr>
-                <th className="text-left py-1 pr-2">Time</th>
-                <th className="text-left py-1 pr-2">Query</th>
-                <th className="text-left py-1 pr-2">Helped</th>
-                <th className="text-left py-1 pr-2">What worked</th>
-                <th className="text-left py-1 pr-2">Log</th>
+                <th>Time</th>
+                <th>Query</th>
+                <th>Helped</th>
+                <th>What worked</th>
+                <th>Log</th>
               </tr>
             </thead>
             <tbody>
@@ -92,16 +93,14 @@ export default function AskEchoFeedbackPanel() {
                 const d = new Date(r.created_at);
                 const time = isNaN(d.getTime()) ? r.created_at : d.toLocaleString();
                 return (
-                  <tr key={r.id} className="border-t border-slate-800/80">
-                    <td className="py-1 pr-2 align-top text-slate-300">{time}</td>
-                    <td className="py-1 pr-2 align-top text-slate-100 truncate max-w-xs" title={r.query_text || ""}>{r.query_text || "—"}</td>
-                    <td className="py-1 pr-2 align-top">
-                      {r.helped ? <span className="text-emerald-300">Yes</span> : <span className="text-rose-300">No</span>}
+                  <tr key={r.id}>
+                    <td>{time}</td>
+                    <td className="insights-panel__cell-query" title={r.query_text || ""}>{r.query_text || "—"}</td>
+                    <td>
+                      {r.helped ? <span className="insights-panel__pill insights-panel__pill--success">Helpful</span> : <span className="insights-panel__pill insights-panel__pill--danger">Needs work</span>}
                     </td>
-                    <td className="py-1 pr-2 align-top text-slate-200">{r.notes ?? "—"}</td>
-                    <td className="py-1 pr-2 align-top text-slate-300">
-                      <span className="text-slate-300">{r.ask_echo_log_id}</span>
-                    </td>
+                    <td>{r.notes ?? "—"}</td>
+                    <td>{r.ask_echo_log_id}</td>
                   </tr>
                 );
               })}
@@ -109,6 +108,6 @@ export default function AskEchoFeedbackPanel() {
           </table>
         </div>
       )}
-    </div>
+    </section>
   );
 }

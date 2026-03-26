@@ -200,15 +200,22 @@ export type AskEchoFeedbackRead = {
 export type Ticket = {
   id: number;
   short_id?: string | null;
+  key?: string | null;
   external_key: string;
   source: string;
+  source_system?: string | null;
+  source_id?: string | null;
+  source_url?: string | null;
   project_key: string;
   summary: string;
   description: string;
   body_md?: string | null;
   root_cause?: string | null;
+  root_cause_good?: string | null;
   environment?: string | null;
   tags?: string[] | null;
+  resolution_good?: string[] | null;
+  resolution_bad?: string[] | null;
   status: string;
   priority?: string | null;
   created_at: string;

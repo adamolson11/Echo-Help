@@ -5,10 +5,13 @@
     "dev": "concurrently -n BACKEND,FRONTEND -c magenta,cyan \"uvicorn backend.app.main:app --reload --port 8001\" \"npm run dev --prefix frontend -- --port 5174\"",
     "lint": "ruff check .",
     "test": "pytest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "xvfb-run -a playwright test --ui",
     "typecheck": "pyright",
     "build": "npm run build --prefix frontend"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "concurrently": "^8.2.2"
   }
 }

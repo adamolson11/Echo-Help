@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from ..models.snippets import SolutionSnippet
 from ..models.ticket import Ticket
 from ..models.ticket_feedback import TicketFeedback
+from .support_query_expansion import keyword_match_score
 
 
 @dataclass(frozen=True)
@@ -30,10 +31,7 @@ def _safe_dt(value: datetime | None) -> datetime | None:
 
 
 def _keyword_match_score(*, query: str, haystack: str) -> float:
-    q = (query or "").strip().lower()
-    if not q:
-        return 0.0
-    return 1.0 if q in (haystack or "").lower() else 0.0
+    return keyword_match_score(query=query, haystack=haystack)
 
 
 def _normalize(values: list[float]) -> list[float]:
