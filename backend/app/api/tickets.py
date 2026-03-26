@@ -1,7 +1,7 @@
 # ruff: noqa: E501,B008
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from ..db import get_session
@@ -15,6 +15,14 @@ router = APIRouter(tags=["tickets"])
 def list_tickets(session: Session = Depends(get_session),) -> list[Ticket]:
     statement = select(Ticket)
     return list(session.exec(statement).all())
+
+
+@router.get("/tickets/{ticket_id}", response_model=Ticket)
+def get_ticket(ticket_id: int, session: Session = Depends(get_session)) -> Ticket:
+    ticket = session.get(Ticket, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return ticket
 
 
 @router.post("/tickets/seed-demo", response_model=MessageResponse)

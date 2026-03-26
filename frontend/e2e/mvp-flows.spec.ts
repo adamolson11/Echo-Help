@@ -86,6 +86,40 @@ test("Ask Echo feedback persists after a successful answer", async ({ page, requ
   ).toBeTruthy();
 });
 
+test("Ask Echo renders clickable ticket sources and opens ticket detail", async ({ page }) => {
+  await page.goto("/#/ask");
+  const main = page.locator("main");
+
+  const askResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/ask-echo") &&
+      response.request().method() === "POST" &&
+      response.status() === 200,
+  );
+
+  await main.getByPlaceholder("Ask Echo a question about tickets...").fill("password reset");
+  await main.getByRole("button", { name: "Ask Echo" }).click();
+
+  const askResponse = await askResponsePromise;
+  const askPayload = (await askResponse.json()) as {
+    references?: Array<{ ticket_id?: number }>;
+    suggested_tickets?: Array<{ id?: number }>;
+  };
+
+  const expectedTicketId = askPayload.references?.[0]?.ticket_id ?? askPayload.suggested_tickets?.[0]?.id;
+  expect(expectedTicketId).toBeTruthy();
+
+  const sourceItems = main.locator(".ask-echo__source-item");
+  await expect(sourceItems.first()).toBeVisible();
+  await expect(sourceItems.first()).toHaveCSS("cursor", "pointer");
+
+  await sourceItems.first().click();
+
+  await expect(page).toHaveURL(new RegExp(`#\\/tickets\\/${expectedTicketId}$`));
+  await expect(main.getByRole("button", { name: "Back to Ask Echo" })).toBeVisible();
+  await expect(main.getByText(`Ticket #${expectedTicketId}`)).toBeVisible();
+});
+
 test("Knowledge Base search shows ranked results and snippet content", async ({ page }) => {
   await page.goto("/#/kb");
   const main = page.locator("main");
