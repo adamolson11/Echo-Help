@@ -69,6 +69,10 @@ export function getInsightsAskEchoFeedback(limit: number) {
   return apiFetch<AskEchoFeedbackResponse>(`/api/insights/ask-echo-feedback?limit=${encodeURIComponent(String(limit))}`);
 }
 
+export function getTicketById(ticketId: number, signal?: AbortSignal) {
+  return apiFetch<Ticket>(`/api/tickets/${encodeURIComponent(String(ticketId))}`, { signal });
+}
+
 export function searchSnippets(query: string, limit = 30) {
   const q = (query || "").trim();
   return apiFetch<SnippetSearchResult[]>(`/api/snippets/search?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(String(limit))}`);

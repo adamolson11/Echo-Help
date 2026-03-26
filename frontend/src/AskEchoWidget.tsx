@@ -8,6 +8,7 @@ import {
   postSnippetFeedback,
 } from "./api/endpoints";
 import type { AskEchoResponse } from "./api/types";
+import { navigateToTicket } from "./appRoutes";
 
 type AskEchoWidgetResponse = AskEchoResponse | { error: string };
 
@@ -27,6 +28,10 @@ function formatConfidencePercent(value?: number | null): string {
 
 function isAskEchoError(r: AskEchoWidgetResponse): r is { error: string } {
   return typeof (r as any)?.error === "string";
+}
+
+function openTicketDetail(ticketId: number) {
+  navigateToTicket(ticketId);
 }
 
 export default function AskEchoWidget() {
@@ -433,6 +438,72 @@ export default function AskEchoWidget() {
               </div>
 
               {response.reasoning && <AskEchoReasoningDetails reasoning={response.reasoning} />}
+
+              <div className="ask-echo__card ask-echo__card--sources">
+                <div className="ask-echo__card-header">
+                  <div>
+                    <div className="ask-echo__card-title">Sources</div>
+                    <div className="ask-echo__card-subtitle">Open the supporting tickets behind this answer.</div>
+                  </div>
+                  {Array.isArray(response.references) && response.references.length > 0 && (
+                    <span className="ask-echo__badge ask-echo__badge--soft">
+                      {response.references.length} ticket source{response.references.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
+                {Array.isArray(response.references) && response.references.length > 0 ? (
+                  <div className="ask-echo__source-list">
+                    {response.references.map((reference, index) => {
+                      const matchingTicket = response.suggested_tickets.find((ticket) => ticket.id === reference.ticket_id);
+                      const label =
+                        matchingTicket?.title ??
+                        matchingTicket?.summary ??
+                        `Ticket #${reference.ticket_id}`;
+
+                      return (
+                        <button
+                          key={`${reference.ticket_id}-${index}`}
+                          type="button"
+                          className="ask-echo__source-item"
+                          onClick={() => openTicketDetail(reference.ticket_id)}
+                        >
+                          <span className="ask-echo__source-copy">
+                            <span className="ask-echo__source-title">{label}</span>
+                            <span className="ask-echo__source-id">Ticket #{reference.ticket_id}</span>
+                          </span>
+                          <span className="ask-echo__source-meta">
+                            {typeof reference.confidence === "number" && (
+                              <span className="ask-echo__badge ask-echo__badge--soft">
+                                Confidence {reference.confidence.toFixed(2)}
+                              </span>
+                            )}
+                            <span className="ask-echo__source-arrow" aria-hidden="true">View ticket</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0 ? (
+                  <div className="ask-echo__source-list">
+                    {response.suggested_tickets.slice(0, 5).map((ticket) => (
+                      <button
+                        key={ticket.id}
+                        type="button"
+                        className="ask-echo__source-item"
+                        onClick={() => openTicketDetail(ticket.id)}
+                      >
+                        <span className="ask-echo__source-copy">
+                          <span className="ask-echo__source-title">{ticket.title ?? ticket.summary ?? `Ticket #${ticket.id}`}</span>
+                          <span className="ask-echo__source-id">Ticket #{ticket.id}</span>
+                        </span>
+                        <span className="ask-echo__source-arrow" aria-hidden="true">View ticket</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="state-panel">No ticket sources were attached to this answer.</div>
+                )}
+              </div>
 
               <div className="ask-echo__card">
                 <div className="ask-echo__card-header">
