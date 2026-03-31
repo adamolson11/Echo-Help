@@ -112,6 +112,7 @@ def search_snippets(
                 id=r.id,
                 title=r.title,
                 summary=r.summary,
+                content_md=r.content_md,
                 echo_score=r.echo_score,
                 success_count=getattr(r, "success_count", 0),
                 failure_count=getattr(r, "failure_count", 0),

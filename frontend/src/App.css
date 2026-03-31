@@ -2,26 +2,62 @@
 
 .min-h-screen {
    min-height: 100vh;
-   background: #eef2f7;
-   color: #0f172a;
+   background: var(--bg-main);
+   color: var(--text-primary);
 }
 
 .bg-gradient-to-br {
-   background: radial-gradient(circle at top, rgba(15, 23, 42, 0.08), transparent 55%),
-      radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.12), transparent 45%),
-      #eef2f7;
+   background:
+      radial-gradient(circle at top, rgba(79, 70, 229, 0.1), transparent 44%),
+      radial-gradient(circle at 20% 16%, rgba(34, 211, 238, 0.08), transparent 34%),
+      linear-gradient(180deg, var(--bg-main), var(--bg-muted));
 }
 
+.text-slate-50,
 .text-slate-100 {
-   color: #0f172a;
+   color: var(--text-primary);
+}
+
+.text-slate-200 {
+   color: var(--text-primary);
 }
 
 .text-slate-300 {
-   color: #64748b;
+   color: var(--text-secondary);
 }
 
+.text-slate-500,
 .text-slate-400 {
-   color: #64748b;
+   color: var(--text-secondary);
+}
+
+.text-indigo-300 {
+   color: var(--accent-end);
+}
+
+.text-red-200 {
+   color: #fecdd3;
+}
+
+.text-red-400 {
+   color: #fda4af;
+}
+
+.text-emerald-50,
+.text-emerald-200 {
+   color: #d1fae5;
+}
+
+.text-emerald-300 {
+   color: #a7f3d0;
+}
+
+.text-emerald-400 {
+   color: #6ee7b7;
+}
+
+.text-yellow-100 {
+   color: #fef3c7;
 }
 
 .mx-auto {
@@ -89,19 +125,151 @@
 }
 
 .border {
-   border: 1px solid #e2e8f0;
+   border: 1px solid var(--border-subtle);
 }
 
 .border-transparent {
    border-color: transparent;
 }
 
+.border-slate-500\/60 {
+   border-color: rgba(159, 176, 192, 0.28);
+}
+
+.border-slate-600,
+.border-slate-700,
+.border-slate-800\/80,
 .border-slate-800 {
-   border-color: #e2e8f0;
+   border-color: var(--border-subtle);
+}
+
+.border-red-500\/60 {
+   border-color: rgba(239, 68, 68, 0.36);
+}
+
+.border-red-700 {
+   border-color: rgba(239, 68, 68, 0.24);
+}
+
+.border-emerald-400 {
+   border-color: rgba(52, 211, 153, 0.4);
+}
+
+.border-emerald-500\/60 {
+   border-color: rgba(16, 185, 129, 0.36);
+}
+
+.bg-slate-500\/10 {
+   background: rgba(159, 176, 192, 0.1);
+}
+
+.bg-slate-800 {
+   background: var(--bg-elevated);
+}
+
+.bg-slate-800\/60 {
+   background: rgba(19, 28, 39, 0.72);
+}
+
+.bg-slate-800\/80 {
+   background: rgba(19, 28, 39, 0.84);
+}
+
+.bg-slate-800\/90 {
+   background: rgba(19, 28, 39, 0.92);
+}
+
+.bg-slate-900 {
+   background: var(--bg-surface);
+}
+
+.bg-slate-900\/30 {
+   background: rgba(15, 22, 32, 0.3);
+}
+
+.bg-slate-900\/40 {
+   background: rgba(15, 22, 32, 0.4);
+}
+
+.bg-slate-900\/50 {
+   background: rgba(15, 22, 32, 0.5);
 }
 
 .bg-slate-900\/60 {
-   background: rgba(255, 255, 255, 0.8);
+   background: rgba(15, 22, 32, 0.72);
+}
+
+.bg-slate-900\/70 {
+   background: rgba(15, 22, 32, 0.8);
+}
+
+.bg-slate-900\/80 {
+   background: rgba(15, 22, 32, 0.9);
+}
+
+.bg-slate-950 {
+   background: var(--bg-main);
+}
+
+.bg-slate-950\/30 {
+   background: rgba(11, 15, 20, 0.3);
+}
+
+.bg-slate-950\/40 {
+   background: rgba(11, 15, 20, 0.4);
+}
+
+.bg-slate-950\/60 {
+   background: rgba(11, 15, 20, 0.6);
+}
+
+.bg-slate-950\/70 {
+   background: rgba(11, 15, 20, 0.72);
+}
+
+.bg-slate-950\/80 {
+   background: rgba(11, 15, 20, 0.84);
+}
+
+.bg-indigo-500,
+.bg-indigo-600 {
+   background: var(--accent-start);
+}
+
+.bg-indigo-500\/20 {
+   background: rgba(79, 70, 229, 0.2);
+}
+
+.bg-red-500\/10 {
+   background: rgba(239, 68, 68, 0.12);
+}
+
+.bg-red-950\/60 {
+   background: rgba(69, 10, 10, 0.6);
+}
+
+.bg-emerald-500\/10 {
+   background: rgba(16, 185, 129, 0.12);
+}
+
+.bg-emerald-600 {
+   background: #059669;
+}
+
+.bg-emerald-600\/80 {
+   background: rgba(5, 150, 105, 0.8);
+}
+
+.bg-emerald-900\/60 {
+   background: rgba(6, 78, 59, 0.6);
+}
+
+.bg-yellow-300\/30 {
+   background: rgba(253, 224, 71, 0.24);
+}
+
+.text-white {
+   color: var(--text-primary);
 }
 
 .backdrop-blur {
@@ -165,11 +333,11 @@
 }
 
 .min-h-screen header {
-   background: #ffffff;
-   border: 1px solid #e2e8f0;
+   background: rgba(15, 22, 32, 0.9);
+   border: 1px solid var(--border-subtle);
    padding: 18px 20px;
    border-radius: 20px;
-   box-shadow: 0 16px 30px rgba(15, 23, 42, 0.06);
+   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
 }
 
 .min-h-screen header > div:first-child {
@@ -179,32 +347,32 @@
 }
 
 .min-h-screen nav {
-   background: #ffffff;
-   border: 1px solid #e2e8f0;
+   background: rgba(19, 28, 39, 0.94);
+   border: 1px solid var(--border-subtle);
    padding: 14px;
    border-radius: 20px;
-   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
 }
 
 .min-h-screen nav button {
    border-radius: 14px;
    padding: 12px 14px;
    border: 1px solid transparent;
-   background: #f8fafc;
-   color: #0f172a;
+   background: rgba(14, 20, 28, 0.88);
+   color: var(--text-primary);
 }
 
 .min-h-screen nav button:hover {
-   border-color: #cbd5f5;
-   background: #eef2ff;
-   box-shadow: 0 8px 18px rgba(99, 102, 241, 0.08);
+   border-color: var(--border-subtle);
+   background: rgba(19, 28, 39, 1);
+   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
 }
 
 .min-h-screen nav button[class*="bg-indigo-500"] {
-   background: #1f4bff;
+   background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
    color: #ffffff;
-   border-color: #1f4bff;
-   box-shadow: 0 12px 22px rgba(31, 75, 255, 0.18);
+   border-color: transparent;
+   box-shadow: 0 12px 22px rgba(79, 70, 229, 0.24);
 }
 
 .min-h-screen nav .border-t {
@@ -212,10 +380,40 @@
 }
 
 .min-h-screen main {
-   background: #f8fafc;
-   border: 1px solid #e2e8f0;
+   background: transparent;
+   border: 1px solid transparent;
    border-radius: 20px;
-   box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
+   box-shadow: none;
+}
+
+.hover\:border-slate-600:hover,
+.hover\:border-slate-700:hover {
+   border-color: var(--border-subtle);
+}
+
+.hover\:bg-slate-700:hover,
+.hover\:bg-slate-800:hover,
+.hover\:bg-slate-800\/60:hover {
+   background: rgba(19, 28, 39, 0.88);
+}
+
+.hover\:bg-slate-800\/80:hover,
+.hover\:bg-slate-900\/60:hover {
+   background: rgba(15, 22, 32, 0.88);
+}
+
+.hover\:text-slate-200:hover {
+   color: var(--text-primary);
+}
+
+.border-indigo-400,
+.border-indigo-500 {
+   border-color: var(--accent-start);
+}
+
+.border-indigo-400\/40,
+.border-indigo-500\/40 {
+   border-color: rgba(79, 70, 229, 0.4);
 }
 
 @media (min-width: 900px) {

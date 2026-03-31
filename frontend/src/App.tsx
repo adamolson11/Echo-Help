@@ -1,14 +1,25 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
-import ConsoleShell, { getInitialConsoleRoute, type ConsoleRoute } from "./ConsoleShell";
+import ConsoleShell from "./ConsoleShell";
+import { navigateToConsole, parseAppRoute, type AppRoute, type ConsoleRoute } from "./appRoutes";
 import AskEchoPage from "./pages/AskEchoPage";
 import SearchPage from "./pages/SearchPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import InsightsPage from "./pages/InsightsPage";
 import IntakePage from "./pages/IntakePage";
+import TicketDetailPage from "./pages/TicketDetailPage";
 
 export default function App() {
-  const [route, setRoute] = useState<ConsoleRoute>(() => getInitialConsoleRoute());
+  const [appRoute, setAppRoute] = useState<AppRoute>(() => parseAppRoute());
+
+  useEffect(() => {
+    function syncRoute() {
+      setAppRoute(parseAppRoute());
+    }
+
+    window.addEventListener("hashchange", syncRoute);
+    return () => window.removeEventListener("hashchange", syncRoute);
+  }, []);
 
   function renderRoute(r: ConsoleRoute) {
     if (r === "ask") return <AskEchoPage />;
@@ -19,14 +30,21 @@ export default function App() {
     return <AskEchoPage />;
   }
 
+  const activeConsoleRoute = appRoute.kind === "console" ? appRoute.route : null;
+  const routeLabel = appRoute.kind === "ticket" ? `tickets/${appRoute.ticketId}` : appRoute.route;
+
   return (
     <ConsoleShell
-      route={route}
-      onRouteChange={setRoute}
+      route={activeConsoleRoute}
+      routeLabel={routeLabel}
+      onRouteChange={(route) => {
+        setAppRoute({ kind: "console", route });
+        navigateToConsole(route);
+      }}
       title="EchoHelp"
       subtitle="AI-powered resolution memory for busy IT teams"
     >
-      {renderRoute(route)}
+      {appRoute.kind === "ticket" ? <TicketDetailPage ticketId={appRoute.ticketId} /> : renderRoute(appRoute.route)}
     </ConsoleShell>
   );
 }

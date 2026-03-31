@@ -70,6 +70,7 @@ def test_snippet_search_returns_matching_results():
     assert isinstance(results, list)
     # expect at least one match and that titles contain VPN
     assert any((r.get("title") and ("vpn" in r.get("title").lower())) for r in results)
+    assert any(r.get("content_md") == "fix auth" for r in results)
 
 
 def test_snippet_search_empty_query_returns_empty():

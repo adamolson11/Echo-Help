@@ -1,59 +1,14 @@
-import { useEffect } from "react";
-
-export type ConsoleRoute = "ask" | "search" | "kb" | "insights" | "intake";
-
-const ROUTE_LABELS: Record<ConsoleRoute, string> = {
-  ask: "Ask Echo",
-  search: "Search",
-  kb: "Knowledge Base",
-  insights: "Insights",
-  intake: "Intake Assist",
-};
-
-function normalizeRoute(value: string | null): ConsoleRoute {
-  const v = (value ?? "").trim().toLowerCase();
-  if (v === "ask" || v === "search" || v === "kb" || v === "insights" || v === "intake") {
-    return v;
-  }
-  return "ask";
-}
-
-function readRouteFromHash(): ConsoleRoute {
-  // Support either '#/ask' or '#ask'
-  const raw = window.location.hash ?? "";
-  const cleaned = raw.replace(/^#\/?/, "");
-  const firstSegment = cleaned.split("/")[0] ?? "";
-  return normalizeRoute(firstSegment);
-}
-
-function setHashRoute(route: ConsoleRoute) {
-  window.location.hash = `#/${route}`;
-}
+import { ROUTE_LABELS, type ConsoleRoute } from "./appRoutes";
 
 export default function ConsoleShell(props: {
-  route: ConsoleRoute;
+  route: ConsoleRoute | null;
   onRouteChange: (r: ConsoleRoute) => void;
+  routeLabel?: string;
   title?: string;
   subtitle?: string;
   children: React.ReactNode;
 }) {
-  const { route, onRouteChange, title, subtitle, children } = props;
-
-  // Keep URL hash in sync for refresh/share.
-  useEffect(() => {
-    const expected = readRouteFromHash();
-    if (expected !== route) setHashRoute(route);
-  }, [route]);
-
-  // If user changes hash manually, update route.
-  useEffect(() => {
-    function onHashChange() {
-      const next = readRouteFromHash();
-      onRouteChange(next);
-    }
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, [onRouteChange]);
+  const { route, onRouteChange, routeLabel, title, subtitle, children } = props;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
@@ -94,7 +49,7 @@ export default function ConsoleShell(props: {
             })}
 
             <div className="mt-3 border-t border-slate-800 pt-3 px-2 text-xs text-slate-400">
-              Route: <span className="text-slate-200">{route}</span>
+              Route: <span className="text-slate-200">{routeLabel ?? route ?? "ticket"}</span>
             </div>
           </nav>
 
@@ -105,9 +60,4 @@ export default function ConsoleShell(props: {
       </div>
     </div>
   );
-}
-
-export function getInitialConsoleRoute(): ConsoleRoute {
-  // On first load, honor hash.
-  return readRouteFromHash();
 }
