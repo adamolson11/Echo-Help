@@ -198,6 +198,17 @@ export type AskEchoFeedbackRead = {
   created_at: string;
 };
 
+
+export type TicketCreateRequest = {
+  summary: string;
+  description: string;
+  source?: string;
+  project_key?: string;
+  status?: string;
+  priority?: string | null;
+  external_key?: string | null;
+};
+
 export type Ticket = {
   id: number;
   short_id?: string | null;

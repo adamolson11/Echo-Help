@@ -1,12 +1,13 @@
 # ruff: noqa: E501,B008
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import Ticket
 from ..schemas.common import MessageResponse
+from ..schemas.tickets import TicketCreate
 
 router = APIRouter(tags=["tickets"])
 
@@ -15,6 +16,35 @@ router = APIRouter(tags=["tickets"])
 def list_tickets(session: Session = Depends(get_session),) -> list[Ticket]:
     statement = select(Ticket)
     return list(session.exec(statement).all())
+
+
+@router.post("/tickets", response_model=Ticket, status_code=status.HTTP_201_CREATED)
+def create_ticket(payload: TicketCreate, session: Session = Depends(get_session)) -> Ticket:
+    now = datetime.now(timezone.utc)
+    ticket = Ticket(
+        external_key=(payload.external_key.strip() if payload.external_key else ""),
+        source=payload.source,
+        project_key=payload.project_key,
+        summary=payload.summary.strip(),
+        description=payload.description.strip(),
+        status=payload.status,
+        priority=payload.priority,
+        created_at=now,
+        updated_at=now,
+    )
+
+    session.add(ticket)
+    session.commit()
+    session.refresh(ticket)
+
+    if not ticket.external_key:
+        ticket.external_key = f"ECHO-{ticket.id:04d}"
+        ticket.updated_at = datetime.now(timezone.utc)
+        session.add(ticket)
+        session.commit()
+        session.refresh(ticket)
+
+    return ticket
 
 
 @router.get("/tickets/{ticket_id}", response_model=Ticket)
