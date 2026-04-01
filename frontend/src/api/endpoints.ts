@@ -17,6 +17,7 @@ import type {
   TicketFeedbackInsights,
   TicketPatternRadarResponse,
   Ticket,
+  TicketCreateRequest,
   SemanticSearchResult,
   SearchTicketResult,
   SnippetFeedbackRequest,
@@ -71,6 +72,15 @@ export function getInsightsAskEchoFeedback(limit: number) {
 
 export function getTicketById(ticketId: number, signal?: AbortSignal) {
   return apiFetch<Ticket>(`/api/tickets/${encodeURIComponent(String(ticketId))}`, { signal });
+}
+
+export function createTicket(payload: TicketCreateRequest, signal?: AbortSignal) {
+  return apiFetch<Ticket>("/api/tickets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
 }
 
 export function searchSnippets(query: string, limit = 30) {
