@@ -18,16 +18,7 @@ from .api import (
     semantic_search,
     tickets,
 )
-from .api.routes import (
-    ask_echo,
-    ingest,
-    insights,
-    machine,
-    orchestration,
-    patterns,
-    snippets,
-    ticket_feedback,
-)
+from .api.routes import ask_echo, ingest, insights, machine, patterns, snippets, ticket_feedback
 
 _log = logging.getLogger(__name__)
 
@@ -110,7 +101,6 @@ app.include_router(ingest.router, prefix="/api")
 app.include_router(ask_echo.router, prefix="/api")
 app.include_router(snippets.router, prefix="/api")
 app.include_router(machine.router, prefix="/api")
-app.include_router(orchestration.router, prefix="/api")
 app.include_router(feedback_suggestions.router, prefix="/api")
 app.include_router(semantic_search.router, prefix="/api")
 app.include_router(semantic_clusters.router, prefix="/api")
@@ -151,3 +141,4 @@ async def health_check():
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
