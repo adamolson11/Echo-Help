@@ -96,7 +96,9 @@ def test_resolved_thread_creates_ticket_and_feedback():
 
 def test_normalize_and_emit_existing_sample_thread():
     sample_path = (
-        Path("/home/runner/work/Echo-Help/Echo-Help/sample_data/sample_thread_slack.json")
+        Path(__file__).resolve().parents[1]
+        / "sample_data"
+        / "sample_thread_slack.json"
     )
     payload = json.loads(sample_path.read_text())
     thread = IngestThread.model_validate(payload)

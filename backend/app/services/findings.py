@@ -3,7 +3,7 @@ from backend.app.schemas.findings import NormalizedFinding
 from backend.app.schemas.ingest import IngestThread
 from backend.app.schemas.tickets import TicketCreate
 
-_CATEGORY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+_CATEGORY_KEYWORD_MAPPING: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("authentication", ("login", "password", "auth", "sso")),
     ("connectivity", ("vpn", "disconnect", "connection", "network")),
     ("build", ("build", "deploy", "pipeline", "ci")),
@@ -33,6 +33,9 @@ _PRIORITY_BY_SEVERITY = {
     "low": "low",
 }
 
+_FULL_CONFIDENCE = 1.0
+_PARTIAL_CONFIDENCE = 0.5
+
 
 def _thread_evidence(thread: IngestThread) -> list[str]:
     evidence = [thread.title.strip()]
@@ -48,7 +51,7 @@ def _category_for_thread(thread: IngestThread) -> str:
     normalized_text = normalize_phrase(
         "\n".join([thread.title, *[message.text for message in thread.messages]])
     )
-    for category, keywords in _CATEGORY_KEYWORDS:
+    for category, keywords in _CATEGORY_KEYWORD_MAPPING:
         if any(keyword in normalized_text for keyword in keywords):
             return category
     return "support"
@@ -76,7 +79,7 @@ def normalize_ingest_thread(thread: IngestThread) -> NormalizedFinding:
         summary=thread.title.strip(),
         category=category,
         severity=severity,
-        confidence=1.0 if evidence else 0.5,
+        confidence=_FULL_CONFIDENCE if evidence else _PARTIAL_CONFIDENCE,
         evidence=evidence,
         product_area=_PRODUCT_AREAS.get(category, thread.source or "support"),
         status="resolved" if thread.resolved else "needs-review",
