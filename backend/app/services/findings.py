@@ -51,30 +51,31 @@ def _source_or_fallback(source: str) -> str:
     return source.strip() or "support"
 
 
-def _category_for_thread(thread: IngestThread) -> str:
-    normalized_text = normalize_phrase(
-        "\n".join([thread.title, *[message.text for message in thread.messages]])
-    )
+def _project_key(source: str) -> str:
+    return _source_or_fallback(source).upper()
+
+
+def _category_for_text(normalized_text: str) -> str:
     for category, keywords in _CATEGORY_KEYWORDS_BY_CATEGORY:
         if any(keyword in normalized_text for keyword in keywords):
             return category
     return "support"
 
 
-def _severity_for_thread(thread: IngestThread) -> str:
-    normalized_text = normalize_phrase(
-        "\n".join([thread.title, *[message.text for message in thread.messages]])
-    )
+def _severity_for_text(normalized_text: str, *, resolved: bool) -> str:
     if any(keyword in normalized_text.split() for keyword in _HIGH_SEVERITY_KEYWORDS):
         return "high"
-    if thread.resolved:
+    if resolved:
         return "low"
     return "medium"
 
 
 def normalize_ingest_thread(thread: IngestThread) -> NormalizedFinding:
-    category = _category_for_thread(thread)
-    severity = _severity_for_thread(thread)
+    normalized_text = normalize_phrase(
+        "\n".join([thread.title, *[message.text for message in thread.messages]])
+    )
+    category = _category_for_text(normalized_text)
+    severity = _severity_for_text(normalized_text, resolved=thread.resolved)
     evidence = _thread_evidence(thread)
     return NormalizedFinding(
         finding_id=f"{thread.source}:{thread.external_id}",
@@ -105,7 +106,7 @@ def emit_ticket_draft(finding: NormalizedFinding) -> TicketCreate:
         summary=finding.summary,
         description="\n".join(description_lines),
         source=finding.source,
-        project_key=_source_or_fallback(finding.source).upper(),
+        project_key=_project_key(finding.source),
         status="closed" if finding.status == "resolved" else "open",
         priority=_PRIORITY_BY_SEVERITY[finding.severity],
         external_key=finding.source_record_id,

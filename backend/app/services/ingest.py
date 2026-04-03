@@ -46,7 +46,7 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
         ticket = Ticket(
             external_key=ticket_draft.external_key or thread.external_id,
             source=ticket_draft.source,
-            project_key=ticket_draft.project_key.upper(),
+            project_key=ticket_draft.project_key,
             summary=ticket_draft.summary,
             description=ticket_draft.description,
             product_area=finding.product_area,
@@ -62,7 +62,7 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
         ticket = existing
         # Keep ingest safe and repeatable: update fields to the latest payload.
         ticket.source = ticket_draft.source
-        ticket.project_key = (ticket_draft.project_key or ticket.project_key or "ingest").upper()
+        ticket.project_key = ticket_draft.project_key or ticket.project_key or "INGEST"
         ticket.summary = ticket_draft.summary
         ticket.description = ticket_draft.description
         ticket.product_area = finding.product_area
