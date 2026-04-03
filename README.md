@@ -1,20 +1,6 @@
-# Echo-Help
-A support tool fot CMS ticketing systems
-EchoHelp
-AI-Powered Support Intelligence & Living Knowledge System
-
-MVP Scope • Private Repository (v0.1)
-
-📌 Overview
-
-EchoHelp is an AI-driven support intelligence platform that sits on top of existing ticketing and knowledge systems (e.g., Jira, Confluence).
-It transforms how support teams search, categorize, resolve, and continually improve their documentation.
-
-At its core, EchoHelp turns a single natural-language problem description into:
-
 # EchoHelp
 
-EchoHelp is a small SaaS-style tool for IT support teams.  
+EchoHelp is a small SaaS-style tool for IT support teams.
 It lets agents search historical tickets, record what actually fixed each issue, and surface unresolved problem patterns over time — with optional **AI semantic search** powered by embeddings.
 
 ---
@@ -102,7 +88,7 @@ It lets agents search historical tickets, record what actually fixed each issue,
 - Node.js + npm
 - (Optional) `virtualenv` / `venv` for Python dependencies
 
-### 1. Clone and install backend dependencies
+### 1. Clone and install local dependencies
 
 ```bash
 git clone <your-repo-url>.git
@@ -113,8 +99,12 @@ npm ci
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 
-pip install -r backend/requirements.txt
+pip install -r requirements.txt
 ```
+
+Notes:
+- `requirements.txt` includes the backend runtime plus local validation tools (`ruff`, `pyright`, `pytest`).
+- `backend/requirements.txt` remains available for CI-compatible backend-only installs.
 
 ### 2. Initialize the database
 
@@ -417,10 +407,13 @@ Return aggregated feedback statistics.
 
 ## 🧪 Testing & CI
 
-Run backend tests from the repo root:
+Run the standard local validation flow from the repo root:
 
 ```bash
+ruff check .
+PYTHONPATH=$PWD pyright
 PYTHONPATH=$PWD pytest
+npm run build --prefix frontend
 ```
 
 Run a focused feedback endpoint test:
@@ -433,6 +426,24 @@ CI (GitHub Actions) will automatically:
 
 * Install backend dependencies
 * Run `ruff`, `pyright`, and `pytest` on push / pull request
+* Install frontend dependencies and run `npm run build --prefix frontend`
+
+## 🤝 Agent handoff quick check
+
+Before handing work to the next session:
+
+```bash
+./scripts/iron-check.sh
+ruff check .
+PYTHONPATH=$PWD pyright
+PYTHONPATH=$PWD pytest
+npm run build --prefix frontend
+```
+
+Use these docs together:
+- `IRON_OPERATING_FRAMEWORK.md` for request mode, scope, and recovery rules
+- `DEV_NOTES.md` for current priorities, tradeoffs, and handoff defaults
+- `ARCHITECTURE.md` for the product and API north star
 
 ---
 

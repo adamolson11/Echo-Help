@@ -123,6 +123,16 @@ CHECKLIST FOR SENDING A REQUEST TO IRON
 - [ ] Confirm you have a git checkpoint branch (recommended).
 
 
+SESSION HANDOFF PACKET
+
+Before closing a session or handing to another agent, capture:
+
+- Current branch and `git status --short` (or run `./scripts/iron-check.sh`).
+- The exact files changed and the reason each one moved.
+- The exact validation commands already run, plus any commands skipped because dependencies were not installed yet.
+- Any unresolved blockers or intentionally deferred refactors so the next agent does not rediscover them.
+
+
 EXAMPLE — Minimal request you can paste:
 
 ```text
@@ -136,7 +146,7 @@ IRON YELLOW MODE: Fix only `frontend/src/Search.tsx`
 ADDITIONAL NOTES
 
 - This file is intentionally short and prescriptive so it's easy to copy/paste into the chat with Iron before each risky request.
-- If you'd like, I can also add a small `scripts/iron-check.sh` helper that prints `git status` and current branch to make checkpoints easier.
+- Use the included `scripts/iron-check.sh` helper to print the current branch, short status, and recent commits before risky edits.
 
 
 ---

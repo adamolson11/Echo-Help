@@ -10,6 +10,17 @@ Phase 1 (foundation hardening):
 - Idempotent ingest + predictable feedback behavior
 - Defensive frontend rendering (fail soft)
 
+## Session handoff defaults
+
+- Start each new session by checking `IRON_OPERATING_FRAMEWORK.md`, `ARCHITECTURE.md`, and this file before making changes.
+- Prefer reducing duplicate docs, stale setup steps, and mixed-responsibility edits before attempting broad refactors.
+- Treat `./scripts/iron-check.sh` plus the standard validation commands as the minimum handoff packet:
+  - `ruff check .`
+  - `PYTHONPATH=$PWD pyright`
+  - `PYTHONPATH=$PWD pytest`
+  - `npm run build --prefix frontend`
+- If the local environment is missing Python or frontend dependencies, record that as an environment prerequisite instead of treating it as a product bug.
+
 ## Known tradeoffs (intentional)
 
 - **SQLite-first**: We use SQLite for local dev and tests. The DB path is configurable via `ECHOHELP_DB_PATH`.
