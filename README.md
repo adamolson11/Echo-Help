@@ -104,7 +104,7 @@ pip install -r requirements.txt
 
 Notes:
 - `requirements.txt` includes the backend runtime plus local validation tools (`ruff`, `pyright`, `pytest`).
-- `backend/requirements.txt` remains available for CI-compatible backend-only installs.
+- `backend/requirements.txt` is a thin wrapper around the root file, so CI-style backend installs stay aligned with the same pinned Python dependencies.
 
 ### 2. Initialize the database
 
@@ -433,6 +433,7 @@ CI (GitHub Actions) will automatically:
 Before handing work to the next session:
 
 ```bash
+# prints the current branch, short git status, recent commits, and Search.tsx status
 ./scripts/iron-check.sh
 ruff check .
 PYTHONPATH=$PWD pyright
