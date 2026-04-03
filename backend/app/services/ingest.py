@@ -12,6 +12,7 @@ from backend.app.services.embeddings import (
     embeddings_enabled,
     log_embeddings_disabled_once,
 )
+from backend.app.services.findings import emit_ticket_draft, normalize_ingest_thread
 from backend.app.services.tickets import assign_short_id
 
 
@@ -27,8 +28,13 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
     This function will also synchronously generate an embedding for the
     created ticket so it is immediately available for semantic search.
     """
-    # Combine messages into a description blob
-    description = "\n".join(f"[{m.author}] {m.text}" for m in thread.messages)
+    finding = normalize_ingest_thread(thread)
+    ticket_draft = emit_ticket_draft(finding)
+    derived_tags = [
+        f"finding:{finding.category}",
+        f"severity:{finding.severity}",
+        f"status:{finding.status}",
+    ]
 
     # Idempotency: if we've already ingested this external_id, update the existing
     # Ticket instead of creating a duplicate.
@@ -38,12 +44,16 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
 
     if existing is None:
         ticket = Ticket(
-            external_key=thread.external_id,
-            source=thread.source,
-            project_key=thread.source or "ingest",
-            summary=thread.title,
-            description=description,
-            status="closed" if thread.resolved else "open",
+            external_key=ticket_draft.external_key or thread.external_id,
+            source=ticket_draft.source,
+            project_key=ticket_draft.project_key,
+            summary=ticket_draft.summary,
+            description=ticket_draft.description,
+            product_area=finding.product_area,
+            severity=finding.severity,
+            tags=derived_tags,
+            priority=ticket_draft.priority,
+            status=ticket_draft.status,
         )
         session.add(ticket)
         session.commit()
@@ -51,11 +61,15 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
     else:
         ticket = existing
         # Keep ingest safe and repeatable: update fields to the latest payload.
-        ticket.source = thread.source
-        ticket.project_key = thread.source or ticket.project_key or "ingest"
-        ticket.summary = thread.title
-        ticket.description = description
-        ticket.status = "closed" if thread.resolved else "open"
+        ticket.source = ticket_draft.source
+        ticket.project_key = ticket_draft.project_key or ticket.project_key or "ingest"
+        ticket.summary = ticket_draft.summary
+        ticket.description = ticket_draft.description
+        ticket.product_area = finding.product_area
+        ticket.severity = finding.severity
+        ticket.tags = derived_tags
+        ticket.priority = ticket_draft.priority
+        ticket.status = ticket_draft.status
         session.add(ticket)
         session.commit()
         session.refresh(ticket)
