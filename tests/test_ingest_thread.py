@@ -14,7 +14,12 @@ from backend.app.services.findings import emit_ticket_draft, normalize_ingest_th
 
 client = TestClient(app)
 REPO_ROOT = next(
-    parent for parent in Path(__file__).resolve().parents if (parent / "sample_data").exists()
+    (
+        parent
+        for parent in Path(__file__).resolve().parents
+        if (parent / "sample_data").exists()
+    ),
+    Path(__file__).resolve().parents[1],
 )
 
 

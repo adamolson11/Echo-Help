@@ -63,7 +63,7 @@ def _category_for_text(normalized_text: str) -> str:
 
 
 def _severity_for_text(normalized_text: str, *, resolved: bool) -> str:
-    if any(keyword in normalized_text.split() for keyword in _HIGH_SEVERITY_KEYWORDS):
+    if any(keyword in normalized_text for keyword in _HIGH_SEVERITY_KEYWORDS):
         return "high"
     if resolved:
         return "low"
