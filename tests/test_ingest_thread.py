@@ -13,6 +13,9 @@ from backend.app.schemas.ingest import IngestThread
 from backend.app.services.findings import emit_ticket_draft, normalize_ingest_thread
 
 client = TestClient(app)
+REPO_ROOT = next(
+    parent for parent in Path(__file__).resolve().parents if (parent / "sample_data").exists()
+)
 
 
 def test_unresolved_thread_creates_ticket_only():
@@ -95,11 +98,7 @@ def test_resolved_thread_creates_ticket_and_feedback():
 
 
 def test_normalize_and_emit_existing_sample_thread():
-    sample_path = (
-        Path(__file__).resolve().parents[1]
-        / "sample_data"
-        / "sample_thread_slack.json"
-    )
+    sample_path = REPO_ROOT / "sample_data" / "sample_thread_slack.json"
     payload = json.loads(sample_path.read_text())
     thread = IngestThread.model_validate(payload)
 

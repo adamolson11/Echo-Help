@@ -47,6 +47,10 @@ def _thread_evidence(thread: IngestThread) -> list[str]:
     return evidence
 
 
+def _source_or_fallback(source: str) -> str:
+    return source.strip() or "support"
+
+
 def _category_for_thread(thread: IngestThread) -> str:
     normalized_text = normalize_phrase(
         "\n".join([thread.title, *[message.text for message in thread.messages]])
@@ -81,7 +85,7 @@ def normalize_ingest_thread(thread: IngestThread) -> NormalizedFinding:
         severity=severity,
         confidence=_FULL_CONFIDENCE if len(evidence) > 1 else _PARTIAL_CONFIDENCE,
         evidence=evidence,
-        product_area=_PRODUCT_AREAS.get(category, thread.source or "support"),
+        product_area=_PRODUCT_AREAS.get(category, _source_or_fallback(thread.source)),
         status="resolved" if thread.resolved else "needs-review",
     )
 
@@ -101,7 +105,7 @@ def emit_ticket_draft(finding: NormalizedFinding) -> TicketCreate:
         summary=finding.summary,
         description="\n".join(description_lines),
         source=finding.source,
-        project_key=(finding.source or "ingest").upper(),
+        project_key=_source_or_fallback(finding.source).upper(),
         status="closed" if finding.status == "resolved" else "open",
         priority=_PRIORITY_BY_SEVERITY[finding.severity],
         external_key=finding.source_record_id,

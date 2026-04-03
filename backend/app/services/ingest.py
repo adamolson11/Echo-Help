@@ -46,7 +46,7 @@ def ingest_thread(thread: IngestThread, session: Session) -> Ticket:
         ticket = Ticket(
             external_key=ticket_draft.external_key or thread.external_id,
             source=ticket_draft.source,
-            project_key=ticket_draft.project_key,
+            project_key=ticket_draft.project_key.upper(),
             summary=ticket_draft.summary,
             description=ticket_draft.description,
             product_area=finding.product_area,
