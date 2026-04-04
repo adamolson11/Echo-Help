@@ -105,7 +105,10 @@ class OpenAILLMProvider:
                 "Local memory context:",
                 *(context_lines or ["- No local memory context was available."]),
                 "",
-                "Return one concise operator answer. Use the local memory context first, do not invent writeback steps, and do not mention that you are an AI model.",
+                (
+                    "Return one concise operator answer. Use the local memory context first, "
+                    "do not invent writeback steps, and do not mention that you are an AI model."
+                ),
             ]
         )
 
