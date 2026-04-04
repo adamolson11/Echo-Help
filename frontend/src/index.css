@@ -332,6 +332,10 @@ textarea {
   box-shadow: 0 16px 30px rgba(2, 6, 23, 0.16);
 }
 
+.flywheel__panel--compact {
+  padding-top: 18px;
+}
+
 .flywheel__eyebrow {
   margin: 0 0 8px;
   text-transform: uppercase;
@@ -353,6 +357,25 @@ textarea {
   color: #bdd0dd;
 }
 
+.flywheel__mini-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.flywheel__mini-flow span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  color: #d7e9f3;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .flywheel__input-row,
 .flywheel__capture-grid {
   display: grid;
@@ -360,8 +383,33 @@ textarea {
   margin-top: 16px;
 }
 
+.flywheel__hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
 .flywheel__capture-grid {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.flywheel__field {
+  display: grid;
+  gap: 8px;
+}
+
+.flywheel__field-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e6f6ff;
+}
+
+.flywheel__field-help,
+.flywheel__helper {
+  color: #9fb3c7;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .flywheel__textarea {
@@ -384,6 +432,11 @@ textarea {
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+}
+
+.flywheel__primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
 }
 
 .flywheel__primary:disabled {
@@ -425,9 +478,7 @@ textarea {
 }
 
 .flywheel__section-heading span,
-.flywheel__contract-grid,
-.flywheel__contract-grid li,
-.flywheel__recommendation small,
+.flywheel__recommendation-meta,
 .flywheel__step small,
 .flywheel__outcome span {
   color: #9fb3c7;
@@ -450,6 +501,30 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.flywheel__summary-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.flywheel__summary-card {
+  border-radius: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.flywheel__summary-card strong,
+.flywheel__answer-label {
+  color: #f5fdff;
+}
+
+.flywheel__summary-card p {
+  margin: 8px 0 0;
+  color: #bdd0dd;
+}
+
 .flywheel__state,
 .flywheel__recommendation,
 .flywheel__outcome,
@@ -461,13 +536,21 @@ textarea {
 
 .flywheel__state {
   padding: 12px 14px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+}
+
+.flywheel__state div {
+  display: grid;
+  gap: 4px;
 }
 
 .flywheel__state strong {
-  text-transform: capitalize;
+  display: block;
+  text-transform: none;
+}
+
+.flywheel__state span {
+  color: #9fb3c7;
+  font-size: 13px;
 }
 
 .flywheel__state--current,
@@ -477,17 +560,9 @@ textarea {
   background: rgba(59, 130, 246, 0.14);
 }
 
-.flywheel__contract-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  margin-top: 16px;
-}
-
-.flywheel__contract-grid ul,
 .flywheel__steps {
   margin: 10px 0 0;
-  padding-left: 18px;
+  padding-left: 0;
 }
 
 .flywheel__recommendation,
@@ -495,6 +570,14 @@ textarea {
   text-align: left;
   padding: 16px;
   cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.flywheel__recommendation:hover,
+.flywheel__outcome:hover {
+  transform: translateY(-2px);
+  border-color: rgba(96, 165, 250, 0.35);
+  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.16);
 }
 
 .flywheel__recommendation-top {
@@ -508,13 +591,64 @@ textarea {
 .flywheel__recommendation h4,
 .flywheel__recommendation p,
 .flywheel__step p,
-.flywheel__outcome strong {
+.flywheel__outcome strong,
+.flywheel__selected-path strong {
   margin: 0;
+}
+
+.flywheel__recommendation h4 {
+  margin: 0 0 8px;
+  color: #f5fdff;
 }
 
 .flywheel__recommendation p {
   color: #eefaff;
   margin-bottom: 8px;
+}
+
+.flywheel__recommendation-number,
+.flywheel__selected-pill,
+.flywheel__step-done {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.flywheel__recommendation-number {
+  background: rgba(255, 255, 255, 0.07);
+  color: #d8e9f5;
+}
+
+.flywheel__selected-pill,
+.flywheel__step-done {
+  background: rgba(16, 185, 129, 0.14);
+  color: #a7f3d0;
+}
+
+.flywheel__recommendation-meta {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.flywheel__recommendation-cta {
+  display: inline-flex;
+  margin-top: 14px;
+  color: #9edbff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.flywheel__answer-card,
+.flywheel__selected-path {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .flywheel__steps {
@@ -539,6 +673,13 @@ textarea {
   margin-top: 4px;
 }
 
+.flywheel__step-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
 .flywheel__step strong {
   display: block;
   margin-bottom: 6px;
@@ -549,11 +690,6 @@ textarea {
   gap: 6px;
 }
 
-.flywheel__capture-grid label {
-  display: grid;
-  gap: 8px;
-}
-
 @media (max-width: 720px) {
   .flywheel__hero,
   .flywheel__panel {
@@ -562,6 +698,14 @@ textarea {
 
   .flywheel__title {
     font-size: 24px;
+  }
+
+  .flywheel__hero-actions {
+    align-items: stretch;
+  }
+
+  .flywheel__step-title-row {
+    flex-direction: column;
   }
 }
 

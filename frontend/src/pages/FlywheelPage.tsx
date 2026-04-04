@@ -5,8 +5,8 @@ export default function FlywheelPage() {
   return (
     <div>
       <SectionHeader
-        title="Flywheel"
-        description="Run one issue through recommendation, execution, outcome capture, and stored learning."
+        title="Ask Echo"
+        description="Search one issue, choose one next action, run the steps, and save the learning."
       />
       <FlywheelWidget />
     </div>

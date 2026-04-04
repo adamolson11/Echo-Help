@@ -5,8 +5,8 @@ export type AppRoute =
   | { kind: "ticket"; ticketId: number };
 
 export const ROUTE_LABELS: Record<ConsoleRoute, string> = {
-  flywheel: "Flywheel",
-  ask: "Ask Echo",
+  flywheel: "Ask Echo",
+  ask: "Answer Trail",
   search: "Search",
   kb: "Knowledge Base",
   insights: "Insights",

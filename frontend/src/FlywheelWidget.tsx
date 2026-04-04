@@ -5,20 +5,37 @@ import type {
   FlywheelOutcomeStatus,
   FlywheelRecommendResponse,
   FlywheelRecommendation,
+  FlywheelState,
 } from "./api/types";
 
 type StepSelection = Record<string, boolean>;
 
-const outcomeOptions: Array<{ value: FlywheelOutcomeStatus; label: string; hint: string }> = [
-  { value: "resolved", label: "Resolved", hint: "The selected action fixed the issue." },
-  { value: "needs_follow_up", label: "Needs follow-up", hint: "Progress was made, but more work is needed." },
-  { value: "blocked", label: "Blocked", hint: "The action did not move the issue forward." },
+const outcomeOptions: Array<{
+  value: FlywheelOutcomeStatus;
+  label: string;
+  hint: string;
+}> = [
+  { value: "resolved", label: "Resolved", hint: "This path fixed the issue." },
+  { value: "needs_follow_up", label: "Needs follow-up", hint: "This helped, but more work is needed." },
+  { value: "blocked", label: "Blocked", hint: "This path did not move the issue forward." },
 ];
 
-function summarizeOutcome(value: FlywheelOutcomeStatus) {
-  if (value === "resolved") return "Store the winning move so it becomes reusable.";
-  if (value === "needs_follow_up") return "Capture what changed so the next loop starts smarter.";
-  return "Record the blocker so the dead end does not repeat.";
+const stageCopy: Record<FlywheelState["id"], string> = {
+  input: "Type the issue",
+  recommend: "Review the 3 actions",
+  execute: "Run one path",
+  capture: "Record what happened",
+  store: "Save learning",
+};
+
+function learningPlaceholder(outcomeStatus: FlywheelOutcomeStatus) {
+  if (outcomeStatus === "resolved") {
+    return "What should the next operator repeat because it worked?";
+  }
+  if (outcomeStatus === "needs_follow_up") {
+    return "What should the next operator know before taking the next step?";
+  }
+  return "What blocker or dead end should Echo remember next time?";
 }
 
 export default function FlywheelWidget() {
@@ -38,6 +55,13 @@ export default function FlywheelWidget() {
     if (!plan) return null;
     return plan.recommendations.find((item) => item.id === selectedRecommendationId) ?? plan.recommendations[0] ?? null;
   }, [plan, selectedRecommendationId]);
+
+  const completedStepCount = useMemo(() => {
+    if (!selectedRecommendation) return 0;
+    return selectedRecommendation.steps.filter((step) => completedSteps[step.id]).length;
+  }, [completedSteps, selectedRecommendation]);
+
+  const currentStageId: FlywheelState["id"] = selectedRecommendation ? "execute" : plan ? "recommend" : "input";
 
   async function buildPlan() {
     if (!problem.trim()) return;
@@ -91,29 +115,41 @@ export default function FlywheelWidget() {
     <div className="flywheel">
       <section className="flywheel__hero">
         <div>
-          <p className="flywheel__eyebrow">Flywheel wedge</p>
-          <h2 className="flywheel__title">Problem → 3 options → execute → capture → store</h2>
+          <p className="flywheel__eyebrow">Ask Echo wedge</p>
+          <h2 className="flywheel__title">Search the issue, choose one action, then save what happened.</h2>
           <p className="flywheel__subtitle">
-            Enter one operator problem, choose the best next action, run it step-by-step, then save the outcome as reusable learning.
+            Ask Echo gives you 3 next actions. Pick one, run the steps, record the result, and save the learning for the next operator.
           </p>
         </div>
 
-        <div className="flywheel__input-row">
+        <div className="flywheel__mini-flow" aria-label="Ask Echo loop">
+          <span>1. Search</span>
+          <span>2. Choose</span>
+          <span>3. Run</span>
+          <span>4. Save</span>
+        </div>
+
+        <label className="flywheel__field">
+          <span className="flywheel__field-label">Describe the issue</span>
           <textarea
             className="flywheel__textarea"
             value={problem}
             onChange={(event) => setProblem(event.target.value)}
-            placeholder="Describe the support problem you want EchoHelp to work through..."
+            placeholder="Example: VPN login fails after a password reset and MFA re-prompt."
             rows={4}
           />
+        </label>
+
+        <div className="flywheel__hero-actions">
           <button
             type="button"
             className="flywheel__primary"
             disabled={loadingPlan || !problem.trim()}
             onClick={() => void buildPlan()}
           >
-            {loadingPlan ? "Building loop..." : "Recommend 3 next actions"}
+            {loadingPlan ? "Searching..." : "Find 3 next actions"}
           </button>
+          <p className="flywheel__helper">Echo keeps this on one path: search → choose → run → capture → save.</p>
         </div>
       </section>
 
@@ -121,66 +157,68 @@ export default function FlywheelWidget() {
 
       {plan && (
         <>
-          <section className="flywheel__panel">
+          <section className="flywheel__panel flywheel__panel--compact">
             <div className="flywheel__section-heading">
-              <h3>Locked contract</h3>
+              <h3>How this run works</h3>
               <span>Ask Echo log #{plan.issue.ask_echo_log_id}</span>
             </div>
+
             <div className="flywheel__state-row" aria-label="Flywheel states">
-              {plan.states.map((state) => (
-                <div key={state.id} className={`flywheel__state flywheel__state--${state.status}`}>
-                  <span>{state.label}</span>
-                  <strong>{state.status}</strong>
-                </div>
-              ))}
+              {plan.states.map((state) => {
+                const isActive = state.id === currentStageId;
+                return (
+                  <div
+                    key={state.id}
+                    className={`flywheel__state flywheel__state--${isActive ? "current" : state.status}`}
+                  >
+                    <div>
+                      <strong>{stageCopy[state.id]}</strong>
+                      <span>{state.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flywheel__contract-grid">
-              <div>
-                <h4>In scope</h4>
-                <ul>
-                  {plan.contract.in_scope.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+
+            <div className="flywheel__summary-grid">
+              <div className="flywheel__summary-card">
+                <strong>In this pass</strong>
+                <p>One issue in, 3 actions out, one selected path, one saved learning.</p>
               </div>
-              <div>
-                <h4>Deferred</h4>
-                <ul>
-                  {plan.contract.deferred.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+              <div className="flywheel__summary-card">
+                <strong>Not in this pass</strong>
+                <p>{plan.contract.deferred.slice(0, 2).join(" and ")}.</p>
               </div>
-              <div>
-                <h4>Acceptance</h4>
-                <ul>
-                  {plan.contract.acceptance_criteria.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
+              <div className="flywheel__summary-card">
+                <strong>Done when</strong>
+                <p>The operator can explain what Echo found, what they tried, and what should happen next.</p>
               </div>
             </div>
           </section>
 
           <section className="flywheel__panel">
             <div className="flywheel__section-heading">
-              <h3>Issue framing</h3>
+              <h3>1. What Echo found</h3>
               <span>
                 {Math.round(plan.issue.confidence * 100)}% confidence · {plan.issue.source_count} source
                 {plan.issue.source_count === 1 ? "" : "s"}
               </span>
             </div>
             <p className="flywheel__issue">{plan.issue.problem}</p>
-            <p className="flywheel__answer">{plan.issue.answer}</p>
+            <div className="flywheel__answer-card">
+              <strong className="flywheel__answer-label">Best answer so far</strong>
+              <p className="flywheel__answer">{plan.issue.answer}</p>
+            </div>
+            <p className="flywheel__helper">If this looks weak, choose the action that gathers better evidence before changing anything else.</p>
           </section>
 
           <section className="flywheel__panel">
             <div className="flywheel__section-heading">
-              <h3>Choose one of the 3 recommended actions</h3>
-              <span>Single-path wedge</span>
+              <h3>2. Choose your next action</h3>
+              <span>Click one card to continue</span>
             </div>
             <div className="flywheel__card-grid">
-              {plan.recommendations.map((recommendation) => {
+              {plan.recommendations.map((recommendation, index) => {
                 const selected = recommendation.id === selectedRecommendation?.id;
                 return (
                   <button
@@ -193,11 +231,18 @@ export default function FlywheelWidget() {
                     }}
                   >
                     <div className="flywheel__recommendation-top">
-                      <h4>{recommendation.title}</h4>
-                      <span>{recommendation.source_label}</span>
+                      <span className="flywheel__recommendation-number">Option {index + 1}</span>
+                      {selected && <span className="flywheel__selected-pill">Selected</span>}
                     </div>
+                    <h4>{recommendation.title}</h4>
                     <p>{recommendation.summary}</p>
-                    <small>{recommendation.rationale}</small>
+                    <div className="flywheel__recommendation-meta">
+                      <span>Why this: {recommendation.rationale}</span>
+                      <span>Based on: {recommendation.source_label}</span>
+                    </div>
+                    <span className="flywheel__recommendation-cta">
+                      {selected ? "Selected path — run the steps below" : "Click to choose this path"}
+                    </span>
                   </button>
                 );
               })}
@@ -208,9 +253,17 @@ export default function FlywheelWidget() {
             <>
               <section className="flywheel__panel">
                 <div className="flywheel__section-heading">
-                  <h3>Execute the selected action</h3>
-                  <span>{selectedRecommendation.title}</span>
+                  <h3>3. Run the selected path</h3>
+                  <span>
+                    {completedStepCount}/{selectedRecommendation.steps.length} steps complete
+                  </span>
                 </div>
+
+                <div className="flywheel__selected-path">
+                  <strong>{selectedRecommendation.title}</strong>
+                  <span>Next click: check each step as you complete it.</span>
+                </div>
+
                 <ol className="flywheel__steps">
                   {selectedRecommendation.steps.map((step, index) => (
                     <li key={step.id} className="flywheel__step">
@@ -226,11 +279,14 @@ export default function FlywheelWidget() {
                           }
                         />
                         <div>
-                          <strong>
-                            {index + 1}. {step.title}
-                          </strong>
+                          <div className="flywheel__step-title-row">
+                            <strong>
+                              Step {index + 1}: {step.title}
+                            </strong>
+                            {completedSteps[step.id] && <span className="flywheel__step-done">Done</span>}
+                          </div>
                           <p>{step.instruction}</p>
-                          <small>Expected signal: {step.expected_signal}</small>
+                          <small>Look for: {step.expected_signal}</small>
                         </div>
                       </label>
                     </li>
@@ -240,8 +296,8 @@ export default function FlywheelWidget() {
 
               <section className="flywheel__panel">
                 <div className="flywheel__section-heading">
-                  <h3>Capture the outcome and save learning</h3>
-                  <span>{summarizeOutcome(outcomeStatus)}</span>
+                  <h3>4. Capture the result</h3>
+                  <span>Choose what happened, then save the learning</span>
                 </div>
 
                 <div className="flywheel__outcome-options">
@@ -259,26 +315,29 @@ export default function FlywheelWidget() {
                 </div>
 
                 <div className="flywheel__capture-grid">
-                  <label>
-                    <span>What happened when you ran the steps?</span>
+                  <label className="flywheel__field">
+                    <span className="flywheel__field-label">What happened?</span>
                     <textarea
                       className="flywheel__textarea"
                       rows={4}
                       value={executionNotes}
                       onChange={(event) => setExecutionNotes(event.target.value)}
-                      placeholder="Capture commands run, observations, blockers, and what changed."
+                      placeholder="Write the short story: what you ran, what changed, and what is still true."
                     />
                   </label>
 
-                  <label>
-                    <span>Reusable learning to keep</span>
+                  <label className="flywheel__field">
+                    <span className="flywheel__field-label">Save learning for next time</span>
                     <textarea
                       className="flywheel__textarea"
                       rows={4}
                       value={reusableLearning}
                       onChange={(event) => setReusableLearning(event.target.value)}
-                      placeholder="Write the one learning the next operator should inherit."
+                      placeholder={learningPlaceholder(outcomeStatus)}
                     />
+                    <span className="flywheel__field-help">
+                      This note is stored with this Ask Echo run so future operators can reuse what worked or avoid what failed.
+                    </span>
                   </label>
                 </div>
 
@@ -288,10 +347,14 @@ export default function FlywheelWidget() {
                   disabled={savingOutcome}
                   onClick={() => void saveOutcome()}
                 >
-                  {savingOutcome ? "Saving..." : "Save outcome and learning"}
+                  {savingOutcome ? "Saving..." : "Save learning"}
                 </button>
 
-                {savedMessage && <div className="flywheel__saved">Saved learning: {savedMessage}</div>}
+                {savedMessage && (
+                  <div className="flywheel__saved">
+                    Saved. Echo can reuse this note next time: <strong>{savedMessage}</strong>
+                  </div>
+                )}
               </section>
             </>
           )}
