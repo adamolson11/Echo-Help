@@ -155,7 +155,7 @@ export default function FlywheelWidget() {
           >
             {loadingPlan ? "Searching..." : "Find 3 next actions"}
           </button>
-          <p className="flywheel__helper">Echo keeps this on one path: search → choose → run → capture → save.</p>
+          <p className="flywheel__helper">Echo keeps this on one path: search, choose, run, capture, and save.</p>
         </div>
       </section>
 
