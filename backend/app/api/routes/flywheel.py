@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
@@ -56,8 +57,16 @@ def _contract() -> FlywheelContract:
     )
 
 
-def _build_states(current: str) -> list[FlywheelState]:
-    order = ["input", "recommend", "execute", "capture", "store"]
+def _build_states(
+    current: Literal["input", "recommend", "execute", "capture", "store"],
+) -> list[FlywheelState]:
+    order: list[Literal["input", "recommend", "execute", "capture", "store"]] = [
+        "input",
+        "recommend",
+        "execute",
+        "capture",
+        "store",
+    ]
     labels = {
         "input": "Input",
         "recommend": "Recommend 3 options",
@@ -68,7 +77,7 @@ def _build_states(current: str) -> list[FlywheelState]:
     current_index = order.index(current)
     states: list[FlywheelState] = []
     for idx, state_id in enumerate(order):
-        status = "upcoming"
+        status: Literal["complete", "current", "upcoming"] = "upcoming"
         if idx < current_index:
             status = "complete"
         elif idx == current_index:
@@ -288,7 +297,10 @@ def recommend_flywheel_actions(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     log = _persist_ask_echo_log(session=session, problem=problem, result=result)
-    recommendations = _build_recommendations(problem, result, int(log.id))
+    ask_echo_log_id = log.id
+    if ask_echo_log_id is None:
+        raise HTTPException(status_code=500, detail="flywheel ask-echo log id missing")
+    recommendations = _build_recommendations(problem, result, ask_echo_log_id)
     top_ticket_id = result.references[0].ticket_id if result.references else None
     source_count = (len(result.references) if result.references else 0) + len(result.kb_evidence or [])
 
@@ -296,7 +308,7 @@ def recommend_flywheel_actions(
         issue=FlywheelIssue(
             problem=problem,
             normalized_problem=" ".join(problem.lower().split()),
-            ask_echo_log_id=int(log.id),
+            ask_echo_log_id=ask_echo_log_id,
             answer=result.answer_text,
             mode=result.mode,
             confidence=float(result.kb_confidence or 0.0),
