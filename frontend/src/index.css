@@ -318,6 +318,253 @@ textarea {
   font-weight: 600;
 }
 
+.flywheel {
+  display: grid;
+  gap: 18px;
+}
+
+.flywheel__hero,
+.flywheel__panel {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(14, 21, 31, 0.96), rgba(18, 27, 38, 0.94));
+  padding: 20px;
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.16);
+}
+
+.flywheel__eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  color: #86a3bb;
+}
+
+.flywheel__title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.flywheel__subtitle,
+.flywheel__issue,
+.flywheel__answer {
+  margin: 10px 0 0;
+  color: #bdd0dd;
+}
+
+.flywheel__input-row,
+.flywheel__capture-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.flywheel__capture-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.flywheel__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: #eefaff;
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.flywheel__primary {
+  width: fit-content;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.flywheel__primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.flywheel__error,
+.flywheel__saved {
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+.flywheel__error {
+  background: rgba(127, 29, 29, 0.24);
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.flywheel__saved {
+  margin-top: 14px;
+  background: rgba(6, 95, 70, 0.22);
+  color: #ccfbf1;
+  border: 1px solid rgba(45, 212, 191, 0.25);
+}
+
+.flywheel__section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.flywheel__section-heading h3,
+.flywheel__contract-grid h4 {
+  margin: 0;
+}
+
+.flywheel__section-heading span,
+.flywheel__contract-grid,
+.flywheel__contract-grid li,
+.flywheel__recommendation small,
+.flywheel__step small,
+.flywheel__outcome span {
+  color: #9fb3c7;
+}
+
+.flywheel__state-row,
+.flywheel__card-grid,
+.flywheel__outcome-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.flywheel__state-row,
+.flywheel__outcome-options {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.flywheel__card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.flywheel__state,
+.flywheel__recommendation,
+.flywheel__outcome,
+.flywheel__step {
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.flywheel__state {
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flywheel__state strong {
+  text-transform: capitalize;
+}
+
+.flywheel__state--current,
+.flywheel__recommendation--selected,
+.flywheel__outcome--selected {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.flywheel__contract-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 16px;
+}
+
+.flywheel__contract-grid ul,
+.flywheel__steps {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.flywheel__recommendation,
+.flywheel__outcome {
+  text-align: left;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.flywheel__recommendation-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.flywheel__recommendation h4,
+.flywheel__recommendation p,
+.flywheel__step p,
+.flywheel__outcome strong {
+  margin: 0;
+}
+
+.flywheel__recommendation p {
+  color: #eefaff;
+  margin-bottom: 8px;
+}
+
+.flywheel__steps {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.flywheel__step {
+  padding: 14px 16px;
+}
+
+.flywheel__step label {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.flywheel__step input {
+  margin-top: 4px;
+}
+
+.flywheel__step strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.flywheel__outcome {
+  display: grid;
+  gap: 6px;
+}
+
+.flywheel__capture-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .flywheel__hero,
+  .flywheel__panel {
+    padding: 16px;
+  }
+
+  .flywheel__title {
+    font-size: 24px;
+  }
+}
+
 .ask-echo .operator-pill {
   border: 1px solid rgba(0, 229, 255, 0.12);
   background: rgba(18, 24, 33, 0.9);

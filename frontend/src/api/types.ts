@@ -198,6 +198,82 @@ export type AskEchoFeedbackRead = {
   created_at: string;
 };
 
+export type FlywheelOutcomeStatus = "resolved" | "needs_follow_up" | "blocked";
+
+export type FlywheelRecommendRequest = {
+  problem: string;
+};
+
+export type FlywheelStep = {
+  id: string;
+  title: string;
+  instruction: string;
+  expected_signal: string;
+};
+
+export type FlywheelRecommendation = {
+  id: string;
+  title: string;
+  summary: string;
+  rationale: string;
+  source_label: string;
+  confidence?: number | null;
+  ticket_id?: number | null;
+  steps: FlywheelStep[];
+};
+
+export type FlywheelState = {
+  id: "input" | "recommend" | "execute" | "capture" | "store";
+  label: string;
+  status: "complete" | "current" | "upcoming";
+};
+
+export type FlywheelContract = {
+  in_scope: string[];
+  deferred: string[];
+  acceptance_criteria: string[];
+};
+
+export type FlywheelRecommendResponse = {
+  meta: ApiMeta;
+  issue: {
+    problem: string;
+    normalized_problem: string;
+    ask_echo_log_id: number;
+    answer: string;
+    mode?: string | null;
+    confidence: number;
+    source_count: number;
+    top_ticket_id?: number | null;
+  };
+  states: FlywheelState[];
+  recommendations: FlywheelRecommendation[];
+  contract: FlywheelContract;
+};
+
+export type FlywheelOutcomeRequest = {
+  ask_echo_log_id: number;
+  problem: string;
+  recommendation_id: string;
+  recommendation_title: string;
+  ticket_id?: number | null;
+  outcome_status: FlywheelOutcomeStatus;
+  completed_step_ids: string[];
+  execution_notes?: string | null;
+  reusable_learning?: string | null;
+};
+
+export type FlywheelOutcomeResponse = {
+  meta: ApiMeta;
+  saved: {
+    ask_echo_feedback_id: number;
+    ticket_feedback_id?: number | null;
+    helped: boolean;
+    learning_summary: string;
+  };
+  states: FlywheelState[];
+};
+
 
 export type TicketCreateRequest = {
   summary: string;

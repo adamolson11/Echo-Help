@@ -11,6 +11,10 @@ import type {
   FeedbackClustersResponse,
   IntakeRequest,
   IntakeResponse,
+  FlywheelOutcomeRequest,
+  FlywheelOutcomeResponse,
+  FlywheelRecommendRequest,
+  FlywheelRecommendResponse,
   LegacyFeedbackRequest,
   LegacyFeedbackResponse,
   SearchPatternsSummary,
@@ -93,6 +97,24 @@ export function postAskEcho(payload: AskEchoRequest, signal?: AbortSignal) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ q: payload.q, limit: payload.limit ?? 5 }),
+    signal,
+  });
+}
+
+export function postFlywheelRecommend(payload: FlywheelRecommendRequest, signal?: AbortSignal) {
+  return apiFetch<FlywheelRecommendResponse>("/api/flywheel/recommend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
+export function postFlywheelOutcome(payload: FlywheelOutcomeRequest, signal?: AbortSignal) {
+  return apiFetch<FlywheelOutcomeResponse>("/api/flywheel/outcome", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
     signal,
   });
 }
