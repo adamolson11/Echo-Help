@@ -1,11 +1,27 @@
-# EchoHelp
+# Echo-Help / E.C.O.
 
-EchoHelp is a small SaaS-style tool for IT support teams.
-It lets agents search historical tickets, record what actually fixed each issue, and surface unresolved problem patterns over time — with optional **AI semantic search** powered by embeddings.
+This repo is currently being stabilized around **E.C.O. (Executive Command Operations)**.
+
+## Current repo truth
+
+- Canonical visible wedge: `/#/flywheel`
+- Secondary inspection surface: `/#/ask`
+- Canonical loop: `search/input → choose action → run steps → capture outcome → save learning`
+- Current implementation goal: add one server-side provider seam, with an env-gated OpenAI path first
+- Jira is deferred to a read-only seam only; writeback is out of scope
+- No modal redesign, no mobile work, and no intake/ticket-create expansion in the wedge path
+- Known naming drift: parts of the shell and backend still say `EchoHelp`
+
+Today the repo truth is a single operator loop for IT support teams. It preserves local memory-first behavior and adds provider help only behind a bounded server-side seam.
 
 ---
 
 ## ✨ Features
+
+- **E.C.O. wedge**
+  - Primary operator surface is `/#/flywheel`.
+  - `/#/ask` remains available as a secondary inspection / Answer Trail surface.
+  - The wedge stays on one path: search, choose, run, capture, and save.
 
 - **Ticket search console**
   - Keyword-based search (`/api/search`) across ticket summaries and descriptions.
@@ -38,6 +54,7 @@ It lets agents search historical tickets, record what actually fixed each issue,
   - Semantic embeddings backfill script: `scripts/backfill_ticket_embeddings.py`.
   - GitHub Actions CI pipeline running `ruff`, `pyright`, and `pytest`.
   - Production build via Vite (`npm run build` in `frontend/`).
+  - Optional provider seam is server-side only and activates only when `ECHO_FLYWHEEL_PROVIDER=openai` and `OPENAI_API_KEY` are set.
 
 ---
 

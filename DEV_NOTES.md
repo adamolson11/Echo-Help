@@ -10,6 +10,15 @@ Phase 1 (foundation hardening):
 - Idempotent ingest + predictable feedback behavior
 - Defensive frontend rendering (fail soft)
 
+## Current repo truth (2026-04-04)
+
+- Canonical wedge: `/#/flywheel`
+- Secondary inspection surface: `/#/ask`
+- Canonical loop: `search/input → choose action → run steps → capture outcome → save learning`
+- Current approved seam work: one server-side provider seam, OpenAI path first, local-memory-first fallback
+- Explicitly deferred in the wedge path today: Jira writeback, modal redesign, mobile work, intake expansion, ticket-create expansion
+- Known naming drift: some shell/backend labels still say `EchoHelp`
+
 ## Session handoff defaults
 
 - Start each new session by checking `IRON_OPERATING_FRAMEWORK.md`, `ARCHITECTURE.md`, and this file before making changes.

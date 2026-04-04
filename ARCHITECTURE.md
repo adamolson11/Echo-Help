@@ -1,6 +1,14 @@
-# EchoHelp Architecture
+# Echo-Help / E.C.O. Architecture
 
-EchoHelp is an organizational memory engine for support/eng/ops teams.
+Current repo truth is **E.C.O. (Executive Command Operations)** with one canonical wedge at `/#/flywheel`.
+
+Truth lock for this phase:
+- `/#/flywheel` is the visible wedge
+- `/#/ask` is secondary inspection only
+- one loop only: search/input → choose action → run steps → capture outcome → save learning
+- provider seam first, OpenAI path first, server-side only
+- Jira read-only seam is deferred unless the wedge remains stable
+- no writeback, no modal redesign, no mobile work
 
 North star: every system should serve at least one of:
 - Retrieve memory
@@ -129,6 +137,25 @@ Rules:
 **Design stance**
 - Answers must be auditable.
 - Logged reasoning and references are treated as first-class data.
+
+### 3b) Flywheel wedge (current canonical loop)
+
+**User goal**: stay inside one visible operator loop and record one reusable learning before leaving the surface.
+
+**Frontend**
+- `frontend/src/FlywheelWidget.tsx`
+- `frontend/src/pages/FlywheelPage.tsx`
+
+**Backend**
+- `POST /api/flywheel/recommend`
+- `POST /api/flywheel/outcome`
+- `backend/app/api/routes/flywheel.py`
+- `backend/app/schemas/flywheel.py`
+
+**Current seam rule**
+- Local memory and current flywheel logic stay first.
+- Provider help is bounded and server-side only.
+- `/#/ask` remains secondary inspection and is not part of the canonical wedge path.
 
 ### 4) Feedback loop (improve memory quality)
 

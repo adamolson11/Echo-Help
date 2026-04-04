@@ -1,11 +1,15 @@
 from fastapi.testclient import TestClient
 from sqlmodel import select
 
+from backend.app.api.routes import flywheel as flywheel_route
 from backend.app.db import SessionLocal
 from backend.app.main import app
 from backend.app.models.ask_echo_feedback import AskEchoFeedback
 from backend.app.models.ask_echo_log import AskEchoLog
 from backend.app.models.ticket_feedback import TicketFeedback
+from backend.app.schemas.ask_echo import AskEchoReasoning
+from backend.app.services.ask_echo_engine import AskEchoEngineResult
+from backend.app.services.provider_seam import ProviderAnswer
 
 
 def test_flywheel_recommend_returns_three_actions() -> None:
@@ -77,3 +81,54 @@ def test_flywheel_outcome_persists_feedback() -> None:
         ).all()
         assert ticket_feedback
         assert "MFA rebind verification" in (ticket_feedback[-1].resolution_notes or "")
+
+
+def test_flywheel_recommend_provider_fallback_preserves_contract(monkeypatch) -> None:
+    client = TestClient(app)
+
+    fake_result = AskEchoEngineResult(
+        response={
+            "answer": "Local fallback answer",
+            "confidence": 0.2,
+            "sources": [],
+            "reasoning": "Fallback answer because no strong KB-backed match was available.",
+        },
+        answer_kind="ungrounded",
+        mode="general_answer",
+        kb_backed=False,
+        top_ticket_score=0.0,
+        references=[],
+        reasoning=AskEchoReasoning(candidate_snippets=[], chosen_snippet_ids=[], echo_score=None),
+        ticket_summaries=[],
+        snippet_summaries=[],
+        features={
+            "version": "v1",
+            "ticket": {"count": 0, "top_score": 0.0, "signal_evidence": []},
+            "snippet": {"count": 0, "top_echo_score": 0.0, "top_success_count": 0, "top_failure_count": 0},
+        },
+        evidence=[],
+        kb_evidence=[],
+    )
+
+    class FakeProvider:
+        def generate(self, problem: str, context) -> ProviderAnswer | None:
+            return ProviderAnswer(
+                answer_text="Provider-guided next step with the same flywheel contract.",
+                mode="provider_openai",
+            )
+
+    def fake_run(*args, **kwargs):
+        return fake_result
+
+    monkeypatch.setattr(flywheel_route.AskEchoEngine, "run", fake_run)
+    monkeypatch.setattr(flywheel_route, "build_llm_provider_from_env", lambda: FakeProvider())
+
+    resp = client.post("/api/flywheel/recommend", json={"problem": "new outage with no local match"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+
+    assert data["meta"]["kind"] == "flywheel_plan"
+    assert data["issue"]["mode"] == "provider_openai"
+    assert data["issue"]["answer"] == "Provider-guided next step with the same flywheel contract."
+    assert len(data["recommendations"]) == 3
+    assert all(len(item["steps"]) == 3 for item in data["recommendations"])

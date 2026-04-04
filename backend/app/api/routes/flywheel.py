@@ -31,6 +31,7 @@ from backend.app.services.feedback import (
     apply_user_feedback,
     build_feedback_analytics,
 )
+from backend.app.services.provider_seam import build_llm_provider_from_env, maybe_generate_provider_answer
 
 router = APIRouter(prefix="/flywheel", tags=["flywheel"])
 TEXT_TRUNCATE_LIMIT = 220
@@ -110,6 +111,8 @@ def _persist_ask_echo_log(
     session: Session,
     problem: str,
     result,
+    answer_text: str | None = None,
+    mode: str | None = None,
 ) -> AskEchoLog:
     refs_count = len(result.references) if result.references is not None else 0
     candidate_data = [
@@ -119,11 +122,11 @@ def _persist_ask_echo_log(
     chosen_ids = list(result.reasoning.chosen_snippet_ids or [])
     response_sources = list(result.response["sources"])
     analytics = build_feedback_analytics(
-        answer=result.answer_text,
+        answer=answer_text if answer_text is not None else result.answer_text,
         confidence=result.kb_confidence,
         sources=response_sources,
         reasoning=result.response["reasoning"],
-        mode=result.mode,
+        mode=mode if mode is not None else result.mode,
     )
     reasoning_notes_payload = {
         "features": result.features,
@@ -144,7 +147,7 @@ def _persist_ask_echo_log(
         answer_text=analytics["answer_text"],
         top_score=float(result.top_ticket_score or 0.0),
         kb_confidence=float(result.kb_confidence or 0.0),
-        mode=result.mode,
+        mode=mode if mode is not None else result.mode,
         references_count=refs_count,
         source_count=analytics["source_count"],
         reasoning_summary=analytics["reasoning_summary"],
@@ -167,12 +170,19 @@ def _persist_ask_echo_log(
     return log
 
 
-def _build_recommendations(problem: str, result, ask_echo_log_id: int) -> list[FlywheelRecommendation]:
+def _build_recommendations(
+    problem: str,
+    result,
+    ask_echo_log_id: int,
+    *,
+    answer_text: str | None = None,
+) -> list[FlywheelRecommendation]:
     top_ticket_id = result.references[0].ticket_id if result.references else None
     top_ticket = result.ticket_summaries[0] if result.ticket_summaries else None
     top_snippet = result.snippet_summaries[0] if result.snippet_summaries else None
     top_kb = result.kb_evidence[0] if result.kb_evidence else None
-    answer_summary = _first_sentence(result.answer_text)
+    effective_answer = answer_text if answer_text is not None else result.answer_text
+    answer_summary = _first_sentence(effective_answer)
 
     evidence_label = "Ask Echo answer"
     if top_snippet:
@@ -207,7 +217,7 @@ def _build_recommendations(problem: str, result, ask_echo_log_id: int) -> list[F
                 FlywheelStep(
                     id="apply-fix",
                     title="Apply the recommended fix",
-                    instruction=_clip(result.answer_text or "Apply the top recommended remediation path."),
+                    instruction=_clip(effective_answer or "Apply the top recommended remediation path."),
                     expected_signal="The issue changes state or the symptom narrows.",
                 ),
                 FlywheelStep(
@@ -297,11 +307,32 @@ def recommend_flywheel_actions(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    log = _persist_ask_echo_log(session=session, problem=problem, result=result)
+    provider_answer = maybe_generate_provider_answer(
+        provider=build_llm_provider_from_env(),
+        problem=problem,
+        local_answer=result.answer_text,
+        local_confidence=float(result.kb_confidence or 0.0),
+        sources=list(result.response["sources"]),
+    )
+    effective_answer = provider_answer.answer_text if provider_answer else result.answer_text
+    effective_mode = provider_answer.mode if provider_answer else result.mode
+
+    log = _persist_ask_echo_log(
+        session=session,
+        problem=problem,
+        result=result,
+        answer_text=effective_answer,
+        mode=effective_mode,
+    )
     ask_echo_log_id = log.id
     if ask_echo_log_id is None:
         raise HTTPException(status_code=500, detail="flywheel ask-echo log id missing")
-    recommendations = _build_recommendations(problem, result, ask_echo_log_id)
+    recommendations = _build_recommendations(
+        problem,
+        result,
+        ask_echo_log_id,
+        answer_text=effective_answer,
+    )
     top_ticket_id = result.references[0].ticket_id if result.references else None
     source_count = (len(result.references) if result.references else 0) + len(result.kb_evidence or [])
 
@@ -310,8 +341,8 @@ def recommend_flywheel_actions(
             problem=problem,
             normalized_problem=" ".join(problem.lower().split()),
             ask_echo_log_id=ask_echo_log_id,
-            answer=result.answer_text,
-            mode=result.mode,
+            answer=effective_answer,
+            mode=effective_mode,
             confidence=float(result.kb_confidence or 0.0),
             source_count=source_count,
             top_ticket_id=top_ticket_id,
