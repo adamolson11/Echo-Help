@@ -38,6 +38,12 @@ function learningPlaceholder(outcomeStatus: FlywheelOutcomeStatus) {
   return "What blocker or dead end should Echo remember next time?";
 }
 
+function summarizeDeferred(items: string[]) {
+  if (items.length === 0) return "No extra paths are included in this UX pass.";
+  if (items.length === 1) return `${items[0]}.`;
+  return `${items[0]} and ${items[1]}.`;
+}
+
 export default function FlywheelWidget() {
   const [problem, setProblem] = useState("");
   const [plan, setPlan] = useState<FlywheelRecommendResponse | null>(null);
@@ -187,7 +193,7 @@ export default function FlywheelWidget() {
               </div>
               <div className="flywheel__summary-card">
                 <strong>Not in this pass</strong>
-                <p>{plan.contract.deferred.slice(0, 2).join(" and ")}.</p>
+                <p>{summarizeDeferred(plan.contract.deferred)}</p>
               </div>
               <div className="flywheel__summary-card">
                 <strong>Done when</strong>

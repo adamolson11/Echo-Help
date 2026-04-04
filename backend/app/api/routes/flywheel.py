@@ -33,6 +33,7 @@ from backend.app.services.feedback import (
 )
 
 router = APIRouter(prefix="/flywheel", tags=["flywheel"])
+DEFAULT_CLIP_LENGTH = 220
 
 
 def _contract() -> FlywheelContract:
@@ -97,7 +98,7 @@ def _first_sentence(text: str) -> str:
     return value
 
 
-def _clip(text: str, limit: int = 220) -> str:
+def _clip(text: str, limit: int = DEFAULT_CLIP_LENGTH) -> str:
     value = " ".join(text.split()).strip()
     if len(value) <= limit:
         return value
