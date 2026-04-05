@@ -7,15 +7,15 @@ MVP Scope • Private Repository (v0.1)
 
 📌 Overview
 
-EchoHelp is an AI-driven support intelligence platform that sits on top of existing ticketing and knowledge systems (e.g., Jira, Confluence).
-It transforms how support teams search, categorize, resolve, and continually improve their documentation.
+EchoHelp is an AI-assisted decision support and outcome memory layer that sits on top of existing ticketing, monitoring, and knowledge systems (e.g., Jira, Confluence).
+It helps support teams interpret incoming signals, find relevant history, capture what worked, and improve future guidance without rebuilding upstream systems.
 
 At its core, EchoHelp turns a single natural-language problem description into:
 
 # EchoHelp
 
 EchoHelp is a small SaaS-style tool for IT support teams.  
-It lets agents search historical tickets, record what actually fixed each issue, and surface unresolved problem patterns over time — with optional **AI semantic search** powered by embeddings.
+It lets agents search historical tickets, record what actually fixed each issue, and turn support signals into reusable guidance and memory — with optional **AI semantic search** powered by embeddings.
 
 ---
 
@@ -35,14 +35,15 @@ It lets agents search historical tickets, record what actually fixed each issue,
     - Original query text
   - Feedback is persisted to a `ticketfeedback` table via `/api/ticket-feedback/`.
 
-- **Insights (patterns) view**
-  - `/api/patterns/summary` aggregates all feedback:
+- **Insights (signal summaries) view**
+  - `/api/patterns/summary` aggregates lightweight feedback signals:
     - Total feedback count
     - Tickets with unresolved feedback
     - Top unresolved tickets with counts
-  - **Insights tab** in the UI shows:
+  - **Insights tab** in the UI shows simple decision-support summaries:
     - A small metrics row (total feedback, unresolved tickets, most unresolved ticket)
     - A “Top Unresolved Tickets” list
+  - These summaries are intended to complement upstream analytics/monitoring systems, not replace them.
   - Clicking a ticket in Insights jumps back to the Search tab and (when possible) highlights that ticket in the results.
 
 - **Developer experience**
@@ -438,11 +439,10 @@ CI (GitHub Actions) will automatically:
 
 ## 🗺️ Roadmap / Ideas
 
-* More advanced pattern analysis (clusters, time-series of unresolved issues).
+* More integrations with existing ticketing, monitoring, and analytics tools as signal sources.
 * Attachments and richer ticket metadata.
-* Integrations with existing ticketing tools (Jira, Zendesk, etc.).
 * Authentication / multi-tenant support.
-* Deeper AI features: suggested KB articles, automated troubleshooting flows.
+* Deeper AI features: prioritization guidance, suggested KB articles, and automated troubleshooting flows.
 
 ---
 
@@ -453,7 +453,7 @@ EchoHelp is designed as a realistic full-stack portfolio project:
 * Shows experience with **Python/FastAPI/SQLModel** and **React/TypeScript/Tailwind**.
 * Demonstrates **AI integration** via semantic search and embeddings.
 * Includes **CI, tests, and DB tooling**, not just a demo UI.
-* Models a real-world use case for IT teams: turning support tickets into a growing knowledge base and analytics engine.
+* Models a real-world use case for IT teams: turning support signals into reusable operational memory and guided follow-up.
 
 ---
 

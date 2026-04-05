@@ -42,7 +42,7 @@ export default function App() {
         navigateToConsole(route);
       }}
       title="EchoHelp"
-      subtitle="AI-powered resolution memory for busy IT teams"
+      subtitle="Decision support and outcome memory for busy IT teams"
     >
       {appRoute.kind === "ticket" ? <TicketDetailPage ticketId={appRoute.ticketId} /> : renderRoute(appRoute.route)}
     </ConsoleShell>
