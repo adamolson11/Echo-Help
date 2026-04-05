@@ -857,6 +857,207 @@ textarea {
   font-size: 13px;
 }
 
+.ask-echo__flow-callout {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  background: rgba(0, 229, 255, 0.05);
+  color: #d5eef6;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ask-echo__stage-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.ask-echo__stage {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ask-echo__stage--active {
+  border-color: rgba(0, 229, 255, 0.24);
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.08), rgba(17, 25, 35, 0.94));
+}
+
+.ask-echo__stage--complete {
+  border-color: rgba(56, 189, 248, 0.18);
+}
+
+.ask-echo__stage-number {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2fbff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ask-echo__stage-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d7e6f2;
+}
+
+.ask-echo__recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.ask-echo__recommendation-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: linear-gradient(180deg, rgba(12, 18, 26, 0.86), rgba(17, 25, 35, 0.94));
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ask-echo__recommendation-card:hover,
+.ask-echo__recommendation-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(0, 229, 255, 0.18);
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.2);
+}
+
+.ask-echo__recommendation-card--selected {
+  border-color: rgba(0, 229, 255, 0.28);
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.08), rgba(17, 25, 35, 0.96));
+}
+
+.ask-echo__recommendation-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ask-echo__recommendation-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ask-echo__recommendation-rank {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8fb4c8;
+}
+
+.ask-echo__recommendation-title {
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: #f1fbff;
+}
+
+.ask-echo__recommendation-summary {
+  color: #d5e6f2;
+  font-size: 14px;
+}
+
+.ask-echo__recommendation-rationale {
+  color: var(--echo-cyber-muted);
+  font-size: 13px;
+}
+
+.ask-echo__selected-action-title {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #f2fbff;
+}
+
+.ask-echo__selected-action-caption {
+  color: #9fc2d0;
+  font-size: 13px;
+}
+
+.ask-echo__steps-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding-left: 20px;
+}
+
+.ask-echo__step {
+  color: #d7e6f2;
+  line-height: 1.55;
+}
+
+.ask-echo__action-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.ask-echo__outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.ask-echo__outcome-button {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d7e6f2;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.ask-echo__outcome-button:hover,
+.ask-echo__outcome-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(0, 229, 255, 0.18);
+}
+
+.ask-echo__outcome-button--selected {
+  border-color: rgba(0, 229, 255, 0.28);
+  background: rgba(0, 229, 255, 0.1);
+  color: #f2fbff;
+}
+
+.ask-echo__textarea-label {
+  display: block;
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #bfd3df;
+}
+
+.ask-echo__feedback-save {
+  min-width: 200px;
+}
+
 .ask-echo .snippet-list {
   display: grid;
   gap: 12px;
@@ -989,6 +1190,13 @@ textarea {
   flex-wrap: wrap;
 }
 
+.ask-echo__feedback-help {
+  margin-top: 12px;
+  color: #9fc2d0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .ask-echo__feedback-error {
   margin-top: 10px;
   color: #b91c1c;
@@ -1092,7 +1300,8 @@ textarea {
   }
 
   .ask-echo__answer-header,
-  .ask-echo__signal-grid {
+  .ask-echo__signal-grid,
+  .ask-echo__recommendation-grid {
     grid-template-columns: 1fr;
   }
 

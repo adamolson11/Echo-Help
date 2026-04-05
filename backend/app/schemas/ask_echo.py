@@ -52,6 +52,53 @@ class AskEchoKBEvidence(BaseModel):
     score: float | None = None
 
 
+class AskEchoRecommendationSource(BaseModel):
+    kind: Literal["ticket", "snippet", "kb", "general"]
+    label: str
+    ticket_id: int | None = None
+    snippet_id: int | None = None
+    entry_id: str | None = None
+    source_url: str | None = None
+
+
+class AskEchoRecommendation(BaseModel):
+    id: str
+    title: str
+    summary: str
+    rationale: str
+    confidence: float | None = None
+    source: AskEchoRecommendationSource
+    steps: list[str] = []
+
+
+class AskEchoFlywheelState(BaseModel):
+    current_stage: Literal[
+        "recommendations_ready",
+        "action_selected",
+        "outcome_recorded",
+        "learning_captured",
+    ] = "recommendations_ready"
+    recommended_action_count: int = 3
+    selected_recommendation_id: str | None = None
+    outcome_recorded: bool = False
+    reusable_learning_saved: bool = False
+
+
+class AskEchoFlywheel(BaseModel):
+    issue: str
+    state: AskEchoFlywheelState = AskEchoFlywheelState()
+    recommendations: list[AskEchoRecommendation] = []
+    outcome_options: list[Literal["resolved", "partially_resolved", "not_resolved", "needs_escalation"]] = [
+        "resolved",
+        "partially_resolved",
+        "not_resolved",
+        "needs_escalation",
+    ]
+    reusable_learning_prompt: str = (
+        "Capture what Echo should remember next time: the winning step, when to use it, and any escalation signal."
+    )
+
+
 class AskEchoRequest(BaseModel):
     q: str
     limit: int = 5
@@ -76,3 +123,4 @@ class AskEchoResponse(BaseModel):
     reasoning: AskEchoReasoning | None = None
     evidence: list[AskEchoEvidence] = []
     kb_evidence: list[AskEchoKBEvidence] = []
+    flywheel: AskEchoFlywheel

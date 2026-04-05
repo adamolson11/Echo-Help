@@ -7,8 +7,45 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..models import Ticket
 from ..schemas.common import MessageResponse
+from ..schemas.tickets import TicketCreateRequest
+from ..services.tickets import get_next_short_id
 
 router = APIRouter(tags=["tickets"])
+
+
+@router.post("/tickets", response_model=Ticket, status_code=201)
+def create_ticket(payload: TicketCreateRequest, session: Session = Depends(get_session)) -> Ticket:
+    summary = payload.summary.strip()
+    description = payload.description.strip()
+    source = payload.source.strip() or "manual"
+    project_key = payload.project_key.strip().upper() or "IT"
+    priority = payload.priority.strip() if isinstance(payload.priority, str) else None
+
+    if not summary:
+        raise HTTPException(status_code=422, detail="Summary is required")
+    if not description:
+        raise HTTPException(status_code=422, detail="Description is required")
+
+    now = datetime.now(timezone.utc)
+    short_id = get_next_short_id(session)
+    ticket = Ticket(
+        short_id=short_id,
+        key=short_id,
+        external_key=short_id,
+        source=source,
+        source_system="manual-ui",
+        project_key=project_key,
+        summary=summary,
+        description=description,
+        status="open",
+        priority=priority or None,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(ticket)
+    session.commit()
+    session.refresh(ticket)
+    return ticket
 
 
 @router.get("/tickets", response_model=list[Ticket])

@@ -9,6 +9,7 @@ def test_feedback_records_contract_exposes_internal_analytics_shape() -> None:
     ask = client.post("/api/ask-echo", json={"q": "contract feedback records check", "limit": 3})
     assert ask.status_code == 200
     log_id = ask.json()["ask_echo_log_id"]
+    assert len(ask.json()["flywheel"]["recommendations"]) == 3
 
     feedback = client.post(
         "/api/ask-echo/feedback",

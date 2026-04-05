@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import ConsoleShell from "./ConsoleShell";
 import { navigateToConsole, parseAppRoute, type AppRoute, type ConsoleRoute } from "./appRoutes";
+import FlywheelPage from "./pages/FlywheelPage";
 import AskEchoPage from "./pages/AskEchoPage";
 import SearchPage from "./pages/SearchPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
@@ -22,6 +23,7 @@ export default function App() {
   }, []);
 
   function renderRoute(r: ConsoleRoute) {
+    if (r === "flywheel") return <FlywheelPage />;
     if (r === "ask") return <AskEchoPage />;
     if (r === "search") return <SearchPage />;
     if (r === "kb") return <KnowledgeBasePage />;

@@ -1,10 +1,11 @@
-export type ConsoleRoute = "ask" | "search" | "kb" | "insights" | "intake";
+export type ConsoleRoute = "flywheel" | "ask" | "search" | "kb" | "insights" | "intake";
 
 export type AppRoute =
   | { kind: "console"; route: ConsoleRoute }
   | { kind: "ticket"; ticketId: number };
 
 export const ROUTE_LABELS: Record<ConsoleRoute, string> = {
+  flywheel: "Flywheel",
   ask: "Ask Echo",
   search: "Search",
   kb: "Knowledge Base",
@@ -15,6 +16,7 @@ export const ROUTE_LABELS: Record<ConsoleRoute, string> = {
 export function normalizeConsoleRoute(value: string | null): ConsoleRoute {
   const normalized = (value ?? "").trim().toLowerCase();
   if (
+    normalized === "flywheel" ||
     normalized === "ask" ||
     normalized === "search" ||
     normalized === "kb" ||
@@ -23,7 +25,7 @@ export function normalizeConsoleRoute(value: string | null): ConsoleRoute {
   ) {
     return normalized;
   }
-  return "ask";
+  return "flywheel";
 }
 
 export function parseAppRoute(): AppRoute {
@@ -40,7 +42,7 @@ export function parseAppRoute(): AppRoute {
 
   return {
     kind: "console",
-    route: normalizeConsoleRoute(segments[0] ?? "ask"),
+    route: normalizeConsoleRoute(segments[0] ?? "flywheel"),
   };
 }
 

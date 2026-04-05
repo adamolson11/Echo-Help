@@ -11,15 +11,20 @@ from ..models.snippets import SolutionSnippet
 from ..models.ticket import Ticket
 from ..schemas.ask_echo import (
     AskEchoEvidence,
+    AskEchoFlywheel,
     AskEchoKBEvidence,
     AskEchoReasoning,
     AskEchoReasoningSnippet,
+    AskEchoRecommendation,
+    AskEchoRecommendationSource,
     AskEchoReference,
     AskEchoTicketSummary,
 )
 from .ask_echo_templates import AskEchoTemplates
 from .kb_adapter import search_kb_entries
 from .kb_confidence_policy import calculate_kb_confidence
+from .llm_provider import LLMProvider
+from .openai_provider import build_default_llm_provider_from_env
 from .ranking_policy import clamp01, rank_snippets, rank_tickets
 from .semantic_search import semantic_search_tickets
 from .snippet_repository import search_snippets as repo_search_snippets
@@ -53,6 +58,7 @@ class AskEchoEngineResult:
     features: dict
     evidence: list[AskEchoEvidence]
     kb_evidence: list[AskEchoKBEvidence]
+    flywheel: AskEchoFlywheel
 
     @property
     def answer_text(self) -> str:
@@ -219,6 +225,134 @@ def _build_snippet_summaries(snippets: Iterable[SolutionSnippet]) -> list[dict]:
     ]
 
 
+def _ticket_steps(ticket: Ticket, query: str) -> list[str]:
+    ticket_id = getattr(ticket, "id", None)
+    return [
+        f"Open Ticket #{ticket_id} and confirm it matches the current issue: {query}.",
+        "Apply the documented fix or resolution notes from the matching ticket.",
+        "Verify the result in the affected environment and note what changed.",
+    ]
+
+
+def _snippet_steps(snippet: SolutionSnippet, query: str) -> list[str]:
+    title = getattr(snippet, "title", None) or "the snippet"
+    return [
+        f"Read {title} and check whether it fits the current issue: {query}.",
+        "Execute the steps in order and capture any environment-specific differences.",
+        "Confirm the symptom is gone before closing the loop.",
+    ]
+
+
+def _kb_steps(entry: AskEchoKBEvidence, query: str) -> list[str]:
+    return [
+        f"Open {entry.title} and compare its guidance to the current issue: {query}.",
+        "Follow the setup or verification checklist in the KB entry.",
+        "If the KB path works, capture the condition that made it the right playbook.",
+    ]
+
+
+def _fallback_steps(query: str) -> list[str]:
+    return [
+        f"Reproduce the issue and capture the exact error state for: {query}.",
+        "Check identity, network, and recent change signals before escalating.",
+        "If the issue remains unresolved, document the failed path and next escalation target.",
+    ]
+
+
+def _build_flywheel_recommendations(
+    *,
+    query: str,
+    scored_tickets: Sequence[tuple[float, Ticket]],
+    snippets: Sequence[SolutionSnippet],
+    kb_evidence: Sequence[AskEchoKBEvidence],
+) -> AskEchoFlywheel:
+    recommendations: list[AskEchoRecommendation] = []
+
+    if snippets:
+        snippet = snippets[0]
+        snippet_id = getattr(snippet, "id", None)
+        title = getattr(snippet, "title", None) or "Apply the best matching snippet"
+        summary = getattr(snippet, "summary", None) or "Use the strongest snippet-backed fix Echo found."
+        recommendations.append(
+            AskEchoRecommendation(
+                id=f"snippet-{snippet_id or 1}",
+                title=f"Run the snippet-backed fix: {title}",
+                summary=summary,
+                rationale="Echo ranked this snippet highest based on prior successful support work.",
+                confidence=float(getattr(snippet, "echo_score", 0.0) or 0.0),
+                source=AskEchoRecommendationSource(
+                    kind="snippet",
+                    label=title,
+                    snippet_id=int(snippet_id) if snippet_id is not None else None,
+                    ticket_id=getattr(snippet, "ticket_id", None),
+                ),
+                steps=_snippet_steps(snippet, query),
+            )
+        )
+
+    if scored_tickets:
+        score, ticket = scored_tickets[0]
+        ticket_id = getattr(ticket, "id", None)
+        title = getattr(ticket, "summary", None) or getattr(ticket, "title", None) or f"Ticket #{ticket_id}"
+        recommendations.append(
+            AskEchoRecommendation(
+                id=f"ticket-{ticket_id or 1}",
+                title=f"Reuse the fix pattern from Ticket #{ticket_id}",
+                summary=title,
+                rationale="This ticket is the closest historical match for the current problem.",
+                confidence=float(score),
+                source=AskEchoRecommendationSource(
+                    kind="ticket",
+                    label=title,
+                    ticket_id=int(ticket_id) if ticket_id is not None else None,
+                ),
+                steps=_ticket_steps(ticket, query),
+            )
+        )
+
+    if kb_evidence:
+        entry = kb_evidence[0]
+        recommendations.append(
+            AskEchoRecommendation(
+                id=f"kb-{entry.entry_id}",
+                title=f"Follow the KB playbook: {entry.title}",
+                summary="Use the curated knowledge-base guidance before escalating to a custom investigation.",
+                rationale="The knowledge base contains a likely reusable path for this class of issue.",
+                confidence=float(entry.score or 0.0),
+                source=AskEchoRecommendationSource(
+                    kind="kb",
+                    label=entry.title,
+                    entry_id=entry.entry_id,
+                    source_url=entry.source_url,
+                ),
+                steps=_kb_steps(entry, query),
+            )
+        )
+
+    fallback_index = 1
+    while len(recommendations) < 3:
+        recommendations.append(
+            AskEchoRecommendation(
+                id=f"general-{fallback_index}",
+                title="Run a focused diagnostic pass",
+                summary="When Echo has partial grounding, use a structured diagnostic path and capture what you learn.",
+                rationale="This keeps the loop moving without pretending there is stronger evidence than we have.",
+                confidence=0.25,
+                source=AskEchoRecommendationSource(
+                    kind="general",
+                    label="General diagnostic guidance",
+                ),
+                steps=_fallback_steps(query),
+            )
+        )
+        fallback_index += 1
+
+    return AskEchoFlywheel(
+        issue=query,
+        recommendations=recommendations[:3],
+    )
+
+
 def build_ask_echo_features(
     *,
     scored_tickets: Sequence[tuple[float, Ticket]],
@@ -273,12 +407,14 @@ class AskEchoEngine:
         ticket_retriever=None,
         snippet_retriever=None,
         grounding_decider=None,
+        llm_provider: LLMProvider | None = None,
     ) -> None:
         self.templates = templates or AskEchoTemplates()
         self.kb_threshold = kb_threshold
         self._ticket_retriever = ticket_retriever
         self._snippet_retriever = snippet_retriever
         self._grounding_decider = grounding_decider
+        self._llm_provider = llm_provider or build_default_llm_provider_from_env()
 
     def _retrieve_tickets(self, *, session: Session, query: str, limit: int):
         if self._ticket_retriever is not None:
@@ -411,6 +547,12 @@ class AskEchoEngine:
             snippets=snippets,
             ticket_signal_evidence=ticket_signal_evidence,
         )
+        features["provider"] = {
+            "enabled": self._llm_provider is not None,
+            "used": False,
+            "mode": None,
+            "source_count": 0,
+        }
 
         kb_backed = self._decide_grounding(
             features=features,
@@ -450,6 +592,40 @@ class AskEchoEngine:
                 keyword_overlap=_signal_float(top_ticket_signals, "keyword"),
                 recency=_signal_float(top_ticket_signals, "recency"),
             )
+            if self._llm_provider is not None:
+                try:
+                    provider_answer = self._llm_provider.generate(
+                        problem=q,
+                        context={
+                            "query": q,
+                            "kb_confidence": clamp01(float(kb_confidence or 0.0)),
+                            "kb_backed": False,
+                            "top_ticket_score": float(max_score or 0.0),
+                            "candidate_ticket_titles": [
+                                getattr(ticket, "summary", None)
+                                or getattr(ticket, "title", None)
+                                or f"Ticket #{getattr(ticket, 'id', 'unknown')}"
+                                for _, ticket in scored[:3]
+                            ],
+                            "kb_titles": [entry.title for entry in kb_evidence[:2]],
+                            "snippet_titles": [
+                                getattr(snippet, "title", None) or "snippet"
+                                for snippet in snippets[:3]
+                            ],
+                            "local_answer": answer_text,
+                        },
+                    )
+                except Exception:
+                    logging.exception("llm provider fallback failed")
+                else:
+                    if provider_answer.answer_text.strip():
+                        answer_text = provider_answer.answer_text.strip()
+                        features["provider"] = {
+                            "enabled": True,
+                            "used": True,
+                            "mode": provider_answer.mode,
+                            "source_count": len(provider_answer.sources or []),
+                        }
 
         answer_kind = "grounded" if kb_backed else "ungrounded"
 
@@ -487,6 +663,12 @@ class AskEchoEngine:
             scored_tickets=[(float(s), t) for s, t in scored],
             snippets=snippets,
         )
+        flywheel = _build_flywheel_recommendations(
+            query=q,
+            scored_tickets=[(float(s), t) for s, t in scored],
+            snippets=snippets,
+            kb_evidence=kb_evidence,
+        )
 
         return AskEchoEngineResult(
             response=response,
@@ -501,4 +683,5 @@ class AskEchoEngine:
             features=features,
             evidence=evidence_rows,
             kb_evidence=kb_evidence,
+            flywheel=flywheel,
         )

@@ -5,7 +5,7 @@ const knowledgeBaseQuery = "vpn";
 const slowResponseDelayMs = 1_200;
 
 test("Ask Echo returns an answer for a seeded support question", async ({ page }) => {
-  await page.goto("/#/ask");
+  await page.goto("/#/flywheel");
   const main = page.locator("main");
 
   const askResponsePromise = page.waitForResponse(
@@ -21,15 +21,18 @@ test("Ask Echo returns an answer for a seeded support question", async ({ page }
   const askResponse = await askResponsePromise;
   const payload = (await askResponse.json()) as {
     answer?: string;
+    flywheel?: { recommendations?: Array<{ title?: string }> };
   };
 
   expect(payload.answer?.trim()).toBeTruthy();
   await expect(main.locator(".ask-echo__answer")).toContainText(String(payload.answer));
-  await expect(main.getByText("Feedback", { exact: true })).toBeVisible();
+  expect(payload.flywheel?.recommendations?.length).toBe(3);
+  await expect(main.locator(".ask-echo__card--flywheel .ask-echo__card-title")).toHaveText("2. Pick your next action");
+  await expect(main.locator(".ask-echo__recommendation-card")).toHaveCount(3);
 });
 
 test("Ask Echo feedback persists after a successful answer", async ({ page, request, baseURL }) => {
-  await page.goto("/#/ask");
+  await page.goto("/#/flywheel");
   const main = page.locator("main");
   const resolvedBaseUrl = baseURL ?? "http://127.0.0.1:5174";
 
@@ -57,17 +60,29 @@ test("Ask Echo feedback persists after a successful answer", async ({ page, requ
       response.status() === 200,
   );
 
-  await main.getByRole("button", { name: "👍 Yes" }).click();
+  await main.locator(".ask-echo__recommendation-card").nth(1).click();
+  await main.getByRole("button", { name: /^Resolved$/ }).click();
+  await main.getByLabel("Outcome notes").fill("The ticket-backed fix resolved the issue.");
+  await main
+    .getByLabel("What should Echo remember next time?")
+    .fill("Use the ticket-backed fix first when the reset token is valid but the UI still fails.");
+  await main.getByRole("button", { name: "Save learning for next time" }).click();
 
   const feedbackResponse = await feedbackResponsePromise;
   const feedbackPayload = (await feedbackResponse.json()) as {
     ask_echo_log_id?: number;
     helped?: boolean;
+    selected_recommendation_id?: string;
+    outcome?: string;
+    reusable_learning?: string;
   };
 
   expect(feedbackPayload.ask_echo_log_id).toBe(askPayload.ask_echo_log_id);
   expect(feedbackPayload.helped).toBe(true);
-  await expect(main.getByText("Saved")).toBeVisible();
+  expect(feedbackPayload.selected_recommendation_id?.trim()).toBeTruthy();
+  expect(feedbackPayload.outcome).toBe("resolved");
+  expect(feedbackPayload.reusable_learning?.trim()).toBeTruthy();
+  await expect(main.locator(".ask-echo__card--feedback .ask-echo__badge--success")).toHaveText("Saved");
 
   const inspectionResponse = await request.get(
     `${resolvedBaseUrl}/api/ask-echo/feedback/records?limit=25`,
@@ -87,7 +102,7 @@ test("Ask Echo feedback persists after a successful answer", async ({ page, requ
 });
 
 test("Ask Echo renders clickable ticket sources and opens ticket detail", async ({ page }) => {
-  await page.goto("/#/ask");
+  await page.goto("/#/flywheel");
   const main = page.locator("main");
 
   const askResponsePromise = page.waitForResponse(
@@ -188,6 +203,53 @@ test("Ask Echo shows loading state for slow responses and recovers from interrup
           reasoning: null,
           evidence: [],
           kb_evidence: [],
+          flywheel: {
+            issue: requestBody.q,
+            state: {
+              current_stage: "recommendations_ready",
+              recommended_action_count: 3,
+              selected_recommendation_id: null,
+              outcome_recorded: false,
+              reusable_learning_saved: false,
+            },
+            recommendations: [
+              {
+                id: "general-1",
+                title: "Run a focused diagnostic pass",
+                summary: "Collect the strongest diagnostics first.",
+                rationale: "Fallback path while the backend is delayed.",
+                confidence: 0.25,
+                source: { kind: "general", label: "General diagnostic guidance" },
+                steps: ["Capture the failure", "Check the dependency", "Escalate if needed"],
+              },
+              {
+                id: "general-2",
+                title: "Check the adjacent system",
+                summary: "Verify likely dependencies.",
+                rationale: "Useful second move when there is no grounded ticket.",
+                confidence: 0.2,
+                source: { kind: "general", label: "General diagnostic guidance" },
+                steps: ["Check auth", "Check network", "Check recent changes"],
+              },
+              {
+                id: "general-3",
+                title: "Prepare an escalation packet",
+                summary: "Capture the exact failed path.",
+                rationale: "Keeps the loop moving if the issue is unresolved.",
+                confidence: 0.15,
+                source: { kind: "general", label: "General diagnostic guidance" },
+                steps: ["Save the logs", "Summarize the attempt", "Route to the right owner"],
+              },
+            ],
+            outcome_options: [
+              "resolved",
+              "partially_resolved",
+              "not_resolved",
+              "needs_escalation",
+            ],
+            reusable_learning_prompt:
+              "Capture what Echo should remember next time: the winning step, when to use it, and any escalation signal.",
+          },
         }),
       });
       return;

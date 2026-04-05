@@ -3,6 +3,20 @@ A support tool fot CMS ticketing systems
 EchoHelp
 AI-Powered Support Intelligence & Living Knowledge System
 
+## Current Verified Direction (2026-04-04)
+
+- Product direction for current closeout is `E.C.O. (Executive Command Operations)`.
+- Canonical visible wedge surface today is `/#/flywheel`.
+- Secondary inspection surface is `/#/ask`.
+- Canonical wedge contract is in `docs/FLYWHEEL_WEDGE.md`.
+- Verified closeout and repo-truth note is in `docs/ECO_CLOSEOUT_2026-04-04.md`.
+- Current acceptance sentence is: `We will preserve one visible E.C.O loop, verify it is undamaged, and add one server-side OpenAI provider seam without redesign.`
+- Current server-side seam target is env-gated OpenAI fallback from the backend.
+- Jira seam work is deferred until the OpenAI seam is validated.
+- Working design bias is: `signals in -> decisioning layer -> action guidance -> outcome memory`.
+- Existing analytics, ticket, and monitoring systems are treated as input sources; the flywheel should not rebuild commodity upstream capabilities unless they become clear differentiators.
+- Intake-only paths, mobile expansion, Jira writeback, and unrelated ticket/env work are deferred from the wedge path.
+
 MVP Scope • Private Repository (v0.1)
 
 📌 Overview

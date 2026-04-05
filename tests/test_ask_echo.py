@@ -29,6 +29,16 @@ def test_ask_echo_empty_results():
     assert "answer" in data
     assert isinstance(data.get("suggested_tickets"), list)
     assert isinstance(data.get("suggested_snippets"), list)
+    assert isinstance(data.get("flywheel"), dict)
+    assert data["flywheel"].get("issue") == "some question"
+    assert data["flywheel"].get("state", {}).get("current_stage") == "recommendations_ready"
+    assert len(data["flywheel"].get("recommendations", [])) == 3
+    assert data["flywheel"].get("outcome_options") == [
+        "resolved",
+        "partially_resolved",
+        "not_resolved",
+        "needs_escalation",
+    ]
 
 
 def test_ask_echo_includes_kb_evidence_when_kb_present() -> None:
@@ -69,3 +79,4 @@ def test_ask_echo_includes_kb_evidence_when_kb_present() -> None:
     assert isinstance(data.get("kb_evidence"), list)
     assert len(data["kb_evidence"]) >= 1
     assert data["kb_evidence"][0].get("entry_id")
+    assert len(data.get("flywheel", {}).get("recommendations", [])) == 3

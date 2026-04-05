@@ -32,6 +32,11 @@ class FeedbackInspectionRecord(TypedDict):
     rating: int
     feedback_status: str
     feedback_notes: str | None
+    selected_recommendation_id: str | None
+    selected_recommendation_title: str | None
+    outcome: str | None
+    outcome_notes: str | None
+    reusable_learning: str | None
     ask_echo_log_id: int
     created_at: str | None
     feedback_at: str | None
@@ -211,6 +216,11 @@ def list_feedback_records(
         feedback_status = log.feedback_status or "pending"
         rating = int(log.feedback_rating or 0)
         feedback_notes = latest_feedback.notes if latest_feedback else None
+        selected_recommendation_id = latest_feedback.selected_recommendation_id if latest_feedback else None
+        selected_recommendation_title = latest_feedback.selected_recommendation_title if latest_feedback else None
+        outcome = latest_feedback.outcome if latest_feedback else None
+        outcome_notes = latest_feedback.outcome_notes if latest_feedback else None
+        reusable_learning = latest_feedback.reusable_learning if latest_feedback else None
         feedback_at = latest_feedback.created_at.isoformat() if latest_feedback and latest_feedback.created_at else None
         if latest_feedback is not None:
             feedback_status = "helped" if latest_feedback.helped else "not_helped"
@@ -251,6 +261,11 @@ def list_feedback_records(
                 rating=rating,
                 feedback_status=feedback_status,
                 feedback_notes=feedback_notes,
+                selected_recommendation_id=selected_recommendation_id,
+                selected_recommendation_title=selected_recommendation_title,
+                outcome=outcome,
+                outcome_notes=outcome_notes,
+                reusable_learning=reusable_learning,
                 created_at=log.created_at.isoformat() if log.created_at else None,
                 feedback_at=feedback_at,
                 low_confidence=low_confidence,

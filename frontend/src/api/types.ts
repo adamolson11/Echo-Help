@@ -168,6 +168,51 @@ export type AskEchoKBEvidence = {
   score?: number | null;
 };
 
+export type AskEchoOutcome =
+  | "resolved"
+  | "partially_resolved"
+  | "not_resolved"
+  | "needs_escalation";
+
+export type AskEchoRecommendationSource = {
+  kind: "ticket" | "snippet" | "kb" | "general";
+  label: string;
+  ticket_id?: number | null;
+  snippet_id?: number | null;
+  entry_id?: string | null;
+  source_url?: string | null;
+};
+
+export type AskEchoRecommendation = {
+  id: string;
+  title: string;
+  summary: string;
+  rationale: string;
+  confidence?: number | null;
+  source: AskEchoRecommendationSource;
+  steps: string[];
+};
+
+export type AskEchoFlywheelState = {
+  current_stage:
+    | "recommendations_ready"
+    | "action_selected"
+    | "outcome_recorded"
+    | "learning_captured";
+  recommended_action_count: number;
+  selected_recommendation_id?: string | null;
+  outcome_recorded: boolean;
+  reusable_learning_saved: boolean;
+};
+
+export type AskEchoFlywheel = {
+  issue: string;
+  state: AskEchoFlywheelState;
+  recommendations: AskEchoRecommendation[];
+  outcome_options: AskEchoOutcome[];
+  reusable_learning_prompt: string;
+};
+
 export type AskEchoResponse = {
   meta: ApiMeta;
   query: string;
@@ -182,12 +227,18 @@ export type AskEchoResponse = {
   references: AskEchoReference[];
   reasoning?: AskEchoReasoning | null;
   kb_evidence?: AskEchoKBEvidence[];
+  flywheel: AskEchoFlywheel;
 };
 
 export type AskEchoFeedbackCreate = {
   ask_echo_log_id: number;
   helped: boolean;
   notes?: string | null;
+  selected_recommendation_id?: string | null;
+  selected_recommendation_title?: string | null;
+  outcome?: AskEchoOutcome | null;
+  outcome_notes?: string | null;
+  reusable_learning?: string | null;
 };
 
 export type AskEchoFeedbackRead = {
@@ -195,6 +246,11 @@ export type AskEchoFeedbackRead = {
   ask_echo_log_id: number;
   helped: boolean;
   notes: string | null;
+  selected_recommendation_id?: string | null;
+  selected_recommendation_title?: string | null;
+  outcome?: AskEchoOutcome | null;
+  outcome_notes?: string | null;
+  reusable_learning?: string | null;
   created_at: string;
 };
 
@@ -216,6 +272,14 @@ export type Ticket = {
   updated_at: string;
   resolved_at?: string | null;
   [key: string]: unknown;
+};
+
+export type TicketCreateRequest = {
+  summary: string;
+  description: string;
+  source?: string;
+  project_key?: string;
+  priority?: string | null;
 };
 
 // UI-friendly ticket row shape returned by the frontend API layer.

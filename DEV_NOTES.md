@@ -119,3 +119,76 @@ Targeted tests:
 
 Deferred diagnostics (non-blocking):
 - Editor import-resolution warnings for `sqlmodel`/`backend.*` in new script files are environment analysis warnings (not runtime failures); seeding commands and targeted pytest pass in the project runtime environment.
+
+## 2026-04-03 environment reconciliation
+
+STATE:
+- Active branch truth is a manual ticket-creation lane plus existing ingest and semantic features.
+- The ingest readability checkpoint described in chat is not the only live workspace change on this branch.
+- Team-wide reproducibility was not stable at the start of this pass because local/container runtimes were not using the same installed dependency set.
+
+CHANGED:
+- `backend/app/api/semantic_clusters.py` now degrades cleanly when `numpy` is absent instead of failing backend import at startup.
+- `scripts/dev_check.sh` now verifies importable Python modules, not just binary presence, so missing `sqlmodel`/`fastapi` is caught before launch.
+- This note is the shared source of truth for the current repair pass.
+
+EVIDENCE:
+- Branch diff truth inspected from workspace changes: ticket creation flow is present in `backend/app/api/tickets.py`, `backend/app/schemas/tickets.py`, `frontend/src/components/TicketCreateForm.tsx`, `frontend/src/pages/IntakePage.tsx`, and `tests/test_ticket_create_api.py`.
+- Local/container mismatch evidence from this pass:
+	- `PYTHONPATH=. /usr/bin/python3 -m scripts.demo_echohelp` failed when backend was unreachable.
+	- `PYTHONPATH=. /usr/bin/python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8001` initially failed with missing `uvicorn`, then with missing `numpy`.
+	- Separate remote-run evidence reported `ModuleNotFoundError: No module named 'sqlmodel'` for `PYTHONPATH=. python -m scripts.ingest_sample_thread`.
+- Verified after environment repair in this workspace:
+	- `cd frontend && npm run build` passed.
+	- `PYTHONPATH=. /usr/bin/python3 -m pytest -q tests/test_ticket_create_api.py tests/test_ingest_thread.py` passed.
+
+ROOT CAUSE:
+- The repo declares `sqlmodel` and core backend packages, but some operators/runners are invoking scripts without first installing the declared backend requirements.
+- Backend startup imported semantic clustering eagerly, which created a hard dependency on `numpy` even for narrow lanes that do not use semantic clustering.
+- CI and Docker install dependencies explicitly; ad hoc local/remote runs were relying on ambient environment state.
+
+REQUIRED DEPS:
+- For `PYTHONPATH=. python -m scripts.ingest_sample_thread`:
+	- `sqlmodel`
+	- `sqlalchemy`
+	- `pydantic` (via FastAPI/SQLModel dependency tree)
+- For targeted backend tests (`tests/test_ticket_create_api.py`, `tests/test_ingest_thread.py`):
+	- `fastapi`
+	- `sqlmodel`
+	- `sqlalchemy`
+	- `httpx`
+	- `pytest`
+- For backend startup (`uvicorn backend.app.main:app`):
+	- `fastapi`
+	- `sqlmodel`
+	- `sqlalchemy`
+	- `uvicorn`
+
+OPTIONAL DEPS:
+- `numpy`: required for semantic clustering and some vector math paths, but no longer required just to import and start the backend.
+- `sentence-transformers`, `transformers`, `huggingface_hub`, `tokenizers`: required for transformer-backed embeddings; without them, embeddings degrade to fallback mode as designed.
+- `scikit-learn`: optional for some clustering paths; endpoints degrade when unavailable.
+
+LIVE DIFF TRUTH:
+- Current workspace truth does not match a readability-only summary.
+- The visible branch contains active manual ticket creation changes plus environment fragility around startup and dependency installation.
+
+CI/CONTAINER GAP:
+- CI installs backend dependencies explicitly with `pip install -r backend/requirements.txt` and separately installs `ruff pyright pytest`.
+- The backend Docker image installs from the same root requirements via `backend/requirements.txt -> ../requirements.txt`.
+- Remote/manual runners that skip the install step can fail immediately with missing `sqlmodel`, `uvicorn`, or `numpy`.
+
+VERIFY COMMANDS:
+- Minimum backend install: `python -m pip install -r backend/requirements.txt`
+- Targeted backend validation: `PYTHONPATH=. python -m pytest -q tests/test_ticket_create_api.py tests/test_ingest_thread.py`
+- Backend startup check: `PYTHONPATH=. python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8001`
+- Ingest script check: `PYTHONPATH=. python -m scripts.ingest_sample_thread`
+- Frontend build check: `cd frontend && npm run build`
+- Guardrail preflight: `bash scripts/dev_check.sh`
+
+PR GUARD RECOMMENDATION:
+- Require every status claim to pair a command with its result and the exact files inspected.
+- Treat `bash scripts/dev_check.sh` plus one targeted pytest command as the minimum pre-review backend parity check.
+
+NEXT SAFE MERGE STEP:
+- Merge only after one operator validates the above commands in a clean environment that has first run `python -m pip install -r backend/requirements.txt` and records the results in the PR.

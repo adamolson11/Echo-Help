@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 # ruff: noqa: B008
-import numpy as np
+import logging
+from typing import Any
+
+try:
+    import numpy as np
+except ModuleNotFoundError:
+    np = None  # type: ignore[assignment]
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
@@ -19,16 +25,19 @@ router = APIRouter(
     tags=["insights"],
 )
 
+_LOG = logging.getLogger(__name__)
+
 
 def _kmeans_numpy(
-    matrix: np.ndarray,
+    matrix: Any,
     n_clusters: int,
     max_iter: int = 100,
-    rng: np.random.Generator | None = None,
+    rng: Any | None = None,
 ):
     """
     Simple KMeans implementation using numpy. Returns labels and centroids.
     """
+    assert np is not None
     if rng is None:
         rng = np.random.default_rng()
 
@@ -62,6 +71,11 @@ def _kmeans_numpy(
 def semantic_clusters(
     body: SemanticClustersRequest = Depends(), session: Session = Depends(get_session)
 ) -> list[SemanticCluster]:
+    if np is None:
+        _LOG.warning("Semantic clustering disabled: numpy not installed")
+        return []
+    assert np is not None
+
     n_clusters = max(1, int(body.n_clusters))
     max_examples = max(1, int(body.max_examples))
 

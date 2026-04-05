@@ -18,16 +18,35 @@ def test_ask_echo_feedback_round_trip() -> None:
 
     r2 = client.post(
         "/api/ask-echo/feedback",
-        json={"ask_echo_log_id": log_id, "helped": False, "notes": "did not help"},
+        json={
+            "ask_echo_log_id": log_id,
+            "helped": False,
+            "notes": "did not help",
+            "selected_recommendation_id": "general-1",
+            "selected_recommendation_title": "Run a focused diagnostic pass",
+            "outcome": "needs_escalation",
+            "outcome_notes": "No matching fix; escalation required.",
+            "reusable_learning": "Escalate earlier when no grounded source appears and diagnostics are clean.",
+        },
     )
     assert r2.status_code == 200
     saved = r2.json()
     assert saved.get("ask_echo_log_id") == log_id
     assert saved.get("helped") is False
+    assert saved.get("selected_recommendation_id") == "general-1"
+    assert saved.get("outcome") == "needs_escalation"
+    assert saved.get("reusable_learning") == (
+        "Escalate earlier when no grounded source appears and diagnostics are clean."
+    )
 
     with SessionLocal() as session:
         rows = session.exec(select(AskEchoFeedback).where(AskEchoFeedback.ask_echo_log_id == log_id)).all()
         assert len(rows) == 1
+        assert rows[0].selected_recommendation_title == "Run a focused diagnostic pass"
+        assert rows[0].outcome_notes == "No matching fix; escalation required."
+        assert rows[0].reusable_learning == (
+            "Escalate earlier when no grounded source appears and diagnostics are clean."
+        )
         log = session.get(AskEchoLog, log_id)
         assert log is not None
         assert log.feedback_status == "not_helped"
@@ -54,3 +73,5 @@ def test_ask_echo_feedback_round_trip() -> None:
     assert isinstance(matching[0].get("answer"), str)
     assert isinstance(matching[0].get("confidence"), float)
     assert isinstance(matching[0].get("source_count"), int)
+    assert matching[0].get("selected_recommendation_id") == "general-1"
+    assert matching[0].get("outcome") == "needs_escalation"

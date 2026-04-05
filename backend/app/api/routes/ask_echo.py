@@ -43,6 +43,13 @@ from backend.app.services.feedback import (
 router = APIRouter(tags=["ask-echo"])  # will be included with prefix="/api" in main
 logger = logging.getLogger("uvicorn.error")
 
+AskEchoOutcomeLiteral = Literal[
+    "resolved",
+    "partially_resolved",
+    "not_resolved",
+    "needs_escalation",
+]
+
 
 @router.post("/ask-echo/feedback", response_model=AskEchoFeedbackRead)
 def submit_ask_echo_feedback(
@@ -53,10 +60,27 @@ def submit_ask_echo_feedback(
     if not log:
         raise HTTPException(status_code=404, detail="AskEchoLog not found")
 
+    normalized_notes = payload.notes.strip() if payload.notes else None
+    normalized_outcome_notes = payload.outcome_notes.strip() if payload.outcome_notes else None
+    normalized_learning = payload.reusable_learning.strip() if payload.reusable_learning else None
+
     row = AskEchoFeedback(
         ask_echo_log_id=payload.ask_echo_log_id,
         helped=payload.helped,
-        notes=(payload.notes.strip() if payload.notes else None),
+        notes=normalized_notes or normalized_outcome_notes,
+        selected_recommendation_id=(
+            payload.selected_recommendation_id.strip()
+            if payload.selected_recommendation_id
+            else None
+        ),
+        selected_recommendation_title=(
+            payload.selected_recommendation_title.strip()
+            if payload.selected_recommendation_title
+            else None
+        ),
+        outcome=payload.outcome,
+        outcome_notes=normalized_outcome_notes,
+        reusable_learning=normalized_learning,
     )
     apply_user_feedback(log=log, helped=payload.helped)
     session.add(row)
@@ -71,6 +95,11 @@ def submit_ask_echo_feedback(
         ask_echo_log_id=row.ask_echo_log_id,
         helped=row.helped,
         notes=row.notes,
+        selected_recommendation_id=row.selected_recommendation_id,
+        selected_recommendation_title=row.selected_recommendation_title,
+        outcome=cast(AskEchoOutcomeLiteral | None, row.outcome),
+        outcome_notes=row.outcome_notes,
+        reusable_learning=row.reusable_learning,
         created_at=row.created_at,
     )
 
@@ -253,6 +282,7 @@ def ask_echo(
         reasoning=result.reasoning,
         evidence=result.evidence,
         kb_evidence=result.kb_evidence,
+        flywheel=result.flywheel,
     )
 
 

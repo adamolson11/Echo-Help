@@ -106,6 +106,8 @@ For equal scores, the policy uses `(score, timestamp, id)` so results do not dep
 
 Echo exposes three orthogonal “pattern” surfaces. They answer different questions and are designed to evolve independently.
 
+These surfaces are not the canonical flywheel. They are upstream or adjacent inputs that can inform E.C.O. decisioning, but the flywheel itself should stay focused on interpretation, prioritization, action guidance, outcome capture, and reusable learning.
+
 ### 1. Snippet Pattern Radar (KB performance)
 
 **Endpoint**

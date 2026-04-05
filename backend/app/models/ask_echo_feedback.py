@@ -12,4 +12,9 @@ class AskEchoFeedback(SQLModel, table=True):
     ask_echo_log_id: int = Field(index=True)
     helped: bool
     notes: str | None = None
+    selected_recommendation_id: str | None = None
+    selected_recommendation_title: str | None = None
+    outcome: str | None = None
+    outcome_notes: str | None = None
+    reusable_learning: str | None = None
     created_at: datetime = Field(default_factory=utcnow, index=True)

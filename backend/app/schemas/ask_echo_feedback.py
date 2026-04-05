@@ -20,6 +20,11 @@ class AskEchoFeedbackCreate(BaseModel):
     ask_echo_log_id: int
     helped: bool
     notes: str | None = None
+    selected_recommendation_id: str | None = None
+    selected_recommendation_title: str | None = None
+    outcome: Literal["resolved", "partially_resolved", "not_resolved", "needs_escalation"] | None = None
+    outcome_notes: str | None = None
+    reusable_learning: str | None = None
 
 
 class AskEchoFeedbackRead(BaseModel):
@@ -27,6 +32,11 @@ class AskEchoFeedbackRead(BaseModel):
     ask_echo_log_id: int
     helped: bool
     notes: str | None
+    selected_recommendation_id: str | None = None
+    selected_recommendation_title: str | None = None
+    outcome: Literal["resolved", "partially_resolved", "not_resolved", "needs_escalation"] | None = None
+    outcome_notes: str | None = None
+    reusable_learning: str | None = None
     created_at: datetime
 
 
@@ -49,6 +59,11 @@ class AskEchoFeedbackInspectionRecord(BaseModel):
     rating: int
     feedback_status: Literal["pending", "helped", "not_helped"]
     feedback_notes: str | None = None
+    selected_recommendation_id: str | None = None
+    selected_recommendation_title: str | None = None
+    outcome: Literal["resolved", "partially_resolved", "not_resolved", "needs_escalation"] | None = None
+    outcome_notes: str | None = None
+    reusable_learning: str | None = None
     created_at: str | None = None
     feedback_at: str | None = None
     low_confidence: bool

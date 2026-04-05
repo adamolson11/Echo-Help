@@ -212,6 +212,28 @@ def init_db():
 
             _add_col_if_missing(table="snippetfeedback", col_def="notes TEXT", col_name="notes")
 
+            _add_col_if_missing(
+                table="askechofeedback",
+                col_def="selected_recommendation_id TEXT",
+                col_name="selected_recommendation_id",
+            )
+            _add_col_if_missing(
+                table="askechofeedback",
+                col_def="selected_recommendation_title TEXT",
+                col_name="selected_recommendation_title",
+            )
+            _add_col_if_missing(table="askechofeedback", col_def="outcome TEXT", col_name="outcome")
+            _add_col_if_missing(
+                table="askechofeedback",
+                col_def="outcome_notes TEXT",
+                col_name="outcome_notes",
+            )
+            _add_col_if_missing(
+                table="askechofeedback",
+                col_def="reusable_learning TEXT",
+                col_name="reusable_learning",
+            )
+
             # Embeddings table: model + created_at were added after early iterations.
             _add_col_if_missing(table="embedding", col_def="model_name TEXT", col_name="model_name")
             _add_col_if_missing(table="embedding", col_def="created_at TEXT", col_name="created_at")

@@ -7,7 +7,7 @@ import {
   postAskEchoFeedback,
   postSnippetFeedback,
 } from "./api/endpoints";
-import type { AskEchoResponse } from "./api/types";
+import type { AskEchoOutcome, AskEchoRecommendation, AskEchoResponse } from "./api/types";
 import { navigateToTicket } from "./appRoutes";
 
 type AskEchoWidgetResponse = AskEchoResponse | { error: string };
@@ -34,6 +34,59 @@ function openTicketDetail(ticketId: number) {
   navigateToTicket(ticketId);
 }
 
+const OUTCOME_LABELS: Record<AskEchoOutcome, string> = {
+  resolved: "Resolved",
+  partially_resolved: "Partially resolved",
+  not_resolved: "Not resolved",
+  needs_escalation: "Needs escalation",
+};
+
+const RECOMMENDATION_SOURCE_LABELS: Record<AskEchoRecommendation["source"]["kind"], string> = {
+  ticket: "Past ticket",
+  snippet: "Saved step",
+  kb: "KB article",
+  general: "Fallback",
+};
+
+function mapOutcomeToHelped(outcome: AskEchoOutcome): boolean {
+  return outcome === "resolved" || outcome === "partially_resolved";
+}
+
+function getRecommendationSourceHint(recommendation: AskEchoRecommendation): string {
+  switch (recommendation.source.kind) {
+    case "ticket":
+      return "Based on the closest past ticket Echo found.";
+    case "snippet":
+      return "Based on a saved step sequence that matched this issue.";
+    case "kb":
+      return "Based on a supporting knowledge-base article.";
+    default:
+      return "Use this when Echo found weaker evidence and you need a safe next move.";
+  }
+}
+
+function pickFeedbackTicketId(
+  response: AskEchoResponse,
+  recommendation?: AskEchoRecommendation | null,
+): number | null {
+  const sourceTicketId = recommendation?.source.ticket_id;
+  if (typeof sourceTicketId === "number") return sourceTicketId;
+
+  if (Array.isArray(response.references) && response.references.length > 0) {
+    return response.references[0].ticket_id ?? null;
+  }
+
+  if (Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
+    return response.suggested_tickets[0]?.id ?? null;
+  }
+
+  if (Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
+    return response.suggested_snippets[0]?.ticket_id ?? null;
+  }
+
+  return null;
+}
+
 export default function AskEchoWidget() {
   const [q, setQ] = useState("");
   const [response, setResponse] = useState<AskEchoWidgetResponse | null>(null);
@@ -46,8 +99,10 @@ export default function AskEchoWidget() {
   const [fbSubmitting, setFbSubmitting] = useState(false);
   const [fbSaved, setFbSaved] = useState(false);
   const [fbError, setFbError] = useState<string | null>(null);
-  const [fbNotesVisible, setFbNotesVisible] = useState(false);
-  const [fbNotes, setFbNotes] = useState("");
+  const [selectedRecommendationId, setSelectedRecommendationId] = useState<string | null>(null);
+  const [selectedOutcome, setSelectedOutcome] = useState<AskEchoOutcome | null>(null);
+  const [outcomeNotes, setOutcomeNotes] = useState("");
+  const [reusableLearning, setReusableLearning] = useState("");
   const [selectedFeedbackTicketId, setSelectedFeedbackTicketId] = useState<number | null>(null);
 
   function logDevDebug(event: string, payload: Record<string, unknown>) {
@@ -149,110 +204,136 @@ export default function AskEchoWidget() {
   useEffect(() => {
     if (!response || isAskEchoError(response)) {
       setSelectedFeedbackTicketId(null);
+      setSelectedRecommendationId(null);
+      setSelectedOutcome(null);
+      setOutcomeNotes("");
+      setReusableLearning("");
       setFbSaved(false);
       return;
     }
 
     setFbSaved(false);
+    setSelectedOutcome(null);
+    setOutcomeNotes("");
+    setReusableLearning("");
 
-    // Prefer references (returned as { ticket_id, confidence }), then results (full tickets), then snippet.ticket_id
-    let pick: number | null = null;
-    if (Array.isArray(response.references) && response.references.length > 0) {
-      pick = response.references[0].ticket_id ?? null;
-    }
-    if (!pick && Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
-      const r0 = response.suggested_tickets[0];
-      pick = r0?.id ?? null;
-    }
-    if (!pick && Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
-      const s0 = response.suggested_snippets[0];
-      if (s0 && s0.ticket_id) pick = s0.ticket_id;
-    }
-
-    setSelectedFeedbackTicketId(pick);
+    const defaultRecommendation = response.flywheel?.recommendations?.[0] ?? null;
+    setSelectedRecommendationId(defaultRecommendation?.id ?? null);
+    setSelectedFeedbackTicketId(pickFeedbackTicketId(response, defaultRecommendation));
   }, [response]);
 
-  async function submitFeedback(helped: boolean) {
+  const responseData = response && !isAskEchoError(response) ? response : null;
+  const flywheel = responseData?.flywheel ?? null;
+  const recommendations = flywheel?.recommendations ?? [];
+  const selectedRecommendation =
+    recommendations.find((recommendation) => recommendation.id === selectedRecommendationId) ??
+    recommendations[0] ??
+    null;
+
+  useEffect(() => {
+    if (!responseData) return;
+    setSelectedFeedbackTicketId(pickFeedbackTicketId(responseData, selectedRecommendation));
+  }, [responseData, selectedRecommendation]);
+
+  async function submitFeedback() {
     setFbError(null);
     setFbSubmitting(true);
     try {
-      if (!response || isAskEchoError(response)) {
+      if (!responseData) {
         throw new Error("No Ask Echo response to attach feedback to.");
       }
 
-      const askEchoLogId: number | null = response?.ask_echo_log_id ?? null;
+      if (!selectedRecommendation) {
+        throw new Error("Select one recommended next action before saving the loop.");
+      }
+
+      if (!selectedOutcome) {
+        throw new Error("Capture the outcome before saving the loop.");
+      }
+
+      if (!reusableLearning.trim()) {
+        throw new Error("Add the reusable learning before saving the loop.");
+      }
+
+      const askEchoLogId: number | null = responseData.ask_echo_log_id ?? null;
       if (!askEchoLogId) {
         throw new Error("Missing Ask Echo log id; please ask again.");
       }
 
-      // Always record Ask Echo feedback by log id (works even when ungrounded).
+      const helped = mapOutcomeToHelped(selectedOutcome);
+
       await postAskEchoFeedback({
         ask_echo_log_id: askEchoLogId,
         helped,
-        notes: (!helped && fbNotes.trim().length > 0) ? fbNotes.trim() : null,
+        notes: outcomeNotes.trim() || reusableLearning.trim(),
+        selected_recommendation_id: selectedRecommendation.id,
+        selected_recommendation_title: selectedRecommendation.title,
+        outcome: selectedOutcome,
+        outcome_notes: outcomeNotes.trim() || null,
+        reusable_learning: reusableLearning.trim(),
       });
 
-      // Determine ticket id to attach to feedback.
-      // Priority: explicit selectedFeedbackTicketId -> response.references -> response.results -> snippet.ticket_id
       let ticketId: number | undefined = undefined;
       if (selectedFeedbackTicketId) ticketId = selectedFeedbackTicketId as number;
+      const snippetId =
+        selectedRecommendation.source.kind === "snippet"
+          ? selectedRecommendation.source.snippet_id ?? undefined
+          : undefined;
 
-      if ((!ticketId || ticketId === null) && response) {
-        if (Array.isArray(response.references) && response.references.length > 0) {
-          ticketId = response.references[0].ticket_id;
+      if ((!ticketId || ticketId === null) && responseData) {
+        if (Array.isArray(responseData.references) && responseData.references.length > 0) {
+          ticketId = responseData.references[0].ticket_id;
         }
-        if ((!ticketId || ticketId === null) && Array.isArray(response.suggested_tickets) && response.suggested_tickets.length > 0) {
-          const r0 = response.suggested_tickets[0];
+        if ((!ticketId || ticketId === null) && Array.isArray(responseData.suggested_tickets) && responseData.suggested_tickets.length > 0) {
+          const r0 = responseData.suggested_tickets[0];
           ticketId = r0?.id ?? undefined;
         }
-        if ((!ticketId || ticketId === null) && Array.isArray(response.suggested_snippets) && response.suggested_snippets.length > 0) {
-          const s0 = response.suggested_snippets[0];
+        if ((!ticketId || ticketId === null) && Array.isArray(responseData.suggested_snippets) && responseData.suggested_snippets.length > 0) {
+          const s0 = responseData.suggested_snippets[0];
           if (s0 && s0.ticket_id) ticketId = s0.ticket_id;
         }
       }
 
-      // If we found a ticket id, ensure the local state reflects it so subsequent clicks reuse it.
       if (ticketId) setSelectedFeedbackTicketId(ticketId as number);
 
-      // If there is no ticket id, we've still captured Ask Echo feedback by log id.
-      // Skip snippet/ticket feedback persistence in that case.
-      if (!ticketId && ticketId !== 0) {
-        setFbNotes("");
-        setFbNotesVisible(false);
+      if ((!ticketId && ticketId !== 0) && !snippetId) {
+        setOutcomeNotes("");
+        setReusableLearning("");
         setFbSaved(true);
         return;
       }
 
-      // Build payload. Backend expects `notes` for resolution notes; include `resolution_notes` and `query_text` as well for context.
-      const payload: any = { helped, ticket_id: ticketId, source: "ask_echo" };
-      if (!helped && fbNotes.trim().length > 0) {
-        payload.notes = fbNotes.trim();
-        payload.resolution_notes = fbNotes.trim();
-      }
+      const payload: any = {
+        helped,
+        ticket_id: ticketId,
+        snippet_id: snippetId,
+        source: "ask_echo",
+        notes: reusableLearning.trim(),
+        resolution_notes: outcomeNotes.trim() || reusableLearning.trim(),
+      };
       if (q && q.trim().length > 0) payload.query_text = q.trim();
 
-      await postSnippetFeedback(payload);
+      if (ticketId || snippetId) {
+        await postSnippetFeedback(payload);
+      }
 
-      // Also record a ticket-feedback row so Ask Echo feedback is visible in Insights.
-      // Map helped -> rating (5 for helped, 1 for not helped) to satisfy TicketFeedback.rating requirement.
       try {
-        const tfPayload: any = {
+        if (ticketId) {
+          const tfPayload: any = {
           ticket_id: ticketId,
           rating: helped ? 5 : 1,
-          resolution_notes: fbNotes.trim() || undefined,
+          resolution_notes: outcomeNotes.trim() || reusableLearning.trim() || undefined,
           query_text: q.trim() || "",
           helped: helped,
+          ai_summary: reusableLearning.trim() || undefined,
         };
 
-        // Fire-and-forget; we don't block the UI on this.
-        await createTicketFeedback(tfPayload);
+          await createTicketFeedback(tfPayload);
+        }
       } catch (e) {
         // ignore ticket-feedback errors in the UI flow
       }
 
-      // on success: clear notes and hide
-      setFbNotes("");
-      setFbNotesVisible(false);
       setFbSaved(true);
     } catch (err: any) {
       setFbError(formatApiError(err));
@@ -267,7 +348,6 @@ export default function AskEchoWidget() {
     "mfa codes invalid",
     "outlook keeps asking for password",
   ];
-  const responseData = response && !isAskEchoError(response) ? response : null;
   const responseMode = responseData?.mode ?? "unknown";
   const responseConfidence =
     responseData?.kb_confidence ?? responseData?.references?.[0]?.confidence;
@@ -275,6 +355,34 @@ export default function AskEchoWidget() {
     responseData?.references?.[0]?.ticket_id ?? responseData?.suggested_tickets?.[0]?.id ?? null;
   const responseSourceCount =
     (responseData?.references?.length ?? 0) + (responseData?.kb_evidence?.length ?? 0);
+  const currentStage = fbSaved
+    ? "learning_captured"
+    : selectedOutcome
+      ? "outcome_recorded"
+      : selectedRecommendation
+        ? "action_selected"
+        : flywheel?.state.current_stage ?? "recommendations_ready";
+  const saveDisabled =
+    fbSubmitting ||
+    fbSaved ||
+    !selectedRecommendation ||
+    !selectedOutcome ||
+    !reusableLearning.trim();
+  const saveHelperText = fbSaved
+    ? "Saved with this Ask Echo run so the next operator can reuse what you learned."
+    : !selectedRecommendation
+      ? "Pick one next action to start the loop."
+      : !selectedOutcome
+        ? "Choose the outcome after trying the selected action."
+        : !reusableLearning.trim()
+          ? "Add what Echo should remember next time to enable save."
+          : "Saving learning stores your notes with this Ask Echo run for future operators.";
+  const stages = [
+    { id: "recommendations_ready", label: "Review result" },
+    { id: "action_selected", label: "Choose action" },
+    { id: "outcome_recorded", label: "Capture outcome" },
+    { id: "learning_captured", label: "Save learning" },
+  ] as const;
 
   return (
     <div className="ask-echo-shell">
@@ -292,7 +400,7 @@ export default function AskEchoWidget() {
               <div className="ask-echo__hero-chips" aria-label="Ask Echo capabilities">
                 <span className="ask-echo__hero-chip">Ticket intelligence</span>
                 <span className="ask-echo__hero-chip">KB support</span>
-                <span className="ask-echo__hero-chip">Feedback loop</span>
+                <span className="ask-echo__hero-chip">Flywheel wedge</span>
               </div>
             </div>
           </header>
@@ -396,7 +504,7 @@ export default function AskEchoWidget() {
           <div className="ask-echo__grid">
             <div className="ask-echo__stack">
               <div className="ask-echo__card ask-echo__card--answer">
-                <div className="ask-echo__card-title">Answer</div>
+                <div className="ask-echo__card-title">1. What Echo found</div>
                 <div className="ask-echo__answer-header">
                   <div className="ask-echo__answer">{response.answer || "No answer returned yet."}</div>
                   <div className="ask-echo__signal-card">
@@ -427,15 +535,135 @@ export default function AskEchoWidget() {
                 </div>
                 <div className="ask-echo__meta ask-echo__meta--chips">
                   {response.answer_kind === "grounded" || response.mode === "kb_answer" ? (
-                    <span className="ask-echo__badge">Based on your past tickets</span>
+                    <span className="ask-echo__badge">Grounded in past support work</span>
                   ) : response.answer_kind === "ungrounded" || response.mode === "general_answer" ? (
-                    <span className="ask-echo__badge ask-echo__badge--warning">General guidance</span>
+                    <span className="ask-echo__badge ask-echo__badge--warning">Fallback guidance</span>
                   ) : (
                     <span className="ask-echo__badge">Mode: {responseMode}</span>
                   )}
-                  <span className="ask-echo__badge ask-echo__badge--source">source: ask_echo</span>
+                </div>
+                <div className="ask-echo__flow-callout">
+                  Next: pick one of the three actions below. Echo will load the selected path and let you record what happened.
                 </div>
               </div>
+
+              <div className="ask-echo__card ask-echo__card--flywheel">
+                <div className="ask-echo__card-header">
+                  <div>
+                    <div className="ask-echo__card-title">2. Pick your next action</div>
+                    <div className="ask-echo__card-subtitle">
+                      Choose one card. The selected action becomes the step-by-step path below.
+                    </div>
+                  </div>
+                  <span className="ask-echo__badge ask-echo__badge--soft">
+                    {recommendations.length} recommendation{recommendations.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+
+                <div className="ask-echo__stage-strip" aria-label="Flywheel stages">
+                  {stages.map((stage, index) => {
+                    const isActive = currentStage === stage.id;
+                    const isComplete = stages.findIndex((item) => item.id === currentStage) > index;
+                    return (
+                      <div
+                        key={stage.id}
+                        className={`ask-echo__stage ${isActive ? "ask-echo__stage--active" : ""} ${isComplete ? "ask-echo__stage--complete" : ""}`.trim()}
+                      >
+                        <span className="ask-echo__stage-number">{index + 1}</span>
+                        <span className="ask-echo__stage-label">{stage.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="ask-echo__recommendation-grid">
+                  {recommendations.map((recommendation, index) => {
+                    const selected = recommendation.id === selectedRecommendation?.id;
+                    return (
+                      <button
+                        key={recommendation.id}
+                        type="button"
+                        className={`ask-echo__recommendation-card ${selected ? "ask-echo__recommendation-card--selected" : ""}`.trim()}
+                        onClick={() => {
+                          setSelectedRecommendationId(recommendation.id);
+                          setFbSaved(false);
+                        }}
+                        aria-pressed={selected}
+                      >
+                        <div className="ask-echo__recommendation-card-header">
+                          <span className="ask-echo__recommendation-rank">Action {index + 1}</span>
+                          {selected ? (
+                            <span className="ask-echo__badge ask-echo__badge--success">Selected</span>
+                          ) : null}
+                        </div>
+                        <div className="ask-echo__recommendation-meta-row">
+                          <span className="ask-echo__badge ask-echo__badge--soft">
+                            {RECOMMENDATION_SOURCE_LABELS[recommendation.source.kind]}
+                          </span>
+                          {typeof recommendation.confidence === "number" && (
+                            <span className="ask-echo__badge ask-echo__badge--soft">
+                              {formatConfidencePercent(recommendation.confidence)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="ask-echo__recommendation-title">{recommendation.title}</div>
+                        <div className="ask-echo__recommendation-summary">{recommendation.summary}</div>
+                        <div className="ask-echo__recommendation-rationale">{getRecommendationSourceHint(recommendation)}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {selectedRecommendation && (
+                <div className="ask-echo__card ask-echo__card--action-plan">
+                  <div className="ask-echo__card-header">
+                    <div>
+                      <div className="ask-echo__card-title">3. Run this action</div>
+                      <div className="ask-echo__card-subtitle">
+                        Follow these steps in order, then record the result below.
+                      </div>
+                    </div>
+                    <span className="ask-echo__badge ask-echo__badge--source">
+                      Selected path
+                    </span>
+                  </div>
+
+                  <div className="ask-echo__selected-action-caption">
+                    {RECOMMENDATION_SOURCE_LABELS[selectedRecommendation.source.kind]}: {selectedRecommendation.source.label}
+                  </div>
+                  <div className="ask-echo__selected-action-title">{selectedRecommendation.title}</div>
+                  <ol className="ask-echo__steps-list">
+                    {selectedRecommendation.steps.map((step, index) => (
+                      <li key={`${selectedRecommendation.id}-${index}`} className="ask-echo__step">
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+
+                  <div className="ask-echo__action-toolbar">
+                    {selectedRecommendation.source.ticket_id ? (
+                      <button
+                        type="button"
+                        className="op-button op-button--ghost"
+                        onClick={() => openTicketDetail(selectedRecommendation.source.ticket_id as number)}
+                      >
+                        Open supporting ticket
+                      </button>
+                    ) : null}
+                    {selectedRecommendation.source.source_url ? (
+                      <a
+                        className="ask-echo__kb-link"
+                        href={selectedRecommendation.source.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open KB source
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              )}
 
               {response.reasoning && <AskEchoReasoningDetails reasoning={response.reasoning} />}
 
@@ -579,65 +807,90 @@ export default function AskEchoWidget() {
               <div className="ask-echo__card ask-echo__card--feedback">
                 <div className="ask-echo__card-header">
                   <div>
-                    <div className="ask-echo__card-title">Feedback</div>
-                    <div className="ask-echo__card-subtitle">Train Echo with a quick thumbs-up or a correction.</div>
+                    <div className="ask-echo__card-title">4. Record the result</div>
+                    <div className="ask-echo__card-subtitle">Capture what happened, then save what Echo should remember next time.</div>
                   </div>
                   {fbSaved && <span className="ask-echo__badge ask-echo__badge--success">Saved</span>}
                 </div>
                 <div className="ask-echo__feedback-row">
-                  <span className="ask-echo__feedback-question">Was this helpful?</span>
-                  <div className="ask-echo__feedback-actions">
-                    <button
-                      type="button"
-                      onClick={() => submitFeedback(true)}
-                      disabled={fbSubmitting || fbSaved}
-                      className="op-button op-button--primary ask-echo__feedback-button"
-                    >
-                      👍 Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFbNotesVisible(true)}
-                      disabled={fbSubmitting || fbSaved}
-                      className="op-button op-button--danger ask-echo__feedback-button"
-                    >
-                      👎 No
-                    </button>
-                  </div>
+                  <span className="ask-echo__feedback-question">What happened after you tried this selected action?</span>
                 </div>
 
-                {fbNotesVisible && (
-                  <div className="ask-echo__feedback-panel">
-                    <textarea
-                      rows={3}
-                      className="op-input ask-echo__feedback-textarea"
-                      placeholder="What went wrong or what did you do to resolve it?"
-                      value={fbNotes}
-                      onChange={(e) => setFbNotes(e.target.value)}
-                    />
-                    <div className="ask-echo__feedback-panel-actions">
+                <div className="ask-echo__outcome-grid" role="group" aria-label="Outcome options">
+                  {(flywheel?.outcome_options ?? []).map((outcome) => {
+                    const selected = selectedOutcome === outcome;
+                    return (
                       <button
+                        key={outcome}
                         type="button"
-                        className="op-button op-button--ghost"
-                        onClick={() => submitFeedback(false)}
-                        disabled={fbSubmitting}
-                      >
-                        Submit feedback
-                      </button>
-                      <button
-                        type="button"
-                        className="op-button op-button--ghost"
+                        className={`ask-echo__outcome-button ${selected ? "ask-echo__outcome-button--selected" : ""}`.trim()}
                         onClick={() => {
-                          setFbNotesVisible(false);
-                          setFbNotes("");
+                          setSelectedOutcome(outcome);
+                          setFbSaved(false);
                         }}
+                        aria-pressed={selected}
+                        disabled={fbSubmitting || fbSaved}
                       >
-                        Cancel
+                        {OUTCOME_LABELS[outcome]}
                       </button>
-                    </div>
-                    {fbError && <div className="ask-echo__feedback-error">{fbError}</div>}
+                    );
+                  })}
+                </div>
+
+                <div className="ask-echo__feedback-panel">
+                  <label className="ask-echo__textarea-label" htmlFor="ask-echo-outcome-notes">
+                    Outcome notes
+                  </label>
+                  <textarea
+                    id="ask-echo-outcome-notes"
+                    rows={3}
+                    className="op-input ask-echo__feedback-textarea"
+                    placeholder="What happened when you executed the selected action?"
+                    value={outcomeNotes}
+                    onChange={(e) => setOutcomeNotes(e.target.value)}
+                    disabled={fbSubmitting || fbSaved}
+                  />
+
+                  <label className="ask-echo__textarea-label" htmlFor="ask-echo-reusable-learning">
+                    What should Echo remember next time?
+                  </label>
+                  <textarea
+                    id="ask-echo-reusable-learning"
+                    rows={4}
+                    className="op-input ask-echo__feedback-textarea"
+                    placeholder={flywheel?.reusable_learning_prompt ?? "Capture what Echo should remember next time."}
+                    value={reusableLearning}
+                    onChange={(e) => setReusableLearning(e.target.value)}
+                    disabled={fbSubmitting || fbSaved}
+                  />
+
+                  <div className="ask-echo__feedback-panel-actions">
+                    <button
+                      type="button"
+                      className="op-button op-button--primary ask-echo__feedback-save"
+                      onClick={() => submitFeedback()}
+                      disabled={saveDisabled}
+                    >
+                      {fbSubmitting ? "Saving..." : "Save learning for next time"}
+                    </button>
+                    <button
+                      type="button"
+                      className="op-button op-button--ghost"
+                      onClick={() => {
+                        setSelectedOutcome(null);
+                        setOutcomeNotes("");
+                        setReusableLearning("");
+                        setFbSaved(false);
+                        setFbError(null);
+                      }}
+                      disabled={fbSubmitting}
+                    >
+                      Reset
+                    </button>
                   </div>
-                )}
+                  <div className="ask-echo__feedback-help">{saveHelperText}</div>
+                  {fbError && <div className="ask-echo__feedback-error">{fbError}</div>}
+                </div>
               </div>
             </div>
           </div>

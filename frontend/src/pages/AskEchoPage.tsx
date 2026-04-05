@@ -6,7 +6,7 @@ export default function AskEchoPage() {
     <div>
       <SectionHeader
         title="Ask Echo"
-        description="Ask a support question, inspect the answer trail, and capture feedback without leaving the console."
+        description="Describe the issue, choose one next action, follow the steps, then save what happened so Echo can help faster next time."
       />
       <AskEchoWidget />
     </div>
