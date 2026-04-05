@@ -1,5 +1,9 @@
 # EchoHelp Architecture
 
+E.C.O. (Executive Command Operations) is the current product naming direction.
+Canonical wedge: `/#/flywheel`
+Secondary inspection surface: `/#/ask`
+
 EchoHelp is an organizational memory engine for support/eng/ops teams.
 
 North star: every system should serve at least one of:
@@ -84,9 +88,9 @@ Rules:
 - **Must never be inferred**: “A task exists because a pattern exists”
 - **Why it exists**: Future bridge between insights and actionable work, without magic
 
-### 1) Search (retrieve memory)
+### 1) Flywheel / Search (retrieve memory)
 
-**User goal**: find relevant historical tickets quickly.
+**User goal**: run the canonical E.C.O. loop — input/search, choose action, run steps, capture outcome, and save learning.
 
 **Frontend**
 - `frontend/src/Search.tsx`
@@ -115,7 +119,7 @@ Rules:
 - Embeddings are created once per ticket (no duplicates).
 - If the ingested thread is resolved, EchoHelp records a single “resolved via ingest” feedback event.
 
-### 3) Ask Echo (retrieve + improve memory quality)
+### 3) Ask Echo (secondary inspection)
 
 **User goal**: ask a question and get an answer grounded in system memory.
 
@@ -125,6 +129,7 @@ Rules:
 **Backend**
 - Endpoint: `POST /api/ask-echo`
 - Every call creates an `AskEchoLog` row.
+- Local retrieval stays first; an env-gated server-side OpenAI provider seam may supply bounded fallback text when no grounded answer is available.
 
 **Design stance**
 - Answers must be auditable.

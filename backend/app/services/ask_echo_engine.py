@@ -17,6 +17,7 @@ from ..schemas.ask_echo import (
     AskEchoReference,
     AskEchoTicketSummary,
 )
+from .llm_provider import LLMProvider, get_configured_llm_provider
 from .ask_echo_templates import AskEchoTemplates
 from .kb_adapter import search_kb_entries
 from .kb_confidence_policy import calculate_kb_confidence
@@ -219,6 +220,47 @@ def _build_snippet_summaries(snippets: Iterable[SolutionSnippet]) -> list[dict]:
     ]
 
 
+def _build_provider_context(
+    *,
+    query: str,
+    local_answer: str,
+    scored_tickets: Sequence[tuple[float, Ticket]],
+    kb_evidence: Sequence[AskEchoKBEvidence],
+    snippets: Sequence[SolutionSnippet],
+) -> dict[str, object]:
+    return {
+        "query": query,
+        "local_answer": local_answer,
+        "kb_evidence": [
+            {
+                "entry_id": item.entry_id,
+                "title": item.title,
+                "source_system": item.source_system,
+                "source_url": item.source_url,
+                "score": item.score,
+            }
+            for item in kb_evidence[:2]
+        ],
+        "ticket_summaries": [
+            {
+                "ticket_id": getattr(ticket, "id", None),
+                "summary": getattr(ticket, "summary", None) or getattr(ticket, "title", None),
+                "score": float(score),
+            }
+            for score, ticket in scored_tickets[:3]
+        ],
+        "snippet_summaries": [
+            {
+                "id": getattr(snippet, "id", None),
+                "title": getattr(snippet, "title", None),
+                "summary": getattr(snippet, "summary", None),
+                "echo_score": getattr(snippet, "echo_score", None),
+            }
+            for snippet in snippets[:3]
+        ],
+    }
+
+
 def build_ask_echo_features(
     *,
     scored_tickets: Sequence[tuple[float, Ticket]],
@@ -273,12 +315,14 @@ class AskEchoEngine:
         ticket_retriever=None,
         snippet_retriever=None,
         grounding_decider=None,
+        llm_provider: LLMProvider | None = None,
     ) -> None:
         self.templates = templates or AskEchoTemplates()
         self.kb_threshold = kb_threshold
         self._ticket_retriever = ticket_retriever
         self._snippet_retriever = snippet_retriever
         self._grounding_decider = grounding_decider
+        self._llm_provider = llm_provider if llm_provider is not None else get_configured_llm_provider()
 
     def _retrieve_tickets(self, *, session: Session, query: str, limit: int):
         if self._ticket_retriever is not None:
@@ -450,6 +494,23 @@ class AskEchoEngine:
                 keyword_overlap=_signal_float(top_ticket_signals, "keyword"),
                 recency=_signal_float(top_ticket_signals, "recency"),
             )
+            if self._llm_provider is not None:
+                try:
+                    provider_answer = self._llm_provider.generate(
+                        problem=q,
+                        context=_build_provider_context(
+                            query=q,
+                            local_answer=answer_text,
+                            scored_tickets=[(float(s), t) for s, t in scored],
+                            kb_evidence=kb_evidence,
+                            snippets=snippets,
+                        ),
+                    )
+                except Exception:
+                    logging.exception("llm provider fallback failed")
+                else:
+                    if provider_answer.answer_text.strip():
+                        answer_text = provider_answer.answer_text.strip()
 
         answer_kind = "grounded" if kb_backed else "ungrounded"
 

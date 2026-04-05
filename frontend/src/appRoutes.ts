@@ -5,8 +5,8 @@ export type AppRoute =
   | { kind: "ticket"; ticketId: number };
 
 export const ROUTE_LABELS: Record<ConsoleRoute, string> = {
-  ask: "Ask Echo",
-  search: "Search",
+  ask: "Ask Echo (Inspection)",
+  search: "E.C.O. Flywheel",
   kb: "Knowledge Base",
   insights: "Insights",
   intake: "Intake Assist",
@@ -16,14 +16,15 @@ export function normalizeConsoleRoute(value: string | null): ConsoleRoute {
   const normalized = (value ?? "").trim().toLowerCase();
   if (
     normalized === "ask" ||
+    normalized === "flywheel" ||
     normalized === "search" ||
     normalized === "kb" ||
     normalized === "insights" ||
     normalized === "intake"
   ) {
-    return normalized;
+    return normalized === "flywheel" ? "search" : normalized;
   }
-  return "ask";
+  return "search";
 }
 
 export function parseAppRoute(): AppRoute {
@@ -40,12 +41,12 @@ export function parseAppRoute(): AppRoute {
 
   return {
     kind: "console",
-    route: normalizeConsoleRoute(segments[0] ?? "ask"),
+    route: normalizeConsoleRoute(segments[0] ?? "flywheel"),
   };
 }
 
 export function navigateToConsole(route: ConsoleRoute) {
-  window.location.hash = `#/${route}`;
+  window.location.hash = `#/${route === "search" ? "flywheel" : route}`;
 }
 
 export function navigateToTicket(ticketId: number) {

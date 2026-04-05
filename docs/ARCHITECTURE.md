@@ -1,5 +1,9 @@
 # Echo-Help Architecture Overview
 
+- Product name: **E.C.O. (Executive Command Operations)**
+- Canonical wedge: `/#/flywheel`
+- `/#/ask` remains a secondary inspection surface
+
 ## High-Level Domains
 
 - **Ticket Search**: Keyword and semantic search over historical tickets.
@@ -9,22 +13,24 @@
 
 ## Data Flows
 
-### Ticket Search
+### Ticket Search / E.C.O. Flywheel
 
 1. User types a query and chooses keyword or AI search in `Search.tsx`.
 2. Frontend calls either `/api/search` (keyword) or `/api/semantic-search`.
 3. Backend routes hit the DB and/or embedding index to return matching tickets.
 4. `Search.tsx` renders results and an inspector panel for the selected ticket.
+5. The canonical loop is input/search → choose action → run steps → capture outcome → save learning.
 
 ### Ask Echo
 
 1. User asks a natural-language question in `AskEchoWidget.tsx`.
 2. Frontend POSTs to `/api/ask-echo` with `{ q, limit }`.
 3. Backend `ask_echo.py`:
-   - Runs semantic ticket search and snippet search.
-   - Chooses an answer mode (`kb_answer` vs `general_answer`).
-   - Builds an answer, references, snippet summaries, and a `reasoning` object.
-   - Persists an `AskEchoLog` row including reasoning JSON.
+    - Runs semantic ticket search and snippet search.
+    - Chooses an answer mode (`kb_answer` vs `general_answer`).
+    - Keeps local retrieval/grounding logic first and can use an env-gated server-side OpenAI provider seam only for bounded fallback assistance.
+    - Builds an answer, references, snippet summaries, and a `reasoning` object.
+    - Persists an `AskEchoLog` row including reasoning JSON.
 4. Response is rendered by `AskEchoWidget`, including:
    - Answer text and mode.
    - Related tickets.
@@ -58,7 +64,7 @@
 
 ## Frontend Structure
 
-- `frontend/src/Search.tsx` – Main ticket search UI, filters, tabs (search/insights/kb), and inline Ask Echo card.
+- `frontend/src/Search.tsx` – Main E.C.O. flywheel UI, filters, tabs (search/insights/kb), and inline Ask Echo card.
 - `frontend/src/AskEchoWidget.tsx` – Ask Echo input, answer view, feedback, and reasoning panel.
 - `frontend/src/AskEchoLogsPanel.tsx` – Insights panel to review Ask Echo logs and reasoning.
 - `frontend/src/components/SnippetCard.tsx` – Reusable snippet display for the KB tab.
@@ -171,4 +177,3 @@ This surface focuses on Ask Echo feedback and related signals (e.g., thumbs up/d
    - As new top-level keys on existing endpoints, **or**
    - As new sibling endpoints (e.g., `/api/insights/ticket-pattern-radar/clusters`) when payloads become large/expensive.
 - Existing keys (`stats`, `top_keywords`, `frequent_titles`, etc.) should not be removed or renamed without introducing a clearly versioned alternative (e.g., `/ticket-pattern-radar-v2`).
-

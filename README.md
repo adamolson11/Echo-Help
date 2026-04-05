@@ -1,7 +1,7 @@
 # Echo-Help
-A support tool fot CMS ticketing systems
-EchoHelp
-AI-Powered Support Intelligence & Living Knowledge System
+A support tool for CMS ticketing systems
+E.C.O. (Executive Command Operations)
+AI-powered support intelligence and living knowledge system
 
 MVP Scope • Private Repository (v0.1)
 
@@ -21,10 +21,15 @@ It lets agents search historical tickets, record what actually fixed each issue,
 
 ## ✨ Features
 
-- **Ticket search console**
+- **E.C.O. flywheel**
+  - Canonical wedge: `/#/flywheel`
   - Keyword-based search (`/api/search`) across ticket summaries and descriptions.
-  - Optional **AI semantic search** (`/api/semantic-search`) using vector embeddings.
-  - “Use AI semantic search” toggle with a visible badge and per-result AI score.
+  - Optional AI semantic search (`/api/semantic-search`) using vector embeddings.
+  - Single visible loop: input/search → choose action → run steps → capture outcome → save learning.
+
+- **Ask Echo inspection surface**
+  - Secondary inspection surface: `/#/ask`
+  - Uses `/api/ask-echo` for answer review, references, reasoning, and feedback capture.
 
 - **Ticket inspector & feedback loop**
   - Click a ticket to open a detailed inspector panel.
@@ -79,7 +84,7 @@ It lets agents search historical tickets, record what actually fixed each issue,
 - **Bundler/Dev:** Vite
 - **Styling:** Tailwind CSS
 - **Key components:**
-  - `frontend/src/Search.tsx` – main search console + feedback UI + Insights tab
+  - `frontend/src/Search.tsx` – main flywheel console + feedback UI + Insights tab
     - Keyword vs AI semantic search toggle
     - Results list + ticket inspector
     - Feedback form and submit handler
@@ -113,7 +118,7 @@ npm ci
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 
-pip install -r backend/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Initialize the database
@@ -140,6 +145,18 @@ If embeddings are not yet populated, run:
 ```bash
 PYTHONPATH=. python3 scripts/backfill_ticket_embeddings.py
 ```
+
+### Optional: enable the server-side OpenAI seam
+
+Keep the OpenAI key server-side only.
+
+```bash
+export ECHOHELP_OPENAI_ENABLED=1
+export OPENAI_API_KEY=your_key_here
+export OPENAI_MODEL=gpt-4.1-mini
+```
+
+When enabled, E.C.O. keeps the local Ask Echo retrieval flow first and only uses the provider seam as a bounded fallback when the local answer is ungrounded.
 
 Troubleshooting:
 

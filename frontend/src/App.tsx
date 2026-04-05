@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import ConsoleShell from "./ConsoleShell";
-import { navigateToConsole, parseAppRoute, type AppRoute, type ConsoleRoute } from "./appRoutes";
+import { ROUTE_LABELS, navigateToConsole, parseAppRoute, type AppRoute, type ConsoleRoute } from "./appRoutes";
 import AskEchoPage from "./pages/AskEchoPage";
-import SearchPage from "./pages/SearchPage";
+import FlywheelPage from "./pages/FlywheelPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import InsightsPage from "./pages/InsightsPage";
 import IntakePage from "./pages/IntakePage";
@@ -23,15 +23,15 @@ export default function App() {
 
   function renderRoute(r: ConsoleRoute) {
     if (r === "ask") return <AskEchoPage />;
-    if (r === "search") return <SearchPage />;
+    if (r === "search") return <FlywheelPage />;
     if (r === "kb") return <KnowledgeBasePage />;
     if (r === "insights") return <InsightsPage />;
     if (r === "intake") return <IntakePage />;
-    return <AskEchoPage />;
+    return <FlywheelPage />;
   }
 
   const activeConsoleRoute = appRoute.kind === "console" ? appRoute.route : null;
-  const routeLabel = appRoute.kind === "ticket" ? `tickets/${appRoute.ticketId}` : appRoute.route;
+  const routeLabel = appRoute.kind === "ticket" ? `tickets/${appRoute.ticketId}` : ROUTE_LABELS[appRoute.route];
 
   return (
     <ConsoleShell
@@ -41,8 +41,8 @@ export default function App() {
         setAppRoute({ kind: "console", route });
         navigateToConsole(route);
       }}
-      title="EchoHelp"
-      subtitle="AI-powered resolution memory for busy IT teams"
+      title="E.C.O."
+      subtitle="Executive Command Operations"
     >
       {appRoute.kind === "ticket" ? <TicketDetailPage ticketId={appRoute.ticketId} /> : renderRoute(appRoute.route)}
     </ConsoleShell>
