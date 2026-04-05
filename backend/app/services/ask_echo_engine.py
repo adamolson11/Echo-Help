@@ -17,10 +17,10 @@ from ..schemas.ask_echo import (
     AskEchoReference,
     AskEchoTicketSummary,
 )
-from .llm_provider import LLMProvider, get_configured_llm_provider
 from .ask_echo_templates import AskEchoTemplates
 from .kb_adapter import search_kb_entries
 from .kb_confidence_policy import calculate_kb_confidence
+from .llm_provider import LLMProvider, get_configured_llm_provider
 from .ranking_policy import clamp01, rank_snippets, rank_tickets
 from .semantic_search import semantic_search_tickets
 from .snippet_repository import search_snippets as repo_search_snippets
