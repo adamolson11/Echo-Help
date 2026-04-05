@@ -35,19 +35,26 @@ def _env_flag(name: str) -> bool:
 
 
 def _extract_output_text(payload: dict) -> str:
-    output_text = payload.get("output_text")
-    if isinstance(output_text, str) and output_text.strip():
-        return output_text.strip()
+    choices = payload.get("choices")
+    if not isinstance(choices, list):
+        return ""
 
-    for item in payload.get("output", []):
-        if not isinstance(item, dict):
+    for choice in choices:
+        if not isinstance(choice, dict):
             continue
-        for content in item.get("content", []):
-            if not isinstance(content, dict):
-                continue
-            text = content.get("text")
-            if isinstance(text, str) and text.strip():
-                return text.strip()
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+        if isinstance(content, list):
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                text = part.get("text")
+                if isinstance(text, str) and text.strip():
+                    return text.strip()
     return ""
 
 
@@ -58,7 +65,7 @@ class OpenAIProvider:
     def generate(self, problem: str, context: dict[str, object]) -> ProviderAnswer:
         payload = {
             "model": self._config.model,
-            "input": [
+            "messages": [
                 {
                     "role": "system",
                     "content": (
@@ -82,7 +89,7 @@ class OpenAIProvider:
         }
 
         with httpx.Client(timeout=self._config.timeout_seconds) as client:
-            response = client.post(f"{self._config.base_url.rstrip('/')}/responses", headers=headers, json=payload)
+            response = client.post(f"{self._config.base_url.rstrip('/')}/chat/completions", headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
 
