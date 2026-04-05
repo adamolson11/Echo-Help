@@ -726,13 +726,13 @@ export default function Search() {
       {activeTab === "insights" && (
         <div className="space-y-4">
           <p className="text-xs text-slate-400 mb-1">
-            View patterns, system behavior, and AI routing signals from Ask Echo.
+            View lightweight follow-up signals and AI routing context from Ask Echo.
           </p>
           {/* Friendly empty state when there is no feedback at all */}
           {patterns && patterns.total_feedback === 0 && !patternsLoading && (
             <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/70 p-4 text-xs text-slate-300">
               <p className="font-medium text-slate-100 mb-1">No feedback yet</p>
-              <p>As agents start submitting “Did this resolve your issue?” feedback, EchoHelp will surface unresolved patterns and high-friction tickets here.</p>
+              <p>As agents start submitting “Did this resolve your issue?” feedback, EchoHelp will surface the tickets that need attention and capture what to learn next.</p>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

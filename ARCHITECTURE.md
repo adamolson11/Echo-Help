@@ -2,6 +2,11 @@
 
 EchoHelp is an organizational memory engine for support/eng/ops teams.
 
+Design bias:
+- Existing ticketing, analytics, and monitoring systems are upstream signal sources.
+- EchoHelp should focus on interpretation, prioritization, recommendation, outcome capture, and reusable learning.
+- Commodity analytics/pattern detection should be integrated when possible rather than rebuilt into the core flywheel.
+
 North star: every system should serve at least one of:
 - Retrieve memory
 - Create memory
@@ -19,7 +24,7 @@ EchoHelp is a small web app with:
 At a high level:
 - Tickets are the primary “memory objects”.
 - Feedback and logs are “memory quality signals”.
-- Insights endpoints aggregate signals into cheap, factual summaries.
+- Insights endpoints provide lightweight local signal summaries, while richer analytics can live in upstream systems of record.
 
 ## Core flows
 
@@ -166,21 +171,21 @@ Note: `/api/feedback` exists as a small legacy wrapper used by Intake; it maps t
 **Data**
 - `TicketFeedback` rows are the primary “did this help?” signal.
 
-### 5) Insights / Pattern Radar (improve memory quality)
+### 5) Signal summaries / decision support (improve memory quality)
 
-EchoHelp intentionally exposes multiple pattern surfaces so we don’t mix concerns.
+EchoHelp exposes a few lightweight signal surfaces so operators can interpret what matters next without treating EchoHelp as the primary analytics system.
 
 #### Snippet Pattern Radar (KB performance)
 - Endpoint: `GET /api/insights/pattern-radar`
-- Purpose: how well the snippet/KB layer is performing.
+- Purpose: a compact local read on how well the snippet/KB layer is performing.
 
 #### Ticket Pattern Radar (queue themes)
 - Endpoint: `GET /api/insights/ticket-pattern-radar?days=14`
-- Purpose: what the ticket queue is telling us right now.
+- Purpose: a simple queue snapshot that can inform prioritization when upstream analytics are unavailable or too coarse.
 
 #### Feedback Patterns (user sentiment)
 - Endpoint: `GET /api/patterns/summary?days=30`
-- Purpose: simple, factual counts of positive/negative feedback.
+- Purpose: simple, factual counts of positive/negative feedback that can feed follow-up decisions and outcome memory.
 
 ## Contracts and versioning
 

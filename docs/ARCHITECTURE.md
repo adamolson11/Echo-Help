@@ -7,6 +7,12 @@
 - **Snippet Library**: Reusable solution snippets distilled from ticket feedback.
 - **Ask Echo Logs**: Auditable history of Ask Echo questions, answers, and reasoning.
 
+## Design Bias
+
+- Existing ticketing, analytics, and monitoring tools are treated as upstream signal sources.
+- Echo’s differentiating layer is decision support: interpretation, prioritization, action guidance, outcome capture, and reusable learning.
+- Commodity analytics or pattern-detection features should stay lightweight here unless they become a clear product differentiator.
+
 ## Data Flows
 
 ### Ticket Search
@@ -104,7 +110,7 @@ For equal scores, the policy uses `(score, timestamp, id)` so results do not dep
 
 ## Pattern & Insights Endpoints
 
-Echo exposes three orthogonal “pattern” surfaces. They answer different questions and are designed to evolve independently.
+Echo exposes three lightweight signal surfaces. They support local interpretation and operator workflow, but they are not meant to replace dedicated analytics or monitoring systems.
 
 ### 1. Snippet Pattern Radar (KB performance)
 
@@ -127,7 +133,7 @@ Echo exposes three orthogonal “pattern” surfaces. They answer different ques
    - `kind: "snippet"`
    - `version: "v1"`
 
-Design stance: **stable / legacy-friendly**. This is the v1 contract for snippet radar; new behavior should be added additively or via a new versioned endpoint.
+Design stance: **stable / legacy-friendly**. This is a compact summary surface, not a mandate to rebuild full KB analytics inside Echo.
 
 ### 2. Ticket Pattern Radar (queue themes)
 
@@ -151,7 +157,7 @@ Design stance: **stable / legacy-friendly**. This is the v1 contract for snippet
    - `kind: "ticket"`
    - `version: "v1"`
 
-Design stance: **primary growth surface** for Pattern Radar. We can add fields (e.g., clusters, per-queue breakdowns) as long as existing keys remain stable.
+Design stance: **lightweight queue summary**. We can add fields that improve prioritization or actionability, but richer commodity analytics should live in integrated upstream systems when possible.
 
 ### 3. Feedback Pattern Summary (user sentiment about Echo)
 
@@ -163,7 +169,7 @@ Design stance: **primary growth surface** for Pattern Radar. We can add fields (
 
 > "What are users telling us about Echo’s answers?"
 
-This surface focuses on Ask Echo feedback and related signals (e.g., thumbs up/down, free-text comments). It is intentionally **kept separate** from ticket and snippet radar so we don’t mix “what the queue is doing” with “how Echo is perceived” in a single response blob.
+This surface focuses on Ask Echo feedback and related signals (e.g., thumbs up/down, free-text comments). It is intentionally **kept separate** from ticket and snippet radar so we don’t mix “what the queue is doing” with “how Echo is perceived” in a single response blob, and so these signals can feed downstream decisioning and outcome memory cleanly.
 
 ### Versioning & evolution
 
@@ -171,4 +177,3 @@ This surface focuses on Ask Echo feedback and related signals (e.g., thumbs up/d
    - As new top-level keys on existing endpoints, **or**
    - As new sibling endpoints (e.g., `/api/insights/ticket-pattern-radar/clusters`) when payloads become large/expensive.
 - Existing keys (`stats`, `top_keywords`, `frequent_titles`, etc.) should not be removed or renamed without introducing a clearly versioned alternative (e.g., `/ticket-pattern-radar-v2`).
-
