@@ -1,4 +1,6 @@
 from fastapi.testclient import TestClient
+from datetime import UTC, datetime
+from collections.abc import Mapping
 
 from backend.app.db import SessionLocal, init_db
 from backend.app.main import app
@@ -10,9 +12,9 @@ from backend.app.services.openai_provider import OpenAIProvider
 class _StubProvider:
     def __init__(self, answer_text: str) -> None:
         self.answer_text = answer_text
-        self.calls: list[tuple[str, dict[str, object] | None]] = []
+        self.calls: list[tuple[str, Mapping[str, object] | None]] = []
 
-    def generate(self, problem: str, context: dict[str, object] | None = None) -> ProviderAnswer:
+    def generate(self, problem: str, context: Mapping[str, object] | None = None) -> ProviderAnswer:
         self.calls.append((problem, context))
         return ProviderAnswer(answer_text=self.answer_text, mode="openai", confidence=0.8)
 
@@ -22,6 +24,7 @@ class _StubTicket:
         self.id = ticket_id
         self.summary = summary
         self.description = description
+        self.created_at = datetime.now(UTC)
 
 
 def test_ask_echo_engine_response_schema_is_always_present() -> None:
@@ -126,16 +129,13 @@ def test_ask_echo_engine_can_use_llm_provider_for_fallback_answers() -> None:
     assert result.response["answer"].startswith("Try re-authenticating the VPN client")
     assert result.response["sources"] == []
     assert set(result.response.keys()) == {"answer", "confidence", "sources", "reasoning"}
-    assert provider.calls == [
-        (
-            "vpn login keeps failing",
-            {
-                "local_answer": (
-                    "I couldn't find any matching tickets or prior solutions in your history for this question. "
-                    "Here's general guidance based on typical IT issues, but it's not specific to your environment."
-                ),
-                "sources": [],
-                "mode": "general_answer",
-            },
-        )
-    ]
+    assert len(provider.calls) == 1
+    assert provider.calls[0][0] == "vpn login keeps failing"
+    assert provider.calls[0][1] == {
+        "local_answer": (
+            "I couldn't find any matching tickets or prior solutions in your history for this question. "
+            "Here's general guidance based on typical IT issues, but it's not specific to your environment."
+        ),
+        "sources": [],
+        "mode": "general_answer",
+    }
