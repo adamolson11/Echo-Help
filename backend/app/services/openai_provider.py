@@ -118,5 +118,4 @@ class OpenAIProvider:
         return ProviderAnswer(
             answer_text=_extract_answer_text(data),
             mode="openai",
-            sources=[],
         )

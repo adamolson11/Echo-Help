@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from datetime import UTC, datetime
 from collections.abc import Mapping
+import pytest
 
 from backend.app.db import SessionLocal, init_db
 from backend.app.main import app
@@ -80,7 +81,7 @@ def test_ask_echo_route_preserves_public_contract() -> None:
     assert "evidence" in data
 
 
-def test_get_llm_provider_requires_env_flag_and_key(monkeypatch) -> None:
+def test_get_llm_provider_requires_env_flag_and_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ECHOHELP_OPENAI_ENABLED", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert get_llm_provider() is None
