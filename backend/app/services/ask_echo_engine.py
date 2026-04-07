@@ -20,6 +20,7 @@ from ..schemas.ask_echo import (
 from .ask_echo_templates import AskEchoTemplates
 from .kb_adapter import search_kb_entries
 from .kb_confidence_policy import calculate_kb_confidence
+from .llm_provider import LLMProvider, get_llm_provider
 from .ranking_policy import clamp01, rank_snippets, rank_tickets
 from .semantic_search import semantic_search_tickets
 from .snippet_repository import search_snippets as repo_search_snippets
@@ -273,12 +274,40 @@ class AskEchoEngine:
         ticket_retriever=None,
         snippet_retriever=None,
         grounding_decider=None,
+        llm_provider: LLMProvider | None = None,
     ) -> None:
         self.templates = templates or AskEchoTemplates()
         self.kb_threshold = kb_threshold
         self._ticket_retriever = ticket_retriever
         self._snippet_retriever = snippet_retriever
         self._grounding_decider = grounding_decider
+        self._llm_provider = llm_provider if llm_provider is not None else get_llm_provider()
+
+    def _maybe_generate_provider_answer(
+        self,
+        *,
+        query: str,
+        local_answer: str,
+        sources: Sequence[str],
+    ) -> str | None:
+        if self._llm_provider is None:
+            return None
+
+        try:
+            provider_answer = self._llm_provider.generate(
+                problem=query,
+                context={
+                    "local_answer": local_answer,
+                    "sources": list(sources),
+                    "mode": "general_answer",
+                },
+            )
+        except Exception:
+            logging.exception("llm provider fallback failed")
+            return None
+
+        answer_text = provider_answer.answer_text.strip()
+        return answer_text or None
 
     def _retrieve_tickets(self, *, session: Session, query: str, limit: int):
         if self._ticket_retriever is not None:
@@ -450,6 +479,13 @@ class AskEchoEngine:
                 keyword_overlap=_signal_float(top_ticket_signals, "keyword"),
                 recency=_signal_float(top_ticket_signals, "recency"),
             )
+            provider_answer_text = self._maybe_generate_provider_answer(
+                query=q,
+                local_answer=answer_text,
+                sources=[],
+            )
+            if provider_answer_text is not None:
+                answer_text = provider_answer_text
 
         answer_kind = "grounded" if kb_backed else "ungrounded"
 
